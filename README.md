@@ -276,7 +276,7 @@ Render multiple documents in parallel. Each item is a dict with `"html"` and opt
 
 ## Performance
 
-Measured on a single-core Linux machine (median times, 100 iterations):
+Measured on an **Intel Core i5-10210U** (4 cores / 8 threads, 1.6–4.2 GHz), 24 GB RAM, Debian 12 — median times over 100 iterations:
 
 | Document Type | FastPDF (median) |
 |---|---|
@@ -288,7 +288,7 @@ Measured on a single-core Linux machine (median times, 100 iterations):
 | Batch 10 docs (parallel) | **0.54 ms** |
 | Batch 50 docs (parallel) | **2.76 ms** |
 
-Run `python benchmarks/benchmark.py` to reproduce.
+Run `python benchmarks/benchmark.py` to reproduce on your machine.
 
 ## Development
 
