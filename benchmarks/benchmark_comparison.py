@@ -235,6 +235,47 @@ def print_table(results):
         print("{}{}{}".format(C["DIM"], "─" * W, C["RST"]))
 
 
+def print_chart(results):
+    """ASCII horizontal bar chart — one group per document, one bar per library."""
+    libs = ["FerroPDF", "WeasyPrint", "wkhtmltopdf"]
+    docs = sorted({r.document for r in results})
+    idx  = {(r.library, r.document): r for r in results}
+    BAR_W = 38
+
+    all_means = [
+        r.mean_ms for r in results
+        if not r.error and r.mean_ms is not None
+    ]
+    if not all_means:
+        return
+    max_val = max(all_means)
+
+    legend = "  {}█ FerroPDF{}   {}█ WeasyPrint{}   {}█ wkhtmltopdf{}".format(
+        C["G"], C["RST"], C["B"], C["RST"], C["Y"], C["RST"])
+    W = 84
+    print("\n{}{}{}".format(C["BOLD"], "─" * W, C["RST"]))
+    print("{}  Bar chart — mean render time  (longer bar = slower){}".format(C["BOLD"], C["RST"]))
+    print(legend)
+    print("{}{}{}".format(C["BOLD"], "─" * W, C["RST"]))
+
+    for doc in docs:
+        print("  {}{}{}".format(C["BOLD"], doc, C["RST"]))
+        for lib in libs:
+            r = idx.get((lib, doc))
+            col = LIB_COLOR.get(lib, "")
+            if r is None or r.error:
+                print("    {}{:<12}{}  ░ N/A".format(col, lib, C["RST"]))
+                continue
+            bar_len = max(1, int((r.mean_ms / max_val) * BAR_W))
+            bar = "█" * bar_len
+            print("    {}{:<12}{}  {}{}{}  {}".format(
+                col, lib, C["RST"],
+                col, bar, C["RST"],
+                fmt(r.mean_ms),
+            ))
+        print()
+
+
 def save_markdown(results, path="benchmark_results.md"):
     libs = ["FerroPDF", "WeasyPrint", "wkhtmltopdf"]
     docs = sorted({r.document for r in results})
@@ -269,6 +310,47 @@ def save_markdown(results, path="benchmark_results.md"):
         else:
             cells.append("—")
         lines.append("| " + " | ".join(cells) + " |")
+    # ── Mermaid bar chart ──────────────────────────────────────────────────
+    chart_docs = [d.replace("  ", " ") for d in docs]
+    x_labels   = "[" + ", ".join('"{}"'.format(d) for d in chart_docs) + "]"
+
+    def _series(lib):
+        vals = []
+        for d in docs:
+            r = idx.get((lib, d))
+            if r is None or r.error or r.mean_ms is None:
+                vals.append("0")
+            else:
+                vals.append("{:.3f}".format(r.mean_ms))
+        return "[" + ", ".join(vals) + "]"
+
+    active_libs = [
+        lib for lib in libs
+        if any(
+            idx.get((lib, d)) is not None and not idx[(lib, d)].error
+            for d in docs
+        )
+    ]
+
+    mermaid_lines = [
+        "",
+        "### Visual comparison (mean render time in ms — lower is better)",
+        "",
+        "```mermaid",
+        "xychart-beta",
+        '    title "HTML → PDF render time (ms) — lower is better"',
+        "    x-axis {}".format(x_labels),
+        '    y-axis "Time (ms)"',
+    ]
+    for lib in active_libs:
+        mermaid_lines.append("    bar {}".format(_series(lib)))
+    mermaid_lines += [
+        "```",
+        "",
+        "> **Series order (left → right per group):** {}".format(" · ".join(active_libs)),
+    ]
+
+    lines += mermaid_lines
     lines += [
         "",
         "> 1 warm-up run + N timed iterations. Mean +/- stdev shown.",
@@ -343,6 +425,7 @@ def main():
         print(" done")
 
     print_table(all_results)
+    print_chart(all_results)
     print()
     save_json(all_results)
     save_markdown(all_results, path=args.output)
