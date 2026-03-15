@@ -24,7 +24,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist --find-interpreter
+          args: --release --out dist -i python3.9 python3.10 python3.11 python3.12 python3.13
           manylinux: auto
       - uses: actions/upload-artifact@v5
         with:
@@ -46,7 +46,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist --find-interpreter
+          args: --release --out dist -i python3.9 python3.10 python3.11 python3.12 python3.13
       - uses: actions/upload-artifact@v5
         with:
           name: wheels-macos-${{ matrix.target }}
@@ -68,7 +68,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: x86_64
-          args: --release --out dist --find-interpreter
+          args: --release --out dist -i python3.9 python3.10 python3.11 python3.12 python3.13
       - uses: actions/upload-artifact@v5
         with:
           name: wheels-windows-${{ matrix.target }}
