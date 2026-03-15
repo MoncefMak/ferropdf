@@ -78,22 +78,22 @@ pub enum TextAlign {
 
 /// The renderer converts layout pages into paint commands.
 pub struct Renderer {
-    font_cache: FontCache,
-    image_cache: ImageCache,
+    _font_cache: FontCache,
+    _image_cache: ImageCache,
 }
 
 impl Renderer {
     pub fn new() -> Self {
         Self {
-            font_cache: FontCache::default(),
-            image_cache: ImageCache::default(),
+            _font_cache: FontCache::default(),
+            _image_cache: ImageCache::default(),
         }
     }
 
     pub fn with_caches(font_cache: FontCache, image_cache: ImageCache) -> Self {
         Self {
-            font_cache,
-            image_cache,
+            _font_cache: font_cache,
+            _image_cache: image_cache,
         }
     }
 

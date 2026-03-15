@@ -779,7 +779,6 @@ impl LayoutEngine {
                     let mut y = 0.0;
                     for row in &rows {
                         let mut row_height: f64 = 0.0;
-                        let mut x = 0.0;
                         let row_total_width: f64 = row.iter()
                             .map(|&i| layout_box.children[i].dimensions.margin_box().width)
                             .sum();
@@ -790,7 +789,7 @@ impl LayoutEngine {
                         let (initial_x, inter_item_space) = compute_justify(
                             &justify_content, row_remaining, row.len(), gap
                         );
-                        x = initial_x;
+                        let mut x = initial_x;
 
                         for (ri, &child_idx) in row.iter().enumerate() {
                             let child = &mut layout_box.children[child_idx];
