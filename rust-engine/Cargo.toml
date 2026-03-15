@@ -15,7 +15,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 # Python bindings
-pyo3 = { version = "0.22", features = ["extension-module"] }
+pyo3 = { version = "0.22", features = ["extension-module", "generate-import-lib"] }
 
 # PDF generation
 printpdf = { version = "0.7", features = ["embedded_images"] }

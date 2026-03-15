@@ -26,7 +26,7 @@ jobs:
           target: ${{ matrix.target }}
           args: --release --out dist -i python3.9 python3.10 python3.11 python3.12 python3.13
           manylinux: auto
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         with:
           name: wheels-linux-${{ matrix.target }}
           path: dist
@@ -47,7 +47,7 @@ jobs:
         with:
           target: ${{ matrix.target }}
           args: --release --out dist -i python3.9 python3.10 python3.11 python3.12 python3.13
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         with:
           name: wheels-macos-${{ matrix.target }}
           path: dist
@@ -69,7 +69,7 @@ jobs:
         with:
           target: x86_64
           args: --release --out dist -i python3.9 python3.10 python3.11 python3.12 python3.13
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         with:
           name: wheels-windows-${{ matrix.target }}
           path: dist
@@ -84,7 +84,7 @@ jobs:
         with:
           command: sdist
           args: --out dist
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         with:
           name: wheels-sdist
           path: dist
@@ -100,7 +100,7 @@ jobs:
     permissions:
       id-token: write   # trusted publishing
     steps:
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v6
         with:
           pattern: wheels-*
           merge-multiple: true
