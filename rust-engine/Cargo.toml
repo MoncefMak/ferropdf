@@ -5,7 +5,7 @@ edition = "2021"
 authors = ["FastPDF Contributors"]
 description = "High-performance PDF generation engine with HTML/CSS rendering"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/fastpdf/fastpdf"
+repository = "https://github.com/MoncefMak/ferropdf"
 keywords = ["pdf", "html", "css", "rendering", "document"]
 categories = ["rendering", "text-processing"]
 

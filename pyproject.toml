@@ -45,11 +45,11 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/MoncefMak/fast-pdf"
-Documentation = "https://github.com/MoncefMak/fast-pdf#readme"
-Repository = "https://github.com/MoncefMak/fast-pdf"
-Issues = "https://github.com/MoncefMak/fast-pdf/issues"
-Changelog = "https://github.com/MoncefMak/fast-pdf/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/MoncefMak/ferropdf"
+Documentation = "https://github.com/MoncefMak/ferropdf#readme"
+Repository = "https://github.com/MoncefMak/ferropdf"
+Issues = "https://github.com/MoncefMak/ferropdf/issues"
+Changelog = "https://github.com/MoncefMak/ferropdf/blob/main/CHANGELOG.md"
 
 [tool.maturin]
 manifest-path = "rust-engine/Cargo.toml"
