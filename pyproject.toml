@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "ferropdf"
-version = "0.1.0"
+version = "0.1.1"
 description = "High-performance PDF generation from HTML/CSS/Tailwind — Rust-powered Python library"
 readme = "README.md"
 license = { text = "MIT OR Apache-2.0" }
