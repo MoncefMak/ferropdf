@@ -99,10 +99,7 @@ impl Renderer {
 
     /// Render all pages into paint commands.
     pub fn render_pages(&self, pages: &[Page]) -> Vec<Vec<PaintCommand>> {
-        pages
-            .iter()
-            .map(|page| self.render_page(page))
-            .collect()
+        pages.iter().map(|page| self.render_page(page)).collect()
     }
 
     /// Render a single page into paint commands.
@@ -172,9 +169,7 @@ impl Renderer {
         // Text content
         if let Some(text) = &layout_box.text {
             if !text.is_empty() {
-                let font_size = layout_box
-                    .style
-                    .font_size_px(16.0, 16.0);
+                let font_size = layout_box.style.font_size_px(16.0, 16.0);
                 let font_weight = layout_box.style.font_weight();
                 let font_family = layout_box.style.font_family().to_string();
                 let color = layout_box.style.color();
@@ -213,7 +208,8 @@ impl Renderer {
         }
 
         // Image
-        if let (Some(src), LayoutBoxType::Replaced) = (&layout_box.image_src, &layout_box.box_type) {
+        if let (Some(src), LayoutBoxType::Replaced) = (&layout_box.image_src, &layout_box.box_type)
+        {
             commands.push(PaintCommand::Image {
                 x: dims.content.x + offset_x,
                 y: dims.content.y + offset_y,
@@ -262,7 +258,7 @@ impl Renderer {
                 .style
                 .get(&CssProperty::BorderTopColor)
                 .and_then(|v| v.as_color())
-                .unwrap_or(Color::black());
+                .unwrap_or_default();
 
             commands.push(PaintCommand::Line {
                 x1: x,
@@ -280,7 +276,7 @@ impl Renderer {
                 .style
                 .get(&CssProperty::BorderRightColor)
                 .and_then(|v| v.as_color())
-                .unwrap_or(Color::black());
+                .unwrap_or_default();
 
             commands.push(PaintCommand::Line {
                 x1: x + w,
@@ -298,7 +294,7 @@ impl Renderer {
                 .style
                 .get(&CssProperty::BorderBottomColor)
                 .and_then(|v| v.as_color())
-                .unwrap_or(Color::black());
+                .unwrap_or_default();
 
             commands.push(PaintCommand::Line {
                 x1: x,
@@ -316,7 +312,7 @@ impl Renderer {
                 .style
                 .get(&CssProperty::BorderLeftColor)
                 .and_then(|v| v.as_color())
-                .unwrap_or(Color::black());
+                .unwrap_or_default();
 
             commands.push(PaintCommand::Line {
                 x1: x,

@@ -1,8 +1,8 @@
 //! Pagination — splitting a layout tree into pages for PDF output.
 
-use once_cell::sync::Lazy;
 use super::box_model::{LayoutBox, LayoutBoxType, Rect};
 use crate::css::properties::ComputedStyle;
+use once_cell::sync::Lazy;
 
 /// Strip HTML tags for plain-text header/footer rendering.
 static RE_TAGS: Lazy<regex::Regex> =
@@ -27,7 +27,7 @@ impl PageSize {
     /// US Letter (8.5" × 11").
     pub fn letter() -> Self {
         Self {
-            width: 8.5 * 96.0,  // 816px
+            width: 8.5 * 96.0,   // 816px
             height: 11.0 * 96.0, // 1056px
         }
     }
@@ -105,7 +105,7 @@ impl PageLayout {
     pub fn new(size: PageSize) -> Self {
         Self {
             size,
-            margin_top: 72.0,    // 1 inch
+            margin_top: 72.0, // 1 inch
             margin_right: 72.0,
             margin_bottom: 72.0,
             margin_left: 72.0,
@@ -198,7 +198,13 @@ impl Paginator {
         let content_height = self.page_layout.content_height();
         let mut y_offset = 0.0;
 
-        self.split_into_pages(root, &mut pages, &mut current_page, &mut y_offset, content_height);
+        self.split_into_pages(
+            root,
+            &mut pages,
+            &mut current_page,
+            &mut y_offset,
+            content_height,
+        );
 
         // Add the last page if it has content
         if !current_page.content.is_empty() {
@@ -258,23 +264,37 @@ impl Paginator {
         width: f64,
         height: f64,
     ) -> LayoutBox {
-
         let mut container = LayoutBox::new(LayoutBoxType::Block, ComputedStyle::default_root());
-        container.dimensions.content = Rect { x, y, width, height };
+        container.dimensions.content = Rect {
+            x,
+            y,
+            width,
+            height,
+        };
 
         // Strip basic HTML tags to get text content
         let text = html
-            .replace("<div>", "").replace("</div>", "")
-            .replace("<span>", "").replace("</span>", "")
-            .replace("<p>", "").replace("</p>", "")
-            .replace("<header>", "").replace("</header>", "")
-            .replace("<footer>", "").replace("</footer>", "");
+            .replace("<div>", "")
+            .replace("</div>", "")
+            .replace("<span>", "")
+            .replace("</span>", "")
+            .replace("<p>", "")
+            .replace("</p>", "")
+            .replace("<header>", "")
+            .replace("</header>", "")
+            .replace("<footer>", "")
+            .replace("</footer>", "");
         // Remove any remaining HTML tags
         let text = RE_TAGS.replace_all(&text, "").trim().to_string();
 
         if !text.is_empty() {
             let mut text_box = LayoutBox::text_box(text, ComputedStyle::default_root());
-            text_box.dimensions.content = Rect { x: 0.0, y: 0.0, width, height };
+            text_box.dimensions.content = Rect {
+                x: 0.0,
+                y: 0.0,
+                width,
+                height,
+            };
             container.children.push(text_box);
         }
 
@@ -292,10 +312,8 @@ impl Paginator {
         // Check for page break before
         if layout_box.page_break_before && !current_page.content.is_empty() {
             let page_num = pages.len() + 2;
-            let completed = std::mem::replace(
-                current_page,
-                Page::new(page_num, self.page_layout.clone()),
-            );
+            let completed =
+                std::mem::replace(current_page, Page::new(page_num, self.page_layout.clone()));
             pages.push(completed);
             *y_offset = 0.0;
         }
@@ -306,10 +324,8 @@ impl Paginator {
         if *y_offset + box_height > page_height && *y_offset > 0.0 {
             // Start a new page
             let page_num = pages.len() + 2;
-            let completed = std::mem::replace(
-                current_page,
-                Page::new(page_num, self.page_layout.clone()),
-            );
+            let completed =
+                std::mem::replace(current_page, Page::new(page_num, self.page_layout.clone()));
             pages.push(completed);
             *y_offset = 0.0;
         }
@@ -318,8 +334,7 @@ impl Paginator {
         // keep it together
         if layout_box.avoid_break_inside && box_height <= page_height {
             let mut adjusted_box = layout_box.clone();
-            adjusted_box.dimensions.content.y =
-                self.page_layout.content_top() + *y_offset;
+            adjusted_box.dimensions.content.y = self.page_layout.content_top() + *y_offset;
             current_page.content.push(adjusted_box);
             *y_offset += box_height;
         } else if box_height > page_height && !layout_box.children.is_empty() {
@@ -330,8 +345,7 @@ impl Paginator {
         } else {
             // Box fits on current page
             let mut adjusted_box = layout_box.clone();
-            adjusted_box.dimensions.content.y =
-                self.page_layout.content_top() + *y_offset;
+            adjusted_box.dimensions.content.y = self.page_layout.content_top() + *y_offset;
             current_page.content.push(adjusted_box);
             *y_offset += box_height;
         }
@@ -339,10 +353,8 @@ impl Paginator {
         // Check for page break after
         if layout_box.page_break_after {
             let page_num = pages.len() + 2;
-            let completed = std::mem::replace(
-                current_page,
-                Page::new(page_num, self.page_layout.clone()),
-            );
+            let completed =
+                std::mem::replace(current_page, Page::new(page_num, self.page_layout.clone()));
             pages.push(completed);
             *y_offset = 0.0;
         }

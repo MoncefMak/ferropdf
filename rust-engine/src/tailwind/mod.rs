@@ -9,9 +9,9 @@ use std::collections::HashMap;
 
 use once_cell::sync::Lazy;
 
-use crate::css::stylesheet::{CssRule, Declaration, Stylesheet};
 use crate::css::properties::CssProperty;
 use crate::css::selector::Selector;
+use crate::css::stylesheet::{CssRule, Declaration, Stylesheet};
 use crate::css::values::{Color, CssValue, Length};
 
 /// Pre-compiled regex for extracting Tailwind class attributes.
@@ -22,91 +22,133 @@ static CLASS_ATTR_RE: Lazy<regex::Regex> =
 // in resolve_spacing / resolve_colors / resolve_sizing / resolve_borders.
 
 /// Tailwind spacing scale: suffix → pixel value.
-static SPACING_PX: Lazy<HashMap<&'static str, f64>> = Lazy::new(|| [
-    ("0", 0.0), ("0.5", 2.0), ("1", 4.0), ("1.5", 6.0),
-    ("2", 8.0), ("2.5", 10.0), ("3", 12.0), ("3.5", 14.0),
-    ("4", 16.0), ("5", 20.0), ("6", 24.0), ("7", 28.0),
-    ("8", 32.0), ("9", 36.0), ("10", 40.0), ("11", 44.0),
-    ("12", 48.0), ("14", 56.0), ("16", 64.0), ("20", 80.0),
-    ("24", 96.0), ("28", 112.0), ("32", 128.0), ("36", 144.0),
-    ("40", 160.0), ("44", 176.0), ("48", 192.0), ("52", 208.0),
-    ("56", 224.0), ("60", 240.0), ("64", 256.0), ("72", 288.0),
-    ("80", 320.0), ("96", 384.0),
-    ("px", 1.0), ("auto", -1.0),
-].into_iter().collect());
+static SPACING_PX: Lazy<HashMap<&'static str, f64>> = Lazy::new(|| {
+    [
+        ("0", 0.0),
+        ("0.5", 2.0),
+        ("1", 4.0),
+        ("1.5", 6.0),
+        ("2", 8.0),
+        ("2.5", 10.0),
+        ("3", 12.0),
+        ("3.5", 14.0),
+        ("4", 16.0),
+        ("5", 20.0),
+        ("6", 24.0),
+        ("7", 28.0),
+        ("8", 32.0),
+        ("9", 36.0),
+        ("10", 40.0),
+        ("11", 44.0),
+        ("12", 48.0),
+        ("14", 56.0),
+        ("16", 64.0),
+        ("20", 80.0),
+        ("24", 96.0),
+        ("28", 112.0),
+        ("32", 128.0),
+        ("36", 144.0),
+        ("40", 160.0),
+        ("44", 176.0),
+        ("48", 192.0),
+        ("52", 208.0),
+        ("56", 224.0),
+        ("60", 240.0),
+        ("64", 256.0),
+        ("72", 288.0),
+        ("80", 320.0),
+        ("96", 384.0),
+        ("px", 1.0),
+        ("auto", -1.0),
+    ]
+    .into_iter()
+    .collect()
+});
 
 /// Tailwind colour palette: name → Color.
-static COLOR_MAP: Lazy<HashMap<&'static str, Color>> = Lazy::new(|| [
-    ("white",       Color::rgb(255, 255, 255)),
-    ("black",       Color::rgb(0, 0, 0)),
-    ("transparent", Color::transparent()),
-    ("gray-50",     Color::rgb(249, 250, 251)),
-    ("gray-100",    Color::rgb(243, 244, 246)),
-    ("gray-200",    Color::rgb(229, 231, 235)),
-    ("gray-300",    Color::rgb(209, 213, 219)),
-    ("gray-400",    Color::rgb(156, 163, 175)),
-    ("gray-500",    Color::rgb(107, 114, 128)),
-    ("gray-600",    Color::rgb(75,  85,  99)),
-    ("gray-700",    Color::rgb(55,  65,  81)),
-    ("gray-800",    Color::rgb(31,  41,  55)),
-    ("gray-900",    Color::rgb(17,  24,  39)),
-    ("red-50",      Color::rgb(254, 242, 242)),
-    ("red-500",     Color::rgb(239, 68,  68)),
-    ("red-600",     Color::rgb(220, 38,  38)),
-    ("red-700",     Color::rgb(185, 28,  28)),
-    ("blue-50",     Color::rgb(239, 246, 255)),
-    ("blue-500",    Color::rgb(59,  130, 246)),
-    ("blue-600",    Color::rgb(37,  99,  235)),
-    ("blue-700",    Color::rgb(29,  78,  216)),
-    ("green-50",    Color::rgb(240, 253, 244)),
-    ("green-500",   Color::rgb(34,  197, 94)),
-    ("green-600",   Color::rgb(22,  163, 74)),
-    ("green-700",   Color::rgb(21,  128, 61)),
-    ("yellow-50",   Color::rgb(254, 252, 232)),
-    ("yellow-500",  Color::rgb(234, 179, 8)),
-    ("indigo-50",   Color::rgb(238, 242, 255)),
-    ("indigo-500",  Color::rgb(99,  102, 241)),
-    ("indigo-600",  Color::rgb(79,  70,  229)),
-    ("purple-500",  Color::rgb(168, 85,  247)),
-    ("pink-500",    Color::rgb(236, 72,  153)),
-].into_iter().collect());
+static COLOR_MAP: Lazy<HashMap<&'static str, Color>> = Lazy::new(|| {
+    [
+        ("white", Color::rgb(255, 255, 255)),
+        ("black", Color::rgb(0, 0, 0)),
+        ("transparent", Color::transparent()),
+        ("gray-50", Color::rgb(249, 250, 251)),
+        ("gray-100", Color::rgb(243, 244, 246)),
+        ("gray-200", Color::rgb(229, 231, 235)),
+        ("gray-300", Color::rgb(209, 213, 219)),
+        ("gray-400", Color::rgb(156, 163, 175)),
+        ("gray-500", Color::rgb(107, 114, 128)),
+        ("gray-600", Color::rgb(75, 85, 99)),
+        ("gray-700", Color::rgb(55, 65, 81)),
+        ("gray-800", Color::rgb(31, 41, 55)),
+        ("gray-900", Color::rgb(17, 24, 39)),
+        ("red-50", Color::rgb(254, 242, 242)),
+        ("red-500", Color::rgb(239, 68, 68)),
+        ("red-600", Color::rgb(220, 38, 38)),
+        ("red-700", Color::rgb(185, 28, 28)),
+        ("blue-50", Color::rgb(239, 246, 255)),
+        ("blue-500", Color::rgb(59, 130, 246)),
+        ("blue-600", Color::rgb(37, 99, 235)),
+        ("blue-700", Color::rgb(29, 78, 216)),
+        ("green-50", Color::rgb(240, 253, 244)),
+        ("green-500", Color::rgb(34, 197, 94)),
+        ("green-600", Color::rgb(22, 163, 74)),
+        ("green-700", Color::rgb(21, 128, 61)),
+        ("yellow-50", Color::rgb(254, 252, 232)),
+        ("yellow-500", Color::rgb(234, 179, 8)),
+        ("indigo-50", Color::rgb(238, 242, 255)),
+        ("indigo-500", Color::rgb(99, 102, 241)),
+        ("indigo-600", Color::rgb(79, 70, 229)),
+        ("purple-500", Color::rgb(168, 85, 247)),
+        ("pink-500", Color::rgb(236, 72, 153)),
+    ]
+    .into_iter()
+    .collect()
+});
 
 /// Tailwind sizing/dimension scale: suffix → CssValue.
-static SIZE_MAP: Lazy<HashMap<&'static str, CssValue>> = Lazy::new(|| [
-    ("0",    CssValue::Length(Length::px(0.0))),
-    ("px",   CssValue::Length(Length::px(1.0))),
-    ("1",    CssValue::Length(Length::px(4.0))),
-    ("2",    CssValue::Length(Length::px(8.0))),
-    ("4",    CssValue::Length(Length::px(16.0))),
-    ("8",    CssValue::Length(Length::px(32.0))),
-    ("12",   CssValue::Length(Length::px(48.0))),
-    ("16",   CssValue::Length(Length::px(64.0))),
-    ("24",   CssValue::Length(Length::px(96.0))),
-    ("32",   CssValue::Length(Length::px(128.0))),
-    ("48",   CssValue::Length(Length::px(192.0))),
-    ("64",   CssValue::Length(Length::px(256.0))),
-    ("96",   CssValue::Length(Length::px(384.0))),
-    ("full", CssValue::Percentage(100.0)),
-    ("1/2",  CssValue::Percentage(50.0)),
-    ("1/3",  CssValue::Percentage(33.333)),
-    ("2/3",  CssValue::Percentage(66.667)),
-    ("1/4",  CssValue::Percentage(25.0)),
-    ("3/4",  CssValue::Percentage(75.0)),
-    ("auto", CssValue::Auto),
-].into_iter().collect());
+static SIZE_MAP: Lazy<HashMap<&'static str, CssValue>> = Lazy::new(|| {
+    [
+        ("0", CssValue::Length(Length::px(0.0))),
+        ("px", CssValue::Length(Length::px(1.0))),
+        ("1", CssValue::Length(Length::px(4.0))),
+        ("2", CssValue::Length(Length::px(8.0))),
+        ("4", CssValue::Length(Length::px(16.0))),
+        ("8", CssValue::Length(Length::px(32.0))),
+        ("12", CssValue::Length(Length::px(48.0))),
+        ("16", CssValue::Length(Length::px(64.0))),
+        ("24", CssValue::Length(Length::px(96.0))),
+        ("32", CssValue::Length(Length::px(128.0))),
+        ("48", CssValue::Length(Length::px(192.0))),
+        ("64", CssValue::Length(Length::px(256.0))),
+        ("96", CssValue::Length(Length::px(384.0))),
+        ("full", CssValue::Percentage(100.0)),
+        ("1/2", CssValue::Percentage(50.0)),
+        ("1/3", CssValue::Percentage(33.333)),
+        ("2/3", CssValue::Percentage(66.667)),
+        ("1/4", CssValue::Percentage(25.0)),
+        ("3/4", CssValue::Percentage(75.0)),
+        ("auto", CssValue::Auto),
+    ]
+    .into_iter()
+    .collect()
+});
 
 /// Tailwind border-radius map: class name → pixel radius.
-static BORDER_RADIUS_MAP: Lazy<HashMap<&'static str, f64>> = Lazy::new(|| [
-    ("rounded-none",  0.0),
-    ("rounded-sm",    2.0),
-    ("rounded",       4.0),
-    ("rounded-md",    6.0),
-    ("rounded-lg",    8.0),
-    ("rounded-xl",   12.0),
-    ("rounded-2xl",  16.0),
-    ("rounded-3xl",  24.0),
-    ("rounded-full", 9999.0),
-].into_iter().collect());
+static BORDER_RADIUS_MAP: Lazy<HashMap<&'static str, f64>> = Lazy::new(|| {
+    [
+        ("rounded-none", 0.0),
+        ("rounded-sm", 2.0),
+        ("rounded", 4.0),
+        ("rounded-md", 6.0),
+        ("rounded-lg", 8.0),
+        ("rounded-xl", 12.0),
+        ("rounded-2xl", 16.0),
+        ("rounded-3xl", 24.0),
+        ("rounded-full", 9999.0),
+    ]
+    .into_iter()
+    .collect()
+});
 /// Resolve a subset of Tailwind CSS utility classes to CSS declarations.
 ///
 /// This is NOT a full Tailwind processor — it handles the most common utility
@@ -169,20 +211,48 @@ impl TailwindResolver {
     /// Resolve spacing utilities (p-*, m-*, px-*, py-*, pt-*, etc.).
     fn resolve_spacing(class: &str) -> Option<Vec<Declaration>> {
         let prefixes = [
-            ("px-", vec![CssProperty::PaddingLeft, CssProperty::PaddingRight]),
-            ("py-", vec![CssProperty::PaddingTop, CssProperty::PaddingBottom]),
+            (
+                "px-",
+                vec![CssProperty::PaddingLeft, CssProperty::PaddingRight],
+            ),
+            (
+                "py-",
+                vec![CssProperty::PaddingTop, CssProperty::PaddingBottom],
+            ),
             ("pt-", vec![CssProperty::PaddingTop]),
             ("pr-", vec![CssProperty::PaddingRight]),
             ("pb-", vec![CssProperty::PaddingBottom]),
             ("pl-", vec![CssProperty::PaddingLeft]),
-            ("p-", vec![CssProperty::PaddingTop, CssProperty::PaddingRight, CssProperty::PaddingBottom, CssProperty::PaddingLeft]),
-            ("mx-", vec![CssProperty::MarginLeft, CssProperty::MarginRight]),
-            ("my-", vec![CssProperty::MarginTop, CssProperty::MarginBottom]),
+            (
+                "p-",
+                vec![
+                    CssProperty::PaddingTop,
+                    CssProperty::PaddingRight,
+                    CssProperty::PaddingBottom,
+                    CssProperty::PaddingLeft,
+                ],
+            ),
+            (
+                "mx-",
+                vec![CssProperty::MarginLeft, CssProperty::MarginRight],
+            ),
+            (
+                "my-",
+                vec![CssProperty::MarginTop, CssProperty::MarginBottom],
+            ),
             ("mt-", vec![CssProperty::MarginTop]),
             ("mr-", vec![CssProperty::MarginRight]),
             ("mb-", vec![CssProperty::MarginBottom]),
             ("ml-", vec![CssProperty::MarginLeft]),
-            ("m-", vec![CssProperty::MarginTop, CssProperty::MarginRight, CssProperty::MarginBottom, CssProperty::MarginLeft]),
+            (
+                "m-",
+                vec![
+                    CssProperty::MarginTop,
+                    CssProperty::MarginRight,
+                    CssProperty::MarginBottom,
+                    CssProperty::MarginLeft,
+                ],
+            ),
             ("gap-", vec![CssProperty::Gap]),
         ];
 
@@ -245,46 +315,130 @@ impl TailwindResolver {
             ]),
 
             // Font weight
-            "font-thin" => Some(vec![Declaration::new(CssProperty::FontWeight, CssValue::Number(100.0))]),
-            "font-extralight" => Some(vec![Declaration::new(CssProperty::FontWeight, CssValue::Number(200.0))]),
-            "font-light" => Some(vec![Declaration::new(CssProperty::FontWeight, CssValue::Number(300.0))]),
-            "font-normal" => Some(vec![Declaration::new(CssProperty::FontWeight, CssValue::Number(400.0))]),
-            "font-medium" => Some(vec![Declaration::new(CssProperty::FontWeight, CssValue::Number(500.0))]),
-            "font-semibold" => Some(vec![Declaration::new(CssProperty::FontWeight, CssValue::Number(600.0))]),
-            "font-bold" => Some(vec![Declaration::new(CssProperty::FontWeight, CssValue::Number(700.0))]),
-            "font-extrabold" => Some(vec![Declaration::new(CssProperty::FontWeight, CssValue::Number(800.0))]),
-            "font-black" => Some(vec![Declaration::new(CssProperty::FontWeight, CssValue::Number(900.0))]),
+            "font-thin" => Some(vec![Declaration::new(
+                CssProperty::FontWeight,
+                CssValue::Number(100.0),
+            )]),
+            "font-extralight" => Some(vec![Declaration::new(
+                CssProperty::FontWeight,
+                CssValue::Number(200.0),
+            )]),
+            "font-light" => Some(vec![Declaration::new(
+                CssProperty::FontWeight,
+                CssValue::Number(300.0),
+            )]),
+            "font-normal" => Some(vec![Declaration::new(
+                CssProperty::FontWeight,
+                CssValue::Number(400.0),
+            )]),
+            "font-medium" => Some(vec![Declaration::new(
+                CssProperty::FontWeight,
+                CssValue::Number(500.0),
+            )]),
+            "font-semibold" => Some(vec![Declaration::new(
+                CssProperty::FontWeight,
+                CssValue::Number(600.0),
+            )]),
+            "font-bold" => Some(vec![Declaration::new(
+                CssProperty::FontWeight,
+                CssValue::Number(700.0),
+            )]),
+            "font-extrabold" => Some(vec![Declaration::new(
+                CssProperty::FontWeight,
+                CssValue::Number(800.0),
+            )]),
+            "font-black" => Some(vec![Declaration::new(
+                CssProperty::FontWeight,
+                CssValue::Number(900.0),
+            )]),
 
             // Font style
-            "italic" => Some(vec![Declaration::new(CssProperty::FontStyle, CssValue::Keyword("italic".to_string()))]),
-            "not-italic" => Some(vec![Declaration::new(CssProperty::FontStyle, CssValue::Keyword("normal".to_string()))]),
+            "italic" => Some(vec![Declaration::new(
+                CssProperty::FontStyle,
+                CssValue::Keyword("italic".to_string()),
+            )]),
+            "not-italic" => Some(vec![Declaration::new(
+                CssProperty::FontStyle,
+                CssValue::Keyword("normal".to_string()),
+            )]),
 
             // Text alignment
-            "text-left" => Some(vec![Declaration::new(CssProperty::TextAlign, CssValue::Keyword("left".to_string()))]),
-            "text-center" => Some(vec![Declaration::new(CssProperty::TextAlign, CssValue::Keyword("center".to_string()))]),
-            "text-right" => Some(vec![Declaration::new(CssProperty::TextAlign, CssValue::Keyword("right".to_string()))]),
-            "text-justify" => Some(vec![Declaration::new(CssProperty::TextAlign, CssValue::Keyword("justify".to_string()))]),
+            "text-left" => Some(vec![Declaration::new(
+                CssProperty::TextAlign,
+                CssValue::Keyword("left".to_string()),
+            )]),
+            "text-center" => Some(vec![Declaration::new(
+                CssProperty::TextAlign,
+                CssValue::Keyword("center".to_string()),
+            )]),
+            "text-right" => Some(vec![Declaration::new(
+                CssProperty::TextAlign,
+                CssValue::Keyword("right".to_string()),
+            )]),
+            "text-justify" => Some(vec![Declaration::new(
+                CssProperty::TextAlign,
+                CssValue::Keyword("justify".to_string()),
+            )]),
 
             // Text decoration
-            "underline" => Some(vec![Declaration::new(CssProperty::TextDecoration, CssValue::Keyword("underline".to_string()))]),
-            "line-through" => Some(vec![Declaration::new(CssProperty::TextDecoration, CssValue::Keyword("line-through".to_string()))]),
-            "no-underline" => Some(vec![Declaration::new(CssProperty::TextDecoration, CssValue::Keyword("none".to_string()))]),
+            "underline" => Some(vec![Declaration::new(
+                CssProperty::TextDecoration,
+                CssValue::Keyword("underline".to_string()),
+            )]),
+            "line-through" => Some(vec![Declaration::new(
+                CssProperty::TextDecoration,
+                CssValue::Keyword("line-through".to_string()),
+            )]),
+            "no-underline" => Some(vec![Declaration::new(
+                CssProperty::TextDecoration,
+                CssValue::Keyword("none".to_string()),
+            )]),
 
             // Text transform
-            "uppercase" => Some(vec![Declaration::new(CssProperty::TextTransform, CssValue::Keyword("uppercase".to_string()))]),
-            "lowercase" => Some(vec![Declaration::new(CssProperty::TextTransform, CssValue::Keyword("lowercase".to_string()))]),
-            "capitalize" => Some(vec![Declaration::new(CssProperty::TextTransform, CssValue::Keyword("capitalize".to_string()))]),
-            "normal-case" => Some(vec![Declaration::new(CssProperty::TextTransform, CssValue::Keyword("none".to_string()))]),
+            "uppercase" => Some(vec![Declaration::new(
+                CssProperty::TextTransform,
+                CssValue::Keyword("uppercase".to_string()),
+            )]),
+            "lowercase" => Some(vec![Declaration::new(
+                CssProperty::TextTransform,
+                CssValue::Keyword("lowercase".to_string()),
+            )]),
+            "capitalize" => Some(vec![Declaration::new(
+                CssProperty::TextTransform,
+                CssValue::Keyword("capitalize".to_string()),
+            )]),
+            "normal-case" => Some(vec![Declaration::new(
+                CssProperty::TextTransform,
+                CssValue::Keyword("none".to_string()),
+            )]),
 
             // Whitespace
-            "whitespace-normal" => Some(vec![Declaration::new(CssProperty::WhiteSpace, CssValue::Keyword("normal".to_string()))]),
-            "whitespace-nowrap" => Some(vec![Declaration::new(CssProperty::WhiteSpace, CssValue::Keyword("nowrap".to_string()))]),
-            "whitespace-pre" => Some(vec![Declaration::new(CssProperty::WhiteSpace, CssValue::Keyword("pre".to_string()))]),
+            "whitespace-normal" => Some(vec![Declaration::new(
+                CssProperty::WhiteSpace,
+                CssValue::Keyword("normal".to_string()),
+            )]),
+            "whitespace-nowrap" => Some(vec![Declaration::new(
+                CssProperty::WhiteSpace,
+                CssValue::Keyword("nowrap".to_string()),
+            )]),
+            "whitespace-pre" => Some(vec![Declaration::new(
+                CssProperty::WhiteSpace,
+                CssValue::Keyword("pre".to_string()),
+            )]),
 
             // Font family
-            "font-sans" => Some(vec![Declaration::new(CssProperty::FontFamily, CssValue::Keyword("sans-serif".to_string()))]),
-            "font-serif" => Some(vec![Declaration::new(CssProperty::FontFamily, CssValue::Keyword("serif".to_string()))]),
-            "font-mono" => Some(vec![Declaration::new(CssProperty::FontFamily, CssValue::Keyword("monospace".to_string()))]),
+            "font-sans" => Some(vec![Declaration::new(
+                CssProperty::FontFamily,
+                CssValue::Keyword("sans-serif".to_string()),
+            )]),
+            "font-serif" => Some(vec![Declaration::new(
+                CssProperty::FontFamily,
+                CssValue::Keyword("serif".to_string()),
+            )]),
+            "font-mono" => Some(vec![Declaration::new(
+                CssProperty::FontFamily,
+                CssValue::Keyword("monospace".to_string()),
+            )]),
 
             _ => None,
         }
@@ -330,39 +484,114 @@ impl TailwindResolver {
     /// Resolve layout utilities.
     fn resolve_layout(class: &str) -> Option<Vec<Declaration>> {
         match class {
-            "block" => Some(vec![Declaration::new(CssProperty::Display, CssValue::Keyword("block".to_string()))]),
-            "inline-block" => Some(vec![Declaration::new(CssProperty::Display, CssValue::Keyword("inline-block".to_string()))]),
-            "inline" => Some(vec![Declaration::new(CssProperty::Display, CssValue::Keyword("inline".to_string()))]),
-            "flex" => Some(vec![Declaration::new(CssProperty::Display, CssValue::Keyword("flex".to_string()))]),
-            "inline-flex" => Some(vec![Declaration::new(CssProperty::Display, CssValue::Keyword("inline-flex".to_string()))]),
-            "table" => Some(vec![Declaration::new(CssProperty::Display, CssValue::Keyword("table".to_string()))]),
-            "hidden" => Some(vec![Declaration::new(CssProperty::Display, CssValue::Keyword("none".to_string()))]),
-            "grid" => Some(vec![Declaration::new(CssProperty::Display, CssValue::Keyword("grid".to_string()))]),
+            "block" => Some(vec![Declaration::new(
+                CssProperty::Display,
+                CssValue::Keyword("block".to_string()),
+            )]),
+            "inline-block" => Some(vec![Declaration::new(
+                CssProperty::Display,
+                CssValue::Keyword("inline-block".to_string()),
+            )]),
+            "inline" => Some(vec![Declaration::new(
+                CssProperty::Display,
+                CssValue::Keyword("inline".to_string()),
+            )]),
+            "flex" => Some(vec![Declaration::new(
+                CssProperty::Display,
+                CssValue::Keyword("flex".to_string()),
+            )]),
+            "inline-flex" => Some(vec![Declaration::new(
+                CssProperty::Display,
+                CssValue::Keyword("inline-flex".to_string()),
+            )]),
+            "table" => Some(vec![Declaration::new(
+                CssProperty::Display,
+                CssValue::Keyword("table".to_string()),
+            )]),
+            "hidden" => Some(vec![Declaration::new(
+                CssProperty::Display,
+                CssValue::Keyword("none".to_string()),
+            )]),
+            "grid" => Some(vec![Declaration::new(
+                CssProperty::Display,
+                CssValue::Keyword("grid".to_string()),
+            )]),
 
             // Flex direction
-            "flex-row" => Some(vec![Declaration::new(CssProperty::FlexDirection, CssValue::Keyword("row".to_string()))]),
-            "flex-row-reverse" => Some(vec![Declaration::new(CssProperty::FlexDirection, CssValue::Keyword("row-reverse".to_string()))]),
-            "flex-col" => Some(vec![Declaration::new(CssProperty::FlexDirection, CssValue::Keyword("column".to_string()))]),
-            "flex-col-reverse" => Some(vec![Declaration::new(CssProperty::FlexDirection, CssValue::Keyword("column-reverse".to_string()))]),
+            "flex-row" => Some(vec![Declaration::new(
+                CssProperty::FlexDirection,
+                CssValue::Keyword("row".to_string()),
+            )]),
+            "flex-row-reverse" => Some(vec![Declaration::new(
+                CssProperty::FlexDirection,
+                CssValue::Keyword("row-reverse".to_string()),
+            )]),
+            "flex-col" => Some(vec![Declaration::new(
+                CssProperty::FlexDirection,
+                CssValue::Keyword("column".to_string()),
+            )]),
+            "flex-col-reverse" => Some(vec![Declaration::new(
+                CssProperty::FlexDirection,
+                CssValue::Keyword("column-reverse".to_string()),
+            )]),
 
             // Flex wrap
-            "flex-wrap" => Some(vec![Declaration::new(CssProperty::FlexWrap, CssValue::Keyword("wrap".to_string()))]),
-            "flex-nowrap" => Some(vec![Declaration::new(CssProperty::FlexWrap, CssValue::Keyword("nowrap".to_string()))]),
+            "flex-wrap" => Some(vec![Declaration::new(
+                CssProperty::FlexWrap,
+                CssValue::Keyword("wrap".to_string()),
+            )]),
+            "flex-nowrap" => Some(vec![Declaration::new(
+                CssProperty::FlexWrap,
+                CssValue::Keyword("nowrap".to_string()),
+            )]),
 
             // Justify content
-            "justify-start" => Some(vec![Declaration::new(CssProperty::JustifyContent, CssValue::Keyword("flex-start".to_string()))]),
-            "justify-end" => Some(vec![Declaration::new(CssProperty::JustifyContent, CssValue::Keyword("flex-end".to_string()))]),
-            "justify-center" => Some(vec![Declaration::new(CssProperty::JustifyContent, CssValue::Keyword("center".to_string()))]),
-            "justify-between" => Some(vec![Declaration::new(CssProperty::JustifyContent, CssValue::Keyword("space-between".to_string()))]),
-            "justify-around" => Some(vec![Declaration::new(CssProperty::JustifyContent, CssValue::Keyword("space-around".to_string()))]),
-            "justify-evenly" => Some(vec![Declaration::new(CssProperty::JustifyContent, CssValue::Keyword("space-evenly".to_string()))]),
+            "justify-start" => Some(vec![Declaration::new(
+                CssProperty::JustifyContent,
+                CssValue::Keyword("flex-start".to_string()),
+            )]),
+            "justify-end" => Some(vec![Declaration::new(
+                CssProperty::JustifyContent,
+                CssValue::Keyword("flex-end".to_string()),
+            )]),
+            "justify-center" => Some(vec![Declaration::new(
+                CssProperty::JustifyContent,
+                CssValue::Keyword("center".to_string()),
+            )]),
+            "justify-between" => Some(vec![Declaration::new(
+                CssProperty::JustifyContent,
+                CssValue::Keyword("space-between".to_string()),
+            )]),
+            "justify-around" => Some(vec![Declaration::new(
+                CssProperty::JustifyContent,
+                CssValue::Keyword("space-around".to_string()),
+            )]),
+            "justify-evenly" => Some(vec![Declaration::new(
+                CssProperty::JustifyContent,
+                CssValue::Keyword("space-evenly".to_string()),
+            )]),
 
             // Align items
-            "items-start" => Some(vec![Declaration::new(CssProperty::AlignItems, CssValue::Keyword("flex-start".to_string()))]),
-            "items-end" => Some(vec![Declaration::new(CssProperty::AlignItems, CssValue::Keyword("flex-end".to_string()))]),
-            "items-center" => Some(vec![Declaration::new(CssProperty::AlignItems, CssValue::Keyword("center".to_string()))]),
-            "items-stretch" => Some(vec![Declaration::new(CssProperty::AlignItems, CssValue::Keyword("stretch".to_string()))]),
-            "items-baseline" => Some(vec![Declaration::new(CssProperty::AlignItems, CssValue::Keyword("baseline".to_string()))]),
+            "items-start" => Some(vec![Declaration::new(
+                CssProperty::AlignItems,
+                CssValue::Keyword("flex-start".to_string()),
+            )]),
+            "items-end" => Some(vec![Declaration::new(
+                CssProperty::AlignItems,
+                CssValue::Keyword("flex-end".to_string()),
+            )]),
+            "items-center" => Some(vec![Declaration::new(
+                CssProperty::AlignItems,
+                CssValue::Keyword("center".to_string()),
+            )]),
+            "items-stretch" => Some(vec![Declaration::new(
+                CssProperty::AlignItems,
+                CssValue::Keyword("stretch".to_string()),
+            )]),
+            "items-baseline" => Some(vec![Declaration::new(
+                CssProperty::AlignItems,
+                CssValue::Keyword("baseline".to_string()),
+            )]),
 
             // Flex grow/shrink
             "flex-1" => Some(vec![
@@ -380,20 +609,50 @@ impl TailwindResolver {
                 Declaration::new(CssProperty::FlexShrink, CssValue::Number(0.0)),
                 Declaration::new(CssProperty::FlexBasis, CssValue::Auto),
             ]),
-            "grow" => Some(vec![Declaration::new(CssProperty::FlexGrow, CssValue::Number(1.0))]),
-            "grow-0" => Some(vec![Declaration::new(CssProperty::FlexGrow, CssValue::Number(0.0))]),
-            "shrink" => Some(vec![Declaration::new(CssProperty::FlexShrink, CssValue::Number(1.0))]),
-            "shrink-0" => Some(vec![Declaration::new(CssProperty::FlexShrink, CssValue::Number(0.0))]),
+            "grow" => Some(vec![Declaration::new(
+                CssProperty::FlexGrow,
+                CssValue::Number(1.0),
+            )]),
+            "grow-0" => Some(vec![Declaration::new(
+                CssProperty::FlexGrow,
+                CssValue::Number(0.0),
+            )]),
+            "shrink" => Some(vec![Declaration::new(
+                CssProperty::FlexShrink,
+                CssValue::Number(1.0),
+            )]),
+            "shrink-0" => Some(vec![Declaration::new(
+                CssProperty::FlexShrink,
+                CssValue::Number(0.0),
+            )]),
 
             // Position
-            "static" => Some(vec![Declaration::new(CssProperty::Position, CssValue::Keyword("static".to_string()))]),
-            "relative" => Some(vec![Declaration::new(CssProperty::Position, CssValue::Keyword("relative".to_string()))]),
-            "absolute" => Some(vec![Declaration::new(CssProperty::Position, CssValue::Keyword("absolute".to_string()))]),
+            "static" => Some(vec![Declaration::new(
+                CssProperty::Position,
+                CssValue::Keyword("static".to_string()),
+            )]),
+            "relative" => Some(vec![Declaration::new(
+                CssProperty::Position,
+                CssValue::Keyword("relative".to_string()),
+            )]),
+            "absolute" => Some(vec![Declaration::new(
+                CssProperty::Position,
+                CssValue::Keyword("absolute".to_string()),
+            )]),
 
             // Page breaks (PDF-specific)
-            "break-before-page" => Some(vec![Declaration::new(CssProperty::PageBreakBefore, CssValue::Keyword("always".to_string()))]),
-            "break-after-page" => Some(vec![Declaration::new(CssProperty::PageBreakAfter, CssValue::Keyword("always".to_string()))]),
-            "break-inside-avoid" => Some(vec![Declaration::new(CssProperty::PageBreakInside, CssValue::Keyword("avoid".to_string()))]),
+            "break-before-page" => Some(vec![Declaration::new(
+                CssProperty::PageBreakBefore,
+                CssValue::Keyword("always".to_string()),
+            )]),
+            "break-after-page" => Some(vec![Declaration::new(
+                CssProperty::PageBreakAfter,
+                CssValue::Keyword("always".to_string()),
+            )]),
+            "break-inside-avoid" => Some(vec![Declaration::new(
+                CssProperty::PageBreakInside,
+                CssValue::Keyword("avoid".to_string()),
+            )]),
 
             _ => None,
         }
@@ -438,10 +697,22 @@ impl TailwindResolver {
                 Declaration::new(CssProperty::BorderRightWidth, CssValue::Length(w)),
                 Declaration::new(CssProperty::BorderBottomWidth, CssValue::Length(w)),
                 Declaration::new(CssProperty::BorderLeftWidth, CssValue::Length(w)),
-                Declaration::new(CssProperty::BorderTopStyle, CssValue::Keyword("solid".to_string())),
-                Declaration::new(CssProperty::BorderRightStyle, CssValue::Keyword("solid".to_string())),
-                Declaration::new(CssProperty::BorderBottomStyle, CssValue::Keyword("solid".to_string())),
-                Declaration::new(CssProperty::BorderLeftStyle, CssValue::Keyword("solid".to_string())),
+                Declaration::new(
+                    CssProperty::BorderTopStyle,
+                    CssValue::Keyword("solid".to_string()),
+                ),
+                Declaration::new(
+                    CssProperty::BorderRightStyle,
+                    CssValue::Keyword("solid".to_string()),
+                ),
+                Declaration::new(
+                    CssProperty::BorderBottomStyle,
+                    CssValue::Keyword("solid".to_string()),
+                ),
+                Declaration::new(
+                    CssProperty::BorderLeftStyle,
+                    CssValue::Keyword("solid".to_string()),
+                ),
             ]);
         }
 

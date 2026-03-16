@@ -14,7 +14,12 @@ pub struct Rect {
 
 impl Rect {
     pub fn new(x: f64, y: f64, width: f64, height: f64) -> Self {
-        Self { x, y, width, height }
+        Self {
+            x,
+            y,
+            width,
+            height,
+        }
     }
 
     pub fn zero() -> Self {
@@ -61,7 +66,12 @@ pub struct EdgeSizes {
 
 impl EdgeSizes {
     pub fn new(top: f64, right: f64, bottom: f64, left: f64) -> Self {
-        Self { top, right, bottom, left }
+        Self {
+            top,
+            right,
+            bottom,
+            left,
+        }
     }
 
     pub fn uniform(value: f64) -> Self {

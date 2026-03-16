@@ -4,11 +4,11 @@
 
 use std::collections::HashMap;
 
-use html5ever::tendril::TendrilSink;
 use html5ever::parse_document;
+use html5ever::tendril::TendrilSink;
 use markup5ever_rcdom::{Handle, NodeData, RcDom};
 
-use super::dom::{DomNode, DomTree, NodeType, ElementData};
+use super::dom::{DomNode, DomTree, ElementData, NodeType};
 use crate::error::{FastPdfError, Result};
 
 /// HTML parser that converts HTML content into a DOM tree.
@@ -50,7 +50,7 @@ impl HtmlParser {
                     .children
                     .borrow()
                     .iter()
-                    .map(|child| Self::convert_node(child))
+                    .map(Self::convert_node)
                     .collect();
                 (NodeType::Document, children)
             }
@@ -58,9 +58,7 @@ impl HtmlParser {
                 let text = contents.borrow().to_string();
                 (NodeType::Text(text), Vec::new())
             }
-            NodeData::Element {
-                name, attrs, ..
-            } => {
+            NodeData::Element { name, attrs, .. } => {
                 let tag_name = name.local.to_string();
                 let mut attributes = HashMap::new();
                 for attr in attrs.borrow().iter() {
@@ -73,7 +71,7 @@ impl HtmlParser {
                     .children
                     .borrow()
                     .iter()
-                    .map(|child| Self::convert_node(child))
+                    .map(Self::convert_node)
                     .collect();
 
                 (
@@ -84,9 +82,7 @@ impl HtmlParser {
                     children,
                 )
             }
-            NodeData::Comment { contents } => {
-                (NodeType::Comment(contents.to_string()), Vec::new())
-            }
+            NodeData::Comment { contents } => (NodeType::Comment(contents.to_string()), Vec::new()),
             NodeData::Doctype { .. } => {
                 // Skip doctype nodes, they're handled by the parser
                 (NodeType::Document, Vec::new())

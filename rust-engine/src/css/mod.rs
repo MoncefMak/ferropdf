@@ -9,6 +9,6 @@ pub mod stylesheet;
 pub mod values;
 
 pub use parser::CssParser;
-pub use properties::{CssProperty, ComputedStyle};
+pub use properties::{ComputedStyle, CssProperty};
 pub use stylesheet::{CssRule, Stylesheet};
 pub use values::{Color, CssValue, Length, LengthUnit};

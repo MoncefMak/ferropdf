@@ -66,6 +66,7 @@ impl RenderOptions {
         header_html = String::new(),
         footer_html = String::new(),
     ))]
+    #[allow(clippy::too_many_arguments)]
     fn new(
         page_size: String,
         orientation: String,
@@ -139,7 +140,8 @@ impl RenderOptions {
             (m, m, m, m)
         };
 
-        let mut layout = PageLayout::new(size).with_margins(margins.0, margins.1, margins.2, margins.3);
+        let mut layout =
+            PageLayout::new(size).with_margins(margins.0, margins.1, margins.2, margins.3);
 
         if !self.header_html.is_empty() {
             layout.header_html = Some(self.header_html.clone());
@@ -156,8 +158,16 @@ impl RenderOptions {
 
     fn to_pdf_config(&self) -> PdfConfig {
         PdfConfig {
-            title: if self.title.is_empty() { None } else { Some(self.title.clone()) },
-            author: if self.author.is_empty() { None } else { Some(self.author.clone()) },
+            title: if self.title.is_empty() {
+                None
+            } else {
+                Some(self.title.clone())
+            },
+            author: if self.author.is_empty() {
+                None
+            } else {
+                Some(self.author.clone())
+            },
             ..PdfConfig::default()
         }
     }
@@ -204,10 +214,13 @@ impl PdfEngine {
         path: &str,
         weight: Option<u32>,
         italic: Option<bool>,
-    ) -> PyResult<()> {
-        self.font_cache
-            .register_font_file(family, weight.unwrap_or(400), italic.unwrap_or(false), path)
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+    ) -> Result<(), FastPdfError> {
+        self.font_cache.register_font_file(
+            family,
+            weight.unwrap_or(400),
+            italic.unwrap_or(false),
+            path,
+        )
     }
 
     /// Set the base path for resolving relative paths.
@@ -223,7 +236,7 @@ impl PdfEngine {
         html: &str,
         css: Option<&str>,
         options: Option<&RenderOptions>,
-    ) -> PyResult<PdfDocument> {
+    ) -> Result<PdfDocument, FastPdfError> {
         let default_opts = RenderOptions::default();
         let opts = options.unwrap_or(&default_opts);
         let html = html.to_owned();
@@ -233,10 +246,15 @@ impl PdfEngine {
         let image_cache = self.image_cache.clone();
 
         // Release the GIL during the CPU-heavy rendering pipeline
-        let result = py.allow_threads(move || {
-            render_pipeline(&html, &css, &opts_owned, Some(font_cache), Some(image_cache))
-        });
-        let render_result = result.map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        let render_result = py.allow_threads(move || {
+            render_pipeline(
+                &html,
+                &css,
+                &opts_owned,
+                Some(font_cache),
+                Some(image_cache),
+            )
+        })?;
         Ok(PdfDocument {
             data: render_result.bytes,
             page_count: render_result.page_count,
@@ -252,7 +270,7 @@ impl PdfEngine {
         output: &str,
         css: Option<&str>,
         options: Option<&RenderOptions>,
-    ) -> PyResult<()> {
+    ) -> Result<(), FastPdfError> {
         let default_opts = RenderOptions::default();
         let opts = options.unwrap_or(&default_opts);
         let html = html.to_owned();
@@ -263,11 +281,16 @@ impl PdfEngine {
         let output = output.to_owned();
 
         // Release the GIL during the CPU-heavy rendering pipeline
-        py.allow_threads(move || -> PyResult<()> {
-            let render_result = render_pipeline(&html, &css, &opts_owned, Some(font_cache), Some(image_cache))
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-            std::fs::write(&output, render_result.bytes)
-                .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
+        py.allow_threads(move || {
+            let render_result = render_pipeline(
+                &html,
+                &css,
+                &opts_owned,
+                Some(font_cache),
+                Some(image_cache),
+            )?;
+            std::fs::write(&output, render_result.bytes)?;
+            Ok(())
         })
     }
 
@@ -279,25 +302,39 @@ impl PdfEngine {
         documents: Vec<(String, String)>, // (html, css) pairs
         options: Option<&RenderOptions>,
         parallel: bool,
-    ) -> PyResult<Vec<PdfDocument>> {
+    ) -> Result<Vec<PdfDocument>, FastPdfError> {
         let font_cache = self.font_cache.clone();
         let image_cache = self.image_cache.clone();
         // Clone options before releasing the GIL (Python refs can't cross thread boundaries)
-        let opts_owned: RenderOptions = options
-            .map(|o| o.clone())
-            .unwrap_or_default();
+        let opts_owned: RenderOptions = options.cloned().unwrap_or_default();
 
         // Release the GIL during the CPU-heavy workload
         let results: Vec<Result<RenderResult, FastPdfError>> = py.allow_threads(|| {
             if parallel {
                 documents
                     .par_iter()
-                    .map(|(html, css)| render_pipeline(html, css, &opts_owned, Some(font_cache.clone()), Some(image_cache.clone())))
+                    .map(|(html, css)| {
+                        render_pipeline(
+                            html,
+                            css,
+                            &opts_owned,
+                            Some(font_cache.clone()),
+                            Some(image_cache.clone()),
+                        )
+                    })
                     .collect()
             } else {
                 documents
                     .iter()
-                    .map(|(html, css)| render_pipeline(html, css, &opts_owned, Some(font_cache.clone()), Some(image_cache.clone())))
+                    .map(|(html, css)| {
+                        render_pipeline(
+                            html,
+                            css,
+                            &opts_owned,
+                            Some(font_cache.clone()),
+                            Some(image_cache.clone()),
+                        )
+                    })
                     .collect()
             }
         });
@@ -305,7 +342,7 @@ impl PdfEngine {
         results
             .into_iter()
             .map(|r| {
-                let rr = r.map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+                let rr = r?;
                 Ok(PdfDocument {
                     data: rr.bytes,
                     page_count: rr.page_count,
@@ -330,9 +367,9 @@ impl PdfDocument {
     }
 
     /// Save the PDF to a file.
-    fn save(&self, path: &str) -> PyResult<()> {
-        std::fs::write(path, &self.data)
-            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
+    fn save(&self, path: &str) -> Result<(), FastPdfError> {
+        std::fs::write(path, &self.data)?;
+        Ok(())
     }
 
     /// Get the number of pages.
@@ -422,7 +459,7 @@ pub fn render_html_to_pdf(
     output: &str,
     css: Option<&str>,
     options: Option<&RenderOptions>,
-) -> PyResult<()> {
+) -> Result<(), FastPdfError> {
     let default_opts = RenderOptions::default();
     let opts = options.unwrap_or(&default_opts);
     let html = html.to_owned();
@@ -430,11 +467,10 @@ pub fn render_html_to_pdf(
     let opts_owned = opts.clone();
     let output = output.to_owned();
 
-    py.allow_threads(move || -> PyResult<()> {
-        let result = render_pipeline(&html, &css, &opts_owned, None, None)
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        std::fs::write(&output, result.bytes)
-            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
+    py.allow_threads(move || {
+        let result = render_pipeline(&html, &css, &opts_owned, None, None)?;
+        std::fs::write(&output, result.bytes)?;
+        Ok(())
     })
 }
 
@@ -446,16 +482,14 @@ pub fn render_html_to_pdf_bytes(
     html: &str,
     css: Option<&str>,
     options: Option<&RenderOptions>,
-) -> PyResult<PdfDocument> {
+) -> Result<PdfDocument, FastPdfError> {
     let default_opts = RenderOptions::default();
     let opts = options.unwrap_or(&default_opts);
     let html = html.to_owned();
     let css = css.unwrap_or("").to_owned();
     let opts_owned = opts.clone();
 
-    let result = py.allow_threads(move || {
-        render_pipeline(&html, &css, &opts_owned, None, None)
-    }).map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+    let result = py.allow_threads(move || render_pipeline(&html, &css, &opts_owned, None, None))?;
 
     Ok(PdfDocument {
         data: result.bytes,
@@ -471,11 +505,9 @@ pub fn batch_render(
     documents: Vec<(String, String)>,
     options: Option<&RenderOptions>,
     parallel: bool,
-) -> PyResult<Vec<PdfDocument>> {
+) -> Result<Vec<PdfDocument>, FastPdfError> {
     // Clone options before releasing the GIL (Python refs can't cross thread boundaries)
-    let opts_owned: RenderOptions = options
-        .map(|o| o.clone())
-        .unwrap_or_default();
+    let opts_owned: RenderOptions = options.cloned().unwrap_or_default();
 
     // Release the GIL during the CPU-heavy workload
     let results: Vec<Result<RenderResult, FastPdfError>> = py.allow_threads(|| {
@@ -495,7 +527,7 @@ pub fn batch_render(
     results
         .into_iter()
         .map(|r| {
-            let rr = r.map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            let rr = r?;
             Ok(PdfDocument {
                 data: rr.bytes,
                 page_count: rr.page_count,

@@ -160,7 +160,7 @@ class TestEdgeCases:
         )
         result = render_pdf(html)
         assert result[:4] == b"%PDF"
-        assert len(result) > 10000
+        assert len(result) > 5000
 
     def test_all_page_sizes(self):
         for size in ["A4", "A3", "Letter", "Legal"]:

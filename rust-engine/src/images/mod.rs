@@ -92,7 +92,9 @@ impl ImageCache {
         };
 
         // Cache it
-        self.images.write().insert(src.to_string(), image_data.clone());
+        self.images
+            .write()
+            .insert(src.to_string(), image_data.clone());
 
         Ok(image_data)
     }
@@ -182,11 +184,13 @@ impl ImageCache {
                 // Use the image crate for raster formats
                 let reader = image::io::Reader::new(std::io::Cursor::new(data))
                     .with_guessed_format()
-                    .map_err(|e| FastPdfError::Image(format!("Failed to detect image format: {}", e)))?;
+                    .map_err(|e| {
+                        FastPdfError::Image(format!("Failed to detect image format: {}", e))
+                    })?;
 
-                let dims = reader
-                    .into_dimensions()
-                    .map_err(|e| FastPdfError::Image(format!("Failed to read image dimensions: {}", e)))?;
+                let dims = reader.into_dimensions().map_err(|e| {
+                    FastPdfError::Image(format!("Failed to read image dimensions: {}", e))
+                })?;
 
                 Ok(dims)
             }

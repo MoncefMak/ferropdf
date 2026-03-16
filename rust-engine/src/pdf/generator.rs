@@ -4,8 +4,8 @@ use std::collections::HashMap;
 use std::io::BufWriter;
 use std::sync::Arc;
 
-use printpdf::*;
 use printpdf::path::{PaintMode, WindingOrder};
+use printpdf::*;
 
 use crate::css::values::Color;
 use crate::error::{FastPdfError, Result};
@@ -70,13 +70,11 @@ impl PdfGenerator {
     }
 
     /// Generate a PDF from rendered pages and return as bytes.
-    pub fn generate(
-        &self,
-        pages: &[Page],
-        page_commands: &[Vec<PaintCommand>],
-    ) -> Result<Vec<u8>> {
+    pub fn generate(&self, pages: &[Page], page_commands: &[Vec<PaintCommand>]) -> Result<Vec<u8>> {
         if pages.is_empty() {
-            return Err(FastPdfError::PdfGeneration("No pages to render".to_string()));
+            return Err(FastPdfError::PdfGeneration(
+                "No pages to render".to_string(),
+            ));
         }
 
         let first_page = &pages[0];
@@ -102,8 +100,11 @@ impl PdfGenerator {
         // Render remaining pages
         for (i, (page, commands)) in pages.iter().zip(page_commands.iter()).enumerate().skip(1) {
             let (page_w, page_h) = page.layout.size.to_mm();
-            let (page_idx, layer_idx) =
-                doc.add_page(Mm(page_w as f32), Mm(page_h as f32), &format!("Layer {}", i + 1));
+            let (page_idx, layer_idx) = doc.add_page(
+                Mm(page_w as f32),
+                Mm(page_h as f32),
+                format!("Layer {}", i + 1),
+            );
             let layer = doc.get_page(page_idx).get_layer(layer_idx);
             self.render_commands_to_layer(&layer, commands, &page.layout, &doc, &font_refs)?;
         }
@@ -113,9 +114,8 @@ impl PdfGenerator {
         doc.save(&mut buf)
             .map_err(|e| FastPdfError::PdfGeneration(format!("Failed to save PDF: {}", e)))?;
 
-        Ok(buf
-            .into_inner()
-            .map_err(|e| FastPdfError::PdfGeneration(format!("Buffer error: {}", e)))?)
+        buf.into_inner()
+            .map_err(|e| FastPdfError::PdfGeneration(format!("Buffer error: {}", e)))
     }
 
     /// Pre-embed all fonts referenced by paint commands (embed each font only once).
@@ -157,7 +157,8 @@ impl PdfGenerator {
 
                     // Try to embed external font
                     if let Some(ref cache) = self.font_cache {
-                        if let Some(font_data) = cache.get_font(font_family, *font_weight, *italic) {
+                        if let Some(font_data) = cache.get_font(font_family, *font_weight, *italic)
+                        {
                             if !font_data.data.is_empty() {
                                 match doc.add_external_font(font_data.data.as_slice()) {
                                     Ok(f) => {
@@ -220,15 +221,7 @@ impl PdfGenerator {
                     if color.a < 0.01 || (*width < 0.1 && *height < 0.1) {
                         continue;
                     }
-                    self.draw_filled_rect(
-                        layer,
-                        *x,
-                        *y,
-                        *width,
-                        *height,
-                        color,
-                        page_height_mm,
-                    );
+                    self.draw_filled_rect(layer, *x, *y, *width, *height, color, page_height_mm);
                 }
                 PaintCommand::StrokeRect {
                     x,
@@ -287,7 +280,9 @@ impl PdfGenerator {
                     height,
                     src,
                 } => {
-                    if let Err(e) = self.draw_image(layer, *x, *y, *width, *height, src, page_height_mm) {
+                    if let Err(e) =
+                        self.draw_image(layer, *x, *y, *width, *height, src, page_height_mm)
+                    {
                         log::warn!("Failed to embed image '{}': {}", src, e);
                     }
                 }
@@ -310,6 +305,7 @@ impl PdfGenerator {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn draw_filled_rect(
         &self,
         layer: &PdfLayerReference,
@@ -331,7 +327,10 @@ impl PdfGenerator {
         let points = vec![
             (Point::new(Mm(x_mm as f32), Mm(y_mm as f32)), false),
             (Point::new(Mm((x_mm + w_mm) as f32), Mm(y_mm as f32)), false),
-            (Point::new(Mm((x_mm + w_mm) as f32), Mm((y_mm + h_mm) as f32)), false),
+            (
+                Point::new(Mm((x_mm + w_mm) as f32), Mm((y_mm + h_mm) as f32)),
+                false,
+            ),
             (Point::new(Mm(x_mm as f32), Mm((y_mm + h_mm) as f32)), false),
         ];
 
@@ -344,6 +343,7 @@ impl PdfGenerator {
         layer.add_polygon(polygon);
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn draw_stroked_rect(
         &self,
         layer: &PdfLayerReference,
@@ -367,7 +367,10 @@ impl PdfGenerator {
         let points = vec![
             (Point::new(Mm(x_mm as f32), Mm(y_mm as f32)), false),
             (Point::new(Mm((x_mm + w_mm) as f32), Mm(y_mm as f32)), false),
-            (Point::new(Mm((x_mm + w_mm) as f32), Mm((y_mm + h_mm) as f32)), false),
+            (
+                Point::new(Mm((x_mm + w_mm) as f32), Mm((y_mm + h_mm) as f32)),
+                false,
+            ),
             (Point::new(Mm(x_mm as f32), Mm((y_mm + h_mm) as f32)), false),
         ];
 
@@ -379,6 +382,7 @@ impl PdfGenerator {
         layer.add_line(line);
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn draw_text(
         &self,
         layer: &PdfLayerReference,
@@ -403,28 +407,41 @@ impl PdfGenerator {
 
         // Check if we have custom font data for complex text shaping
         let font_data_opt = self.font_cache.as_ref().and_then(|cache| {
-            cache.get_font(font_family, font_weight, italic)
+            cache
+                .get_font(font_family, font_weight, italic)
                 .filter(|fd| !fd.data.is_empty())
         });
 
-        let needs_shaping = shaping::needs_complex_layout(text)
-            || shaping::contains_rtl(text)
-            || direction_rtl;
+        let needs_shaping =
+            shaping::needs_complex_layout(text) || shaping::contains_rtl(text) || direction_rtl;
 
         // If we have font data and text needs complex layout, use shaped glyph output
         if needs_shaping {
             if let Some(font_data) = &font_data_opt {
                 return self.draw_shaped_text(
-                    layer, x, y, text, font_family, font_size, font_weight,
-                    italic, color, align, available_width, direction_rtl,
-                    page_height_mm, font_refs, &font_data.data,
+                    layer,
+                    x,
+                    y,
+                    text,
+                    font_family,
+                    font_size,
+                    font_weight,
+                    italic,
+                    color,
+                    align,
+                    available_width,
+                    direction_rtl,
+                    page_height_mm,
+                    font_refs,
+                    &font_data.data,
                 );
             }
         }
 
         // --- Standard text path (built-in fonts or simple text) ---
         // Look up pre-cached font reference
-        let font_ref = self.get_cached_font_ref(font_family, font_weight, italic, font_refs, doc)?;
+        let font_ref =
+            self.get_cached_font_ref(font_family, font_weight, italic, font_refs, doc)?;
 
         let rgb = writer::color_to_rgb(color);
         layer.set_fill_color(printpdf::Color::Rgb(rgb));
@@ -440,7 +457,10 @@ impl PdfGenerator {
             let lines = shaping::wrap_ttf_text(&fd.data, text, font_size, available_width);
             (lines, true)
         } else {
-            (metrics::wrap_text_measured(text, builtin_name, font_size, available_width), false)
+            (
+                metrics::wrap_text_measured(text, builtin_name, font_size, available_width),
+                false,
+            )
         };
 
         let line_height_mm = font_size * 1.2 * 25.4 / 96.0;
@@ -530,12 +550,12 @@ impl PdfGenerator {
 
         // Fallback: create builtin on the fly
         let builtin = writer::resolve_builtin_font(font_family, font_weight, italic);
-        doc.add_builtin_font(builtin).map_err(|e| {
-            FastPdfError::PdfGeneration(format!("Failed to add font: {}", e))
-        })
+        doc.add_builtin_font(builtin)
+            .map_err(|e| FastPdfError::PdfGeneration(format!("Failed to add font: {}", e)))
     }
 
     /// Draw text using shaped glyphs (for Arabic/RTL/complex scripts).
+    #[allow(clippy::too_many_arguments)]
     fn draw_shaped_text(
         &self,
         layer: &PdfLayerReference,
@@ -638,8 +658,8 @@ impl PdfGenerator {
             //   positive = move backward (left in LTR)
             //   negative = move forward (right in LTR)
             let mut positioned: Vec<(i64, u16)> = Vec::new();
-            let mut desired_x: f64 = 0.0;     // where we want the next glyph (font design units)
-            let mut expected_x: f64 = 0.0;     // where PDF thinks the cursor is (font design units)
+            let mut desired_x: f64 = 0.0; // where we want the next glyph (font design units)
+            let mut expected_x: f64 = 0.0; // where PDF thinks the cursor is (font design units)
 
             for run in &shaped.runs {
                 for glyph in &run.glyphs {
@@ -667,6 +687,7 @@ impl PdfGenerator {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn draw_line(
         &self,
         layer: &PdfLayerReference,
@@ -700,6 +721,7 @@ impl PdfGenerator {
         layer.add_line(line);
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn draw_image(
         &self,
         layer: &PdfLayerReference,
@@ -716,7 +738,9 @@ impl PdfGenerator {
             let uri = src.strip_prefix("data:").unwrap_or(src);
             let parts: Vec<&str> = uri.splitn(2, ',').collect();
             if parts.len() != 2 {
-                return Err(FastPdfError::PdfGeneration("Invalid data URI for image".to_string()));
+                return Err(FastPdfError::PdfGeneration(
+                    "Invalid data URI for image".to_string(),
+                ));
             }
             let meta = parts[0];
             let data_str = parts[1];
@@ -724,19 +748,23 @@ impl PdfGenerator {
                 use base64::Engine;
                 base64::engine::general_purpose::STANDARD
                     .decode(data_str)
-                    .map_err(|e| FastPdfError::PdfGeneration(format!("Base64 decode error: {}", e)))?
+                    .map_err(|e| {
+                        FastPdfError::PdfGeneration(format!("Base64 decode error: {}", e))
+                    })?
             } else {
                 data_str.as_bytes().to_vec()
             }
         } else {
             // Read from file
-            std::fs::read(src)
-                .map_err(|e| FastPdfError::PdfGeneration(format!("Failed to read image '{}': {}", src, e)))?
+            std::fs::read(src).map_err(|e| {
+                FastPdfError::PdfGeneration(format!("Failed to read image '{}': {}", src, e))
+            })?
         };
 
         // Decode with the image crate
-        let img = ::image::load_from_memory(&data)
-            .map_err(|e| FastPdfError::PdfGeneration(format!("Failed to decode image '{}': {}", src, e)))?;
+        let img = ::image::load_from_memory(&data).map_err(|e| {
+            FastPdfError::PdfGeneration(format!("Failed to decode image '{}': {}", src, e))
+        })?;
 
         let pdf_image = printpdf::Image::from_dynamic_image(&img);
 
@@ -754,8 +782,16 @@ impl PdfGenerator {
         let native_w_mm = img_w * 25.4 / dpi;
         let native_h_mm = img_h * 25.4 / dpi;
 
-        let scale_x = if native_w_mm > 0.0 { w_mm / native_w_mm } else { 1.0 };
-        let scale_y = if native_h_mm > 0.0 { h_mm / native_h_mm } else { 1.0 };
+        let scale_x = if native_w_mm > 0.0 {
+            w_mm / native_w_mm
+        } else {
+            1.0
+        };
+        let scale_y = if native_h_mm > 0.0 {
+            h_mm / native_h_mm
+        } else {
+            1.0
+        };
 
         let transform = ImageTransform {
             translate_x: Some(Mm(x_mm as f32)),
@@ -784,7 +820,8 @@ mod tests {
 
     #[test]
     fn test_wrap_text() {
-        let lines = metrics::wrap_text_measured("Hello World this is a test", "Helvetica", 12.0, 80.0);
+        let lines =
+            metrics::wrap_text_measured("Hello World this is a test", "Helvetica", 12.0, 80.0);
         assert!(lines.len() >= 2);
     }
 

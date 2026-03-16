@@ -5,7 +5,7 @@ use std::sync::Arc;
 use unicode_bidi::BidiInfo;
 
 use crate::css::properties::{ComputedStyle, CssProperty};
-use crate::css::stylesheet::{Stylesheet, default_stylesheet};
+use crate::css::stylesheet::{default_stylesheet, Stylesheet};
 use crate::css::values::CssValue;
 use crate::error::Result;
 use crate::fonts::metrics;
@@ -51,7 +51,14 @@ impl LayoutEngine {
 
     /// Measure text width in px, using TTF metrics from FontCache if available,
     /// otherwise falling back to built-in font metrics.
-    fn measure_text_width(&self, text: &str, font_family: &str, font_weight: u32, italic: bool, font_size: f64) -> f64 {
+    fn measure_text_width(
+        &self,
+        text: &str,
+        font_family: &str,
+        font_weight: u32,
+        italic: bool,
+        font_size: f64,
+    ) -> f64 {
         if let Some(ref cache) = self.font_cache {
             if let Some(font_data) = cache.get_font(font_family, font_weight, italic) {
                 if !font_data.data.is_empty() {
@@ -64,11 +71,7 @@ impl LayoutEngine {
     }
 
     /// Perform full layout: HTML + CSS → paginated layout boxes.
-    pub fn layout(
-        &self,
-        dom: &DomTree,
-        stylesheets: &[Stylesheet],
-    ) -> Result<Vec<Page>> {
+    pub fn layout(&self, dom: &DomTree, stylesheets: &[Stylesheet]) -> Result<Vec<Page>> {
         // Build combined stylesheets (default + user)
         let defaults = default_stylesheet();
         let mut all_sheets: Vec<&Stylesheet> = vec![&defaults];
@@ -121,14 +124,24 @@ impl LayoutEngine {
                     return Ok(LayoutBox::text_box(String::new(), parent_style.clone()));
                 }
                 let mut collapsed = String::new();
-                if has_leading { collapsed.push(' '); }
+                if has_leading {
+                    collapsed.push(' ');
+                }
                 collapsed.push_str(&words.join(" "));
-                if has_trailing { collapsed.push(' '); }
+                if has_trailing {
+                    collapsed.push(' ');
+                }
                 Ok(LayoutBox::text_box(collapsed, parent_style.clone()))
             }
             NodeType::Element(data) => {
                 // Compute style
-                let mut style = resolver.compute_style(data, parent_style, ancestors, siblings, following_siblings);
+                let mut style = resolver.compute_style(
+                    data,
+                    parent_style,
+                    ancestors,
+                    siblings,
+                    following_siblings,
+                );
                 StyleResolver::apply_tag_defaults(&data.tag_name, &mut style);
 
                 // Check if hidden
@@ -166,16 +179,31 @@ impl LayoutEngine {
                 child_ancestors.push(data);
 
                 // Pre-collect element children so we can compute following siblings
-                let element_children: Vec<&ElementData> = node.children.iter()
-                    .filter_map(|c| if let NodeType::Element(d) = &c.node_type { Some(d) } else { None })
+                let element_children: Vec<&ElementData> = node
+                    .children
+                    .iter()
+                    .filter_map(|c| {
+                        if let NodeType::Element(d) = &c.node_type {
+                            Some(d)
+                        } else {
+                            None
+                        }
+                    })
                     .collect();
 
                 let mut prev_siblings: Vec<&ElementData> = Vec::new();
 
                 for (node_idx, child) in node.children.iter().enumerate() {
                     // Compute following element-siblings for this child
-                    let following: Vec<&ElementData> = node.children[node_idx + 1..].iter()
-                        .filter_map(|c| if let NodeType::Element(d) = &c.node_type { Some(d) } else { None })
+                    let following: Vec<&ElementData> = node.children[node_idx + 1..]
+                        .iter()
+                        .filter_map(|c| {
+                            if let NodeType::Element(d) = &c.node_type {
+                                Some(d)
+                            } else {
+                                None
+                            }
+                        })
                         .collect();
 
                     let child_box = self.build_layout_tree(
@@ -204,8 +232,15 @@ impl LayoutEngine {
                 // Process children of document nodes
                 let mut layout_box = LayoutBox::new(LayoutBoxType::Block, parent_style.clone());
                 for (node_idx, child) in node.children.iter().enumerate() {
-                    let following: Vec<&ElementData> = node.children[node_idx + 1..].iter()
-                        .filter_map(|c| if let NodeType::Element(d) = &c.node_type { Some(d) } else { None })
+                    let following: Vec<&ElementData> = node.children[node_idx + 1..]
+                        .iter()
+                        .filter_map(|c| {
+                            if let NodeType::Element(d) = &c.node_type {
+                                Some(d)
+                            } else {
+                                None
+                            }
+                        })
                         .collect();
                     let child_box = self.build_layout_tree(
                         child,
@@ -316,33 +351,88 @@ impl LayoutEngine {
     }
 
     /// Compute margins, padding, and border from the computed style.
-    fn compute_box_model(
-        &self,
-        layout_box: &mut LayoutBox,
-        container_width: f64,
-        font_size: f64,
-    ) {
+    fn compute_box_model(&self, layout_box: &mut LayoutBox, container_width: f64, font_size: f64) {
         let style = &layout_box.style;
 
         layout_box.dimensions.margin = EdgeSizes::new(
-            style.get_length(&CssProperty::MarginTop, container_width, font_size, self.root_font_size),
-            style.get_length(&CssProperty::MarginRight, container_width, font_size, self.root_font_size),
-            style.get_length(&CssProperty::MarginBottom, container_width, font_size, self.root_font_size),
-            style.get_length(&CssProperty::MarginLeft, container_width, font_size, self.root_font_size),
+            style.get_length(
+                &CssProperty::MarginTop,
+                container_width,
+                font_size,
+                self.root_font_size,
+            ),
+            style.get_length(
+                &CssProperty::MarginRight,
+                container_width,
+                font_size,
+                self.root_font_size,
+            ),
+            style.get_length(
+                &CssProperty::MarginBottom,
+                container_width,
+                font_size,
+                self.root_font_size,
+            ),
+            style.get_length(
+                &CssProperty::MarginLeft,
+                container_width,
+                font_size,
+                self.root_font_size,
+            ),
         );
 
         layout_box.dimensions.padding = EdgeSizes::new(
-            style.get_length(&CssProperty::PaddingTop, container_width, font_size, self.root_font_size),
-            style.get_length(&CssProperty::PaddingRight, container_width, font_size, self.root_font_size),
-            style.get_length(&CssProperty::PaddingBottom, container_width, font_size, self.root_font_size),
-            style.get_length(&CssProperty::PaddingLeft, container_width, font_size, self.root_font_size),
+            style.get_length(
+                &CssProperty::PaddingTop,
+                container_width,
+                font_size,
+                self.root_font_size,
+            ),
+            style.get_length(
+                &CssProperty::PaddingRight,
+                container_width,
+                font_size,
+                self.root_font_size,
+            ),
+            style.get_length(
+                &CssProperty::PaddingBottom,
+                container_width,
+                font_size,
+                self.root_font_size,
+            ),
+            style.get_length(
+                &CssProperty::PaddingLeft,
+                container_width,
+                font_size,
+                self.root_font_size,
+            ),
         );
 
         layout_box.dimensions.border = EdgeSizes::new(
-            style.get_length(&CssProperty::BorderTopWidth, container_width, font_size, self.root_font_size),
-            style.get_length(&CssProperty::BorderRightWidth, container_width, font_size, self.root_font_size),
-            style.get_length(&CssProperty::BorderBottomWidth, container_width, font_size, self.root_font_size),
-            style.get_length(&CssProperty::BorderLeftWidth, container_width, font_size, self.root_font_size),
+            style.get_length(
+                &CssProperty::BorderTopWidth,
+                container_width,
+                font_size,
+                self.root_font_size,
+            ),
+            style.get_length(
+                &CssProperty::BorderRightWidth,
+                container_width,
+                font_size,
+                self.root_font_size,
+            ),
+            style.get_length(
+                &CssProperty::BorderBottomWidth,
+                container_width,
+                font_size,
+                self.root_font_size,
+            ),
+            style.get_length(
+                &CssProperty::BorderLeftWidth,
+                container_width,
+                font_size,
+                self.root_font_size,
+            ),
         );
     }
 
@@ -434,10 +524,13 @@ impl LayoutEngine {
                     continue;
                 }
 
-                let fs = child.style.font_size_px(self.root_font_size, self.root_font_size);
+                let fs = child
+                    .style
+                    .font_size_px(self.root_font_size, self.root_font_size);
                 let family = child.style.font_family();
                 let weight = child.style.font_weight();
-                let italic = child.style
+                let italic = child
+                    .style
                     .get(&CssProperty::FontStyle)
                     .map(|v| matches!(v, CssValue::Keyword(s) if s == "italic" || s == "oblique"))
                     .unwrap_or(false);
@@ -481,10 +574,13 @@ impl LayoutEngine {
                     + child.dimensions.border.right
                     + child.dimensions.margin.right;
 
-                let fs = child.style.font_size_px(self.root_font_size, self.root_font_size);
+                let fs = child
+                    .style
+                    .font_size_px(self.root_font_size, self.root_font_size);
                 let family = child.style.font_family();
                 let weight = child.style.font_weight();
-                let italic = child.style
+                let italic = child
+                    .style
                     .get(&CssProperty::FontStyle)
                     .map(|v| matches!(v, CssValue::Keyword(s) if s == "italic" || s == "oblique"))
                     .unwrap_or(false);
@@ -577,12 +673,10 @@ impl LayoutEngine {
         };
         if is_rtl {
             for &(start, end, line_width, _) in &line_infos {
-                for i in start..end {
-                    let dims = &new_children[i].dimensions;
-                    let outer_left = dims.content.x
-                        - dims.margin.left
-                        - dims.border.left
-                        - dims.padding.left;
+                for child in new_children.iter_mut().take(end).skip(start) {
+                    let dims = &child.dimensions;
+                    let outer_left =
+                        dims.content.x - dims.margin.left - dims.border.left - dims.padding.left;
                     let outer_width = dims.margin.left
                         + dims.border.left
                         + dims.padding.left
@@ -591,10 +685,8 @@ impl LayoutEngine {
                         + dims.border.right
                         + dims.margin.right;
                     let new_outer_left = line_width - outer_left - outer_width;
-                    new_children[i].dimensions.content.x = new_outer_left
-                        + dims.margin.left
-                        + dims.border.left
-                        + dims.padding.left;
+                    child.dimensions.content.x =
+                        new_outer_left + dims.margin.left + dims.border.left + dims.padding.left;
                 }
             }
         }
@@ -605,8 +697,8 @@ impl LayoutEngine {
                 for &(start, end, width, _) in &line_infos {
                     let offset = (content_width - width) / 2.0;
                     if offset > 0.0 {
-                        for i in start..end {
-                            new_children[i].dimensions.content.x += offset;
+                        for child in new_children.iter_mut().take(end).skip(start) {
+                            child.dimensions.content.x += offset;
                         }
                     }
                 }
@@ -615,8 +707,8 @@ impl LayoutEngine {
                 for &(start, end, width, _) in &line_infos {
                     let offset = content_width - width;
                     if offset > 0.0 {
-                        for i in start..end {
-                            new_children[i].dimensions.content.x += offset;
+                        for child in new_children.iter_mut().take(end).skip(start) {
+                            child.dimensions.content.x += offset;
                         }
                     }
                 }
@@ -641,7 +733,8 @@ impl LayoutEngine {
 
             let family = layout_box.style.font_family();
             let weight = layout_box.style.font_weight();
-            let italic = layout_box.style
+            let italic = layout_box
+                .style
                 .get(&CssProperty::FontStyle)
                 .map(|v| matches!(v, CssValue::Keyword(s) if s == "italic" || s == "oblique"))
                 .unwrap_or(false);
@@ -681,7 +774,8 @@ impl LayoutEngine {
                     + child.dimensions.border.bottom
                     + child.dimensions.margin.bottom;
 
-                child.dimensions.content.x = x + child.dimensions.margin.left
+                child.dimensions.content.x = x
+                    + child.dimensions.margin.left
                     + child.dimensions.border.left
                     + child.dimensions.padding.left;
                 child.dimensions.content.y = child.dimensions.margin.top
@@ -715,12 +809,14 @@ impl LayoutEngine {
             .get(&CssProperty::Width)
             .and_then(|v| v.as_px(container_width, font_size, self.root_font_size));
 
-        let content_width = explicit_width.unwrap_or(
-            container_width
-                - layout_box.dimensions.margin.horizontal()
-                - layout_box.dimensions.padding.horizontal()
-                - layout_box.dimensions.border.horizontal(),
-        ).max(0.0);
+        let content_width = explicit_width
+            .unwrap_or(
+                container_width
+                    - layout_box.dimensions.margin.horizontal()
+                    - layout_box.dimensions.padding.horizontal()
+                    - layout_box.dimensions.border.horizontal(),
+            )
+            .max(0.0);
 
         layout_box.dimensions.content.width = content_width;
 
@@ -756,9 +852,12 @@ impl LayoutEngine {
             self.compute_layout(child, content_width);
         }
 
-        let gap = layout_box
-            .style
-            .get_length(&CssProperty::Gap, container_width, font_size, self.root_font_size);
+        let gap = layout_box.style.get_length(
+            &CssProperty::Gap,
+            container_width,
+            font_size,
+            self.root_font_size,
+        );
 
         match flex_direction.as_str() {
             "column" | "column-reverse" => {
@@ -792,16 +891,19 @@ impl LayoutEngine {
 
                 // === STEP 1: Apply flex-basis to override natural sizes ===
                 for child in layout_box.children.iter_mut() {
-                    let basis = child.style.get(&CssProperty::FlexBasis).and_then(|v| match v {
-                        CssValue::Length(l) => {
-                            Some(l.to_px(content_width, font_size, self.root_font_size))
-                        }
-                        CssValue::Calc(expr) => {
-                            Some(expr.to_px(content_width, font_size, self.root_font_size))
-                        }
-                        CssValue::Auto | CssValue::Keyword(_) => None,
-                        _ => None,
-                    });
+                    let basis = child
+                        .style
+                        .get(&CssProperty::FlexBasis)
+                        .and_then(|v| match v {
+                            CssValue::Length(l) => {
+                                Some(l.to_px(content_width, font_size, self.root_font_size))
+                            }
+                            CssValue::Calc(expr) => {
+                                Some(expr.to_px(content_width, font_size, self.root_font_size))
+                            }
+                            CssValue::Auto | CssValue::Keyword(_) => None,
+                            _ => None,
+                        });
                     if let Some(b) = basis {
                         child.dimensions.content.width = (b
                             - child.dimensions.padding.horizontal()
@@ -828,7 +930,13 @@ impl LayoutEngine {
                         .map(|c| {
                             c.style
                                 .get(&CssProperty::FlexGrow)
-                                .and_then(|v| if let CssValue::Number(n) = v { Some(*n) } else { None })
+                                .and_then(|v| {
+                                    if let CssValue::Number(n) = v {
+                                        Some(*n)
+                                    } else {
+                                        None
+                                    }
+                                })
                                 .unwrap_or(0.0)
                         })
                         .sum();
@@ -837,7 +945,13 @@ impl LayoutEngine {
                             let grow = child
                                 .style
                                 .get(&CssProperty::FlexGrow)
-                                .and_then(|v| if let CssValue::Number(n) = v { Some(*n) } else { None })
+                                .and_then(|v| {
+                                    if let CssValue::Number(n) = v {
+                                        Some(*n)
+                                    } else {
+                                        None
+                                    }
+                                })
                                 .unwrap_or(0.0);
                             child.dimensions.content.width += free_space * (grow / total_grow);
                         }
@@ -852,7 +966,13 @@ impl LayoutEngine {
                             let shrink = c
                                 .style
                                 .get(&CssProperty::FlexShrink)
-                                .and_then(|v| if let CssValue::Number(n) = v { Some(*n) } else { None })
+                                .and_then(|v| {
+                                    if let CssValue::Number(n) = v {
+                                        Some(*n)
+                                    } else {
+                                        None
+                                    }
+                                })
                                 .unwrap_or(1.0);
                             let basis = c.dimensions.content.width
                                 + c.dimensions.padding.horizontal()
@@ -865,7 +985,13 @@ impl LayoutEngine {
                             let shrink = child
                                 .style
                                 .get(&CssProperty::FlexShrink)
-                                .and_then(|v| if let CssValue::Number(n) = v { Some(*n) } else { None })
+                                .and_then(|v| {
+                                    if let CssValue::Number(n) = v {
+                                        Some(*n)
+                                    } else {
+                                        None
+                                    }
+                                })
                                 .unwrap_or(1.0);
                             let basis = child.dimensions.content.width
                                 + child.dimensions.padding.horizontal()
@@ -901,7 +1027,9 @@ impl LayoutEngine {
                             row_x = 0.0;
                         }
                         current_row.push(i);
-                        if row_x > 0.0 { row_x += gap; }
+                        if row_x > 0.0 {
+                            row_x += gap;
+                        }
                         row_x += child_w;
                     }
                     if !current_row.is_empty() {
@@ -911,15 +1039,15 @@ impl LayoutEngine {
                     let mut y = 0.0;
                     for row in &rows {
                         let mut row_height: f64 = 0.0;
-                        let row_total_width: f64 = row.iter()
+                        let row_total_width: f64 = row
+                            .iter()
                             .map(|&i| layout_box.children[i].dimensions.margin_box().width)
                             .sum();
                         let row_gap = gap * row.len().saturating_sub(1) as f64;
                         let row_remaining = (content_width - row_total_width - row_gap).max(0.0);
 
-                        let (initial_x, inter_item_space) = compute_justify(
-                            &justify_content, row_remaining, row.len(), gap
-                        );
+                        let (initial_x, inter_item_space) =
+                            compute_justify(&justify_content, row_remaining, row.len(), gap);
                         let mut x = initial_x;
 
                         for (ri, &child_idx) in row.iter().enumerate() {
@@ -943,9 +1071,8 @@ impl LayoutEngine {
                     layout_box.dimensions.content.height = y;
                 } else {
                     // No wrapping — single row
-                    let (initial_x, inter_item_space) = compute_justify(
-                        &justify_content, remaining_space, num_children, gap
-                    );
+                    let (initial_x, inter_item_space) =
+                        compute_justify(&justify_content, remaining_space, num_children, gap);
 
                     let mut x = initial_x;
                     let mut max_height: f64 = 0.0;
@@ -971,7 +1098,13 @@ impl LayoutEngine {
                     let align_items = layout_box
                         .style
                         .get(&CssProperty::AlignItems)
-                        .and_then(|v| if let CssValue::Keyword(s) = v { Some(s.as_str()) } else { None })
+                        .and_then(|v| {
+                            if let CssValue::Keyword(s) = v {
+                                Some(s.as_str())
+                            } else {
+                                None
+                            }
+                        })
                         .unwrap_or("stretch");
 
                     let line_height = layout_box
@@ -984,7 +1117,13 @@ impl LayoutEngine {
                         let effective_align = child
                             .style
                             .get(&CssProperty::AlignSelf)
-                            .and_then(|v| if let CssValue::Keyword(s) = v { Some(s.clone()) } else { None })
+                            .and_then(|v| {
+                                if let CssValue::Keyword(s) = v {
+                                    Some(s.clone())
+                                } else {
+                                    None
+                                }
+                            })
                             .filter(|s| s != "auto" && !s.is_empty())
                             .unwrap_or_else(|| align_items.to_string());
 
@@ -1040,8 +1179,7 @@ impl LayoutEngine {
             .get(&CssProperty::MaxWidth)
             .and_then(|v| v.as_px(container_width, font_size, self.root_font_size))
         {
-            layout_box.dimensions.content.width =
-                layout_box.dimensions.content.width.min(max_w);
+            layout_box.dimensions.content.width = layout_box.dimensions.content.width.min(max_w);
         }
 
         if let Some(min_h) = layout_box
@@ -1057,8 +1195,7 @@ impl LayoutEngine {
             .get(&CssProperty::MaxHeight)
             .and_then(|v| v.as_px(0.0, font_size, self.root_font_size))
         {
-            layout_box.dimensions.content.height =
-                layout_box.dimensions.content.height.min(max_h);
+            layout_box.dimensions.content.height = layout_box.dimensions.content.height.min(max_h);
         }
     }
 
@@ -1094,6 +1231,7 @@ impl LayoutEngine {
 
     /// Recursively find table cells and layout their children using the cell's
     /// content width as the container width.
+    #[allow(clippy::only_used_in_recursion)]
     fn layout_table_cell_contents(&self, node: &mut LayoutBox, font_size: f64) {
         for child in &mut node.children {
             match child.box_type {
@@ -1212,8 +1350,8 @@ fn compute_justify(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::html::HtmlParser;
     use crate::css::CssParser;
+    use crate::html::HtmlParser;
 
     #[test]
     fn test_basic_layout() {

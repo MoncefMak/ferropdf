@@ -1,6 +1,6 @@
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
-use fastpdf_engine::css::{CssParser, Stylesheet};
 use fastpdf_engine::css::stylesheet::default_stylesheet;
+use fastpdf_engine::css::{CssParser, Stylesheet};
 use fastpdf_engine::html::HtmlParser;
 use fastpdf_engine::layout::engine::LayoutEngine;
 use fastpdf_engine::layout::pagination::{PageLayout, PageSize};
@@ -34,9 +34,8 @@ li { margin: 4px 0; }
 "#;
 
 fn table_html(rows: usize) -> String {
-    let mut html = String::from(
-        "<table><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th></tr>",
-    );
+    let mut html =
+        String::from("<table><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th></tr>");
     for i in 0..rows {
         html.push_str(&format!(
             "<tr><td>User {i}</td><td>user{i}@example.com</td><td>Developer</td><td>Active</td></tr>"
@@ -117,8 +116,7 @@ fn render_pdf(html: &str, css: &str) -> Vec<u8> {
     }
 
     // 3. Layout
-    let page_layout = PageLayout::new(PageSize::a4())
-        .with_margins(10.0, 10.0, 10.0, 10.0);
+    let page_layout = PageLayout::new(PageSize::a4()).with_margins(10.0, 10.0, 10.0, 10.0);
     let engine = LayoutEngine::new(page_layout);
     let pages = engine.layout(&dom, &stylesheets).expect("Layout failed");
 
@@ -256,7 +254,11 @@ fn bench_stages(c: &mut Criterion) {
     // Stage: Layout
     group.bench_function("layout_complex", |b| {
         let engine = LayoutEngine::new(page_layout.clone());
-        b.iter(|| engine.layout(black_box(&dom), black_box(&stylesheets)).unwrap())
+        b.iter(|| {
+            engine
+                .layout(black_box(&dom), black_box(&stylesheets))
+                .unwrap()
+        })
     });
 
     // Stage: Render paint commands
@@ -272,7 +274,11 @@ fn bench_stages(c: &mut Criterion) {
     let page_commands = renderer.render_pages(&pages);
     group.bench_function("pdf_generate", |b| {
         let generator = PdfGenerator::new(PdfConfig::default());
-        b.iter(|| generator.generate(black_box(&pages), black_box(&page_commands)).unwrap())
+        b.iter(|| {
+            generator
+                .generate(black_box(&pages), black_box(&page_commands))
+                .unwrap()
+        })
     });
 
     group.finish();

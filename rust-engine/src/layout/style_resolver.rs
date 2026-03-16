@@ -22,7 +22,10 @@ impl<'a> StyleResolver<'a> {
         for sheet in &stylesheets {
             custom_properties.extend(sheet.custom_properties.clone());
         }
-        Self { stylesheets, custom_properties }
+        Self {
+            stylesheets,
+            custom_properties,
+        }
     }
 
     /// Resolve `var(--name)` references in a raw value string using stored custom properties.
@@ -40,7 +43,7 @@ impl<'a> StyleResolver<'a> {
             while let Some(start) = remaining.find("var(") {
                 new_result.push_str(&remaining[..start]);
                 remaining = &remaining[start + 4..]; // skip "var("
-                // Find the closing paren (naive: first ')')
+                                                     // Find the closing paren (naive: first ')')
                 if let Some(end) = remaining.find(')') {
                     let arg = &remaining[..end];
                     remaining = &remaining[end + 1..];
@@ -95,11 +98,14 @@ impl<'a> StyleResolver<'a> {
                             } else {
                                 decl.value.clone()
                             };
-                            matched.push((specificity, Declaration {
-                                property: decl.property.clone(),
-                                value: resolved_value,
-                                important: decl.important,
-                            }));
+                            matched.push((
+                                specificity,
+                                Declaration {
+                                    property: decl.property.clone(),
+                                    value: resolved_value,
+                                    important: decl.important,
+                                },
+                            ));
                         }
                     }
                 }
@@ -142,30 +148,48 @@ impl<'a> StyleResolver<'a> {
         match tag_name {
             "h1" | "h2" | "h3" | "h4" | "h5" | "h6" => {
                 if style.get(&CssProperty::FontWeight).is_none() {
-                    style.set(CssProperty::FontWeight, CssValue::Keyword("bold".to_string()));
+                    style.set(
+                        CssProperty::FontWeight,
+                        CssValue::Keyword("bold".to_string()),
+                    );
                 }
             }
             "b" | "strong" => {
                 if style.get(&CssProperty::FontWeight).is_none() {
-                    style.set(CssProperty::FontWeight, CssValue::Keyword("bold".to_string()));
+                    style.set(
+                        CssProperty::FontWeight,
+                        CssValue::Keyword("bold".to_string()),
+                    );
                 }
             }
             "i" | "em" => {
                 if style.get(&CssProperty::FontStyle).is_none() {
-                    style.set(CssProperty::FontStyle, CssValue::Keyword("italic".to_string()));
+                    style.set(
+                        CssProperty::FontStyle,
+                        CssValue::Keyword("italic".to_string()),
+                    );
                 }
             }
             "a" => {
                 if style.get(&CssProperty::Color).is_none() {
-                    style.set(CssProperty::Color, CssValue::Color(crate::css::values::Color::rgb(0, 0, 238)));
+                    style.set(
+                        CssProperty::Color,
+                        CssValue::Color(crate::css::values::Color::rgb(0, 0, 238)),
+                    );
                 }
                 if style.get(&CssProperty::TextDecoration).is_none() {
-                    style.set(CssProperty::TextDecoration, CssValue::Keyword("underline".to_string()));
+                    style.set(
+                        CssProperty::TextDecoration,
+                        CssValue::Keyword("underline".to_string()),
+                    );
                 }
             }
             "code" | "pre" => {
                 if style.get(&CssProperty::FontFamily).is_none() {
-                    style.set(CssProperty::FontFamily, CssValue::Keyword("monospace".to_string()));
+                    style.set(
+                        CssProperty::FontFamily,
+                        CssValue::Keyword("monospace".to_string()),
+                    );
                 }
             }
             _ => {}

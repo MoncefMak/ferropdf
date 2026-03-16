@@ -74,6 +74,7 @@ pub enum MarginPosition {
 }
 
 impl MarginPosition {
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
             "top-left" => Some(Self::TopLeft),
@@ -152,8 +153,20 @@ pub fn default_stylesheet() -> Stylesheet {
 
     // Block-level elements
     let block_tags = [
-        "html", "body", "div", "article", "section", "nav", "aside", "header",
-        "footer", "main", "figure", "figcaption", "details", "summary",
+        "html",
+        "body",
+        "div",
+        "article",
+        "section",
+        "nav",
+        "aside",
+        "header",
+        "footer",
+        "main",
+        "figure",
+        "figcaption",
+        "details",
+        "summary",
     ];
     for tag in &block_tags {
         stylesheet.rules.push(CssRule {
@@ -178,10 +191,7 @@ pub fn default_stylesheet() -> Stylesheet {
         stylesheet.rules.push(CssRule {
             selectors: vec![Selector::Type(tag.to_string())],
             declarations: vec![
-                Declaration::new(
-                    CssProperty::Display,
-                    CssValue::Keyword("block".to_string()),
-                ),
+                Declaration::new(CssProperty::Display, CssValue::Keyword("block".to_string())),
                 Declaration::new(
                     CssProperty::FontWeight,
                     CssValue::Keyword("bold".to_string()),
@@ -206,10 +216,7 @@ pub fn default_stylesheet() -> Stylesheet {
     stylesheet.rules.push(CssRule {
         selectors: vec![Selector::Type("p".to_string())],
         declarations: vec![
-            Declaration::new(
-                CssProperty::Display,
-                CssValue::Keyword("block".to_string()),
-            ),
+            Declaration::new(CssProperty::Display, CssValue::Keyword("block".to_string())),
             Declaration::new(
                 CssProperty::MarginTop,
                 CssValue::Length(super::values::Length::em(1.0)),
@@ -246,7 +253,9 @@ pub fn default_stylesheet() -> Stylesheet {
     });
 
     // Inline elements
-    let inline_tags = ["span", "a", "strong", "em", "b", "i", "code", "small", "sub", "sup"];
+    let inline_tags = [
+        "span", "a", "strong", "em", "b", "i", "code", "small", "sub", "sup",
+    ];
     for tag in &inline_tags {
         stylesheet.rules.push(CssRule {
             selectors: vec![Selector::Type(tag.to_string())],
@@ -261,10 +270,7 @@ pub fn default_stylesheet() -> Stylesheet {
     stylesheet.rules.push(CssRule {
         selectors: vec![Selector::Type("table".to_string())],
         declarations: vec![
-            Declaration::new(
-                CssProperty::Display,
-                CssValue::Keyword("table".to_string()),
-            ),
+            Declaration::new(CssProperty::Display, CssValue::Keyword("table".to_string())),
             Declaration::new(
                 CssProperty::BorderCollapse,
                 CssValue::Keyword("separate".to_string()),
@@ -315,10 +321,7 @@ pub fn default_stylesheet() -> Stylesheet {
         stylesheet.rules.push(CssRule {
             selectors: vec![Selector::Type(tag.to_string())],
             declarations: vec![
-                Declaration::new(
-                    CssProperty::Display,
-                    CssValue::Keyword("block".to_string()),
-                ),
+                Declaration::new(CssProperty::Display, CssValue::Keyword("block".to_string())),
                 Declaration::new(
                     CssProperty::PaddingLeft,
                     CssValue::Length(super::values::Length::px(40.0)),

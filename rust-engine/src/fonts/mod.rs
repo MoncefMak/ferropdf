@@ -84,7 +84,11 @@ impl FontCache {
         path: impl AsRef<Path>,
     ) -> Result<()> {
         let data = std::fs::read(path.as_ref()).map_err(|e| {
-            FastPdfError::Font(format!("Failed to read font file {:?}: {}", path.as_ref(), e))
+            FastPdfError::Font(format!(
+                "Failed to read font file {:?}: {}",
+                path.as_ref(),
+                e
+            ))
         })?;
 
         let key = FontKey {

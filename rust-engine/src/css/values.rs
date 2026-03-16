@@ -188,10 +188,21 @@ impl CalcExpr {
         let mut chars = s.chars().peekable();
         while let Some(&c) = chars.peek() {
             match c {
-                ' ' | '\t' | '\n' => { chars.next(); }
-                '+' => { chars.next(); tokens.push(CalcToken::Plus); }
-                '*' => { chars.next(); tokens.push(CalcToken::Star); }
-                '/' => { chars.next(); tokens.push(CalcToken::Slash); }
+                ' ' | '\t' | '\n' => {
+                    chars.next();
+                }
+                '+' => {
+                    chars.next();
+                    tokens.push(CalcToken::Plus);
+                }
+                '*' => {
+                    chars.next();
+                    tokens.push(CalcToken::Star);
+                }
+                '/' => {
+                    chars.next();
+                    tokens.push(CalcToken::Slash);
+                }
                 '-' => {
                     chars.next();
                     let after_value = matches!(
@@ -202,7 +213,9 @@ impl CalcExpr {
                         tokens.push(CalcToken::Minus);
                     } else {
                         // Unary minus — consume the following value token and negate it
-                        while chars.peek() == Some(&' ') { chars.next(); }
+                        while chars.peek() == Some(&' ') {
+                            chars.next();
+                        }
                         let mut val = String::from('-');
                         while let Some(&c2) = chars.peek() {
                             if c2.is_ascii_alphanumeric() || c2 == '.' || c2 == '%' {
@@ -227,7 +240,9 @@ impl CalcExpr {
                     }
                     tokens.push(Self::parse_value_str(&val)?);
                 }
-                _ => { chars.next(); }
+                _ => {
+                    chars.next();
+                }
             }
         }
         Some(tokens)
@@ -264,10 +279,10 @@ impl CalcExpr {
 
     /// Split a token slice on operator tokens matching `is_op`.
     /// Returns `(op_before_segment, segment_slice)` pairs; the first has `op = None`.
-    fn split_on<'a>(
-        tokens: &'a [CalcToken],
+    fn split_on(
+        tokens: &[CalcToken],
         is_op: impl Fn(&CalcToken) -> bool,
-    ) -> Vec<(Option<bool>, &'a [CalcToken])> {
+    ) -> Vec<(Option<bool>, &[CalcToken])> {
         let mut parts: Vec<(Option<bool>, &[CalcToken])> = Vec::new();
         let mut start = 0;
         let mut pending_op: Option<bool> = None;
@@ -460,7 +475,7 @@ impl Color {
             .trim_start_matches("rgb(")
             .trim_end_matches(')');
 
-        let parts: Vec<&str> = inner.split(|c| c == ',' || c == '/').collect();
+        let parts: Vec<&str> = inner.split([',', '/']).collect();
 
         if parts.len() >= 3 {
             let r = parts[0].trim().parse::<u8>().ok()?;
@@ -504,7 +519,7 @@ impl fmt::Display for Color {
 }
 
 /// A general CSS value.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum CssValue {
     /// A length value.
     Length(Length),
@@ -531,6 +546,7 @@ pub enum CssValue {
     /// The "initial" keyword.
     Initial,
     /// No value set.
+    #[default]
     None,
 }
 
@@ -547,12 +563,7 @@ impl CssValue {
 
     /// Evaluate this value to pixels given layout context.
     /// Handles `Length`, `Percentage`, `Number(0)`, and `Calc` variants.
-    pub fn as_px(
-        &self,
-        parent_size: f64,
-        font_size: f64,
-        root_font_size: f64,
-    ) -> Option<f64> {
+    pub fn as_px(&self, parent_size: f64, font_size: f64, root_font_size: f64) -> Option<f64> {
         match self {
             CssValue::Length(l) => Some(l.to_px(parent_size, font_size, root_font_size)),
             CssValue::Number(n) if *n == 0.0 => Some(0.0),
@@ -661,12 +672,6 @@ impl CssValue {
             }
         }
         None
-    }
-}
-
-impl Default for CssValue {
-    fn default() -> Self {
-        CssValue::None
     }
 }
 

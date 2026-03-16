@@ -1,15 +1,13 @@
 //! Integration tests for FastPDF engine
 
-use fastpdf_engine::html::HtmlParser;
-use fastpdf_engine::css::CssParser;
 use fastpdf_engine::css::stylesheet::default_stylesheet;
-use fastpdf_engine::layout::{
-    LayoutEngine, PageSize, PageLayout,
-};
+use fastpdf_engine::css::CssParser;
 use fastpdf_engine::fonts::{self, FontCache};
+use fastpdf_engine::html::HtmlParser;
 use fastpdf_engine::images::ImageCache;
-use fastpdf_engine::tailwind::TailwindResolver;
+use fastpdf_engine::layout::{LayoutEngine, PageLayout, PageSize};
 use fastpdf_engine::renderer::Renderer;
+use fastpdf_engine::tailwind::TailwindResolver;
 
 #[test]
 fn test_full_pipeline_simple() {
@@ -37,7 +35,8 @@ fn test_html_parser_basic() {
 
 #[test]
 fn test_html_parser_classes() {
-    let dom = HtmlParser::parse(r#"<div class="foo bar"><span class="foo">text</span></div>"#).unwrap();
+    let dom =
+        HtmlParser::parse(r#"<div class="foo bar"><span class="foo">text</span></div>"#).unwrap();
 
     let foos = dom.root.find_elements_by_class("foo");
     assert_eq!(foos.len(), 2);

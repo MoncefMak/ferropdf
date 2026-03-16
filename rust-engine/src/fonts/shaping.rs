@@ -206,7 +206,8 @@ pub fn shape_text(
 
                 // Look up the font's default advance from hmtx table
                 let glyph_id = info.glyph_id as u16;
-                let hmtx_advance = ttf_face.as_ref()
+                let hmtx_advance = ttf_face
+                    .as_ref()
                     .and_then(|f| f.glyph_hor_advance(ttf_parser::GlyphId(glyph_id)))
                     .unwrap_or(pos.x_advance.unsigned_abs() as u16);
 
@@ -284,11 +285,10 @@ pub fn wrap_shaped_text(
     base_rtl: bool,
 ) -> Vec<(String, ShapedText)> {
     if text.is_empty() || max_width_px <= 0.0 {
-        let shaped = shape_text(font_data, text, font_size_px, base_rtl)
-            .unwrap_or(ShapedText {
-                runs: Vec::new(),
-                units_per_em: 1000,
-            });
+        let shaped = shape_text(font_data, text, font_size_px, base_rtl).unwrap_or(ShapedText {
+            runs: Vec::new(),
+            units_per_em: 1000,
+        });
         return vec![(text.to_string(), shaped)];
     }
 
@@ -311,11 +311,12 @@ pub fn wrap_shaped_text(
             current_width += space_width + word_width;
         } else {
             // Wrap current line
-            let shaped = shape_text(font_data, &current_line, font_size_px, base_rtl)
-                .unwrap_or(ShapedText {
+            let shaped = shape_text(font_data, &current_line, font_size_px, base_rtl).unwrap_or(
+                ShapedText {
                     runs: Vec::new(),
                     units_per_em: 1000,
-                });
+                },
+            );
             lines.push((current_line, shaped));
             current_line = word.to_string();
             current_width = word_width;
@@ -323,8 +324,8 @@ pub fn wrap_shaped_text(
     }
 
     if !current_line.is_empty() {
-        let shaped = shape_text(font_data, &current_line, font_size_px, base_rtl)
-            .unwrap_or(ShapedText {
+        let shaped =
+            shape_text(font_data, &current_line, font_size_px, base_rtl).unwrap_or(ShapedText {
                 runs: Vec::new(),
                 units_per_em: 1000,
             });
@@ -407,16 +408,12 @@ pub fn font_units_per_em(font_data: &[u8]) -> Option<u16> {
 pub fn ttf_char_advance(font_data: &[u8], ch: char) -> Option<u16> {
     let face = ttf_parser::Face::parse(font_data, 0).ok()?;
     let glyph_id = face.glyph_index(ch)?;
-    Some(face.glyph_hor_advance(glyph_id)?)
+    face.glyph_hor_advance(glyph_id)
 }
 
 /// Measure text width in CSS pixels using the raw TTF font.
 /// Falls back to a default width for missing glyphs.
-pub fn measure_ttf_text_width_px(
-    font_data: &[u8],
-    text: &str,
-    font_size_px: f64,
-) -> f64 {
+pub fn measure_ttf_text_width_px(font_data: &[u8], text: &str, font_size_px: f64) -> f64 {
     let face = match ttf_parser::Face::parse(font_data, 0) {
         Ok(f) => f,
         Err(_) => return text.len() as f64 * font_size_px * 0.5,

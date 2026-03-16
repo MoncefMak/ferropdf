@@ -112,7 +112,9 @@ impl CssParser {
         *position += 1;
 
         // Read at-rule name
-        let name = Self::read_until(chars, position, |c| c.is_whitespace() || c == '{' || c == ';');
+        let name = Self::read_until(chars, position, |c| {
+            c.is_whitespace() || c == '{' || c == ';'
+        });
 
         match name.as_str() {
             "page" => {
@@ -249,10 +251,13 @@ impl CssParser {
 
         let (declarations, vars) = Self::parse_declarations(&block)?;
 
-        Ok(Some((CssRule {
-            selectors,
-            declarations,
-        }, vars)))
+        Ok(Some((
+            CssRule {
+                selectors,
+                declarations,
+            },
+            vars,
+        )))
     }
 
     /// Parse declarations from a block string.
@@ -467,7 +472,7 @@ impl CssParser {
         let mut result = String::new();
         let mut depth = 1;
 
-        while let Some(c) = chars.next() {
+        for c in chars.by_ref() {
             *position += 1;
             match c {
                 '{' => {

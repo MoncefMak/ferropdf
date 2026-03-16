@@ -36,10 +36,17 @@ pub fn layout_table(
     }
 
     // ── Compute column widths (content-aware) ─────────────────────────
-    let col_widths = compute_column_widths(table_box, available, num_cols, font_size, collapsed, cell_border);
+    let col_widths = compute_column_widths(
+        table_box,
+        available,
+        num_cols,
+        font_size,
+        collapsed,
+        cell_border,
+    );
 
     // ── Layout rows ───────────────────────────────────────────────────
-    let mut y = if collapsed { 0.0 } else { 0.0 };
+    let mut y = 0.0;
     let mut row_index = 0usize;
 
     layout_rows(
@@ -75,11 +82,21 @@ fn compute_column_widths(
     let mut col_min: Vec<f64> = vec![40.0; num_cols]; // minimum 40px per column
 
     let mut rows_sampled = 0usize;
-    collect_column_widths(&table_box.children, &mut col_pref, &mut col_min, font_size, &mut rows_sampled);
+    collect_column_widths(
+        &table_box.children,
+        &mut col_pref,
+        &mut col_min,
+        font_size,
+        &mut rows_sampled,
+    );
 
     // (use first cell's padding as representative)
     let cell_overhead = first_cell_padding_h(table_box)
-        + if collapsed { cell_border } else { first_cell_border_h(table_box) };
+        + if collapsed {
+            cell_border
+        } else {
+            first_cell_border_h(table_box)
+        };
 
     for i in 0..num_cols {
         col_pref[i] += cell_overhead;
@@ -157,16 +174,14 @@ fn collect_column_widths(
                     if !text.is_empty() {
                         let family = cell.style.font_family();
                         let weight = cell.style.font_weight();
-                        let fs = cell
-                            .style
-                            .font_size_px(font_size, font_size);
+                        let fs = cell.style.font_size_px(font_size, font_size);
                         let font_name = writer::resolve_builtin_font_name(family, weight, false);
-                        let w = metrics::measure_text_width_px(&text, &font_name, fs);
+                        let w = metrics::measure_text_width_px(&text, font_name, fs);
                         col_pref[col] = col_pref[col].max(w);
                         // Minimum = width of the longest single word in the cell
                         let min_w = text
                             .split_whitespace()
-                            .map(|word| metrics::measure_text_width_px(word, &font_name, fs))
+                            .map(|word| metrics::measure_text_width_px(word, font_name, fs))
                             .fold(0.0_f64, f64::max);
                         col_min[col] = col_min[col].max(min_w);
                     }
@@ -177,7 +192,13 @@ fn collect_column_widths(
             LayoutBoxType::Block | LayoutBoxType::AnonymousBlock => {
                 let tag = child.tag_name.as_deref().unwrap_or("");
                 if matches!(tag, "thead" | "tbody" | "tfoot") {
-                    collect_column_widths(&child.children, col_pref, col_min, font_size, rows_sampled);
+                    collect_column_widths(
+                        &child.children,
+                        col_pref,
+                        col_min,
+                        font_size,
+                        rows_sampled,
+                    );
                 }
             }
             _ => {}
@@ -305,8 +326,9 @@ fn adjust_collapsed_borders_inner(children: &mut [LayoutBox], row_index: &mut us
 
 // ── Row layout ────────────────────────────────────────────────────────────
 
+#[allow(clippy::too_many_arguments)]
 fn layout_rows(
-    children: &mut Vec<LayoutBox>,
+    children: &mut [LayoutBox],
     col_widths: &[f64],
     available: f64,
     font_size: f64,
@@ -318,7 +340,16 @@ fn layout_rows(
     for child in children.iter_mut() {
         match child.box_type {
             LayoutBoxType::TableRow => {
-                layout_row(child, col_widths, available, font_size, y, *row_index, collapsed, cell_border);
+                layout_row(
+                    child,
+                    col_widths,
+                    available,
+                    font_size,
+                    y,
+                    *row_index,
+                    collapsed,
+                    cell_border,
+                );
                 *row_index += 1;
             }
             LayoutBoxType::Block | LayoutBoxType::AnonymousBlock => {
@@ -345,6 +376,7 @@ fn layout_rows(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn layout_row(
     row: &mut LayoutBox,
     col_widths: &[f64],
@@ -398,9 +430,8 @@ fn layout_row(
     // Equalize cell heights within the row
     for cell in row.children.iter_mut() {
         if matches!(cell.box_type, LayoutBoxType::TableCell) {
-            cell.dimensions.content.height = row_height
-                - cell.dimensions.padding.vertical()
-                - cell.dimensions.border.vertical();
+            cell.dimensions.content.height =
+                row_height - cell.dimensions.padding.vertical() - cell.dimensions.border.vertical();
         }
     }
 
@@ -459,7 +490,7 @@ fn estimate_text_height_measured(
     let weight = box_node.style.font_weight();
     let font_name = writer::resolve_builtin_font_name(family, weight, false);
 
-    let lines = metrics::wrap_text_measured(&text, &font_name, fs, available_width);
+    let lines = metrics::wrap_text_measured(&text, font_name, fs, available_width);
     (lines.len() as f64 * line_height).max(line_height)
 }
 

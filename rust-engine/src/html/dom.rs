@@ -172,11 +172,7 @@ impl DomNode {
         result
     }
 
-    fn find_elements_by_class_recursive<'a>(
-        &'a self,
-        class: &str,
-        result: &mut Vec<&'a DomNode>,
-    ) {
+    fn find_elements_by_class_recursive<'a>(&'a self, class: &str, result: &mut Vec<&'a DomNode>) {
         if let NodeType::Element(data) = &self.node_type {
             if data.has_class(class) {
                 result.push(self);

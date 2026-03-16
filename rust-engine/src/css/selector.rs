@@ -1,5 +1,7 @@
 //! CSS selector matching and specificity.
 
+use std::ops::Add;
+
 use crate::html::dom::ElementData;
 
 /// Represents the pattern for nth-child/nth-of-type selectors.
@@ -19,8 +21,12 @@ impl NthPattern {
     /// Parse an nth expression: "odd", "even", "3", "2n", "2n+1", "-n+4"
     pub fn parse(s: &str) -> Option<Self> {
         let s = s.trim();
-        if s == "even" { return Some(NthPattern::Even); }
-        if s == "odd"  { return Some(NthPattern::Odd);  }
+        if s == "even" {
+            return Some(NthPattern::Even);
+        }
+        if s == "odd" {
+            return Some(NthPattern::Odd);
+        }
 
         // Try plain integer first
         if let Ok(n) = s.parse::<i32>() {
@@ -35,8 +41,8 @@ impl NthPattern {
 
             let a: i32 = match a_str.trim() {
                 "" | "+" => 1,
-                "-"      => -1,
-                other    => other.trim().parse().ok()?,
+                "-" => -1,
+                other => other.trim().parse().ok()?,
             };
 
             let b: i32 = if b_str.trim().is_empty() {
@@ -55,7 +61,7 @@ impl NthPattern {
     pub fn matches_position(&self, pos: i32) -> bool {
         match self {
             NthPattern::Even => pos % 2 == 0,
-            NthPattern::Odd  => pos % 2 == 1,
+            NthPattern::Odd => pos % 2 == 1,
             NthPattern::Exact(k) => pos == *k,
             NthPattern::AnPlusB(a, b) => {
                 if *a == 0 {
@@ -118,8 +124,12 @@ impl Specificity {
     pub fn zero() -> Self {
         Self(0, 0, 0)
     }
+}
 
-    pub fn add(self, other: Self) -> Self {
+impl std::ops::Add for Specificity {
+    type Output = Self;
+
+    fn add(self, other: Self) -> Self {
         Self(self.0 + other.0, self.1 + other.1, self.2 + other.2)
     }
 }
@@ -140,11 +150,9 @@ impl Selector {
             }
             // :not() contributes the specificity of its argument (CSS Selectors 4)
             Selector::Not(inner) => inner.specificity(),
-            Selector::Compound(parts) => {
-                parts.iter().fold(Specificity::zero(), |acc, s| {
-                    acc.add(s.specificity())
-                })
-            }
+            Selector::Compound(parts) => parts
+                .iter()
+                .fold(Specificity::zero(), |acc, s| acc.add(s.specificity())),
             Selector::Descendant(a, b)
             | Selector::Child(a, b)
             | Selector::AdjacentSibling(a, b)
@@ -175,13 +183,17 @@ impl Selector {
             },
             Selector::PseudoClass(pseudo) => match pseudo.as_str() {
                 "first-child" => siblings.is_empty(),
-                "last-child"  => following_siblings.is_empty(),
-                "only-child"  => siblings.is_empty() && following_siblings.is_empty(),
+                "last-child" => following_siblings.is_empty(),
+                "only-child" => siblings.is_empty() && following_siblings.is_empty(),
                 "first-of-type" => !siblings.iter().any(|s| s.tag_name == element.tag_name),
-                "last-of-type"  => !following_siblings.iter().any(|s| s.tag_name == element.tag_name),
-                "only-of-type"  => {
+                "last-of-type" => !following_siblings
+                    .iter()
+                    .any(|s| s.tag_name == element.tag_name),
+                "only-of-type" => {
                     !siblings.iter().any(|s| s.tag_name == element.tag_name)
-                        && !following_siblings.iter().any(|s| s.tag_name == element.tag_name)
+                        && !following_siblings
+                            .iter()
+                            .any(|s| s.tag_name == element.tag_name)
                 }
                 _ => false,
             },
@@ -192,9 +204,11 @@ impl Selector {
             }
             Selector::NthOfType(pattern) => {
                 // 1-based position counting only same-tag preceding siblings
-                let same_tag_count = siblings.iter()
+                let same_tag_count = siblings
+                    .iter()
                     .filter(|s| s.tag_name == element.tag_name)
-                    .count() as i32 + 1;
+                    .count() as i32
+                    + 1;
                 pattern.matches_position(same_tag_count)
             }
             Selector::NthLastChild(pattern) => {
@@ -206,9 +220,9 @@ impl Selector {
                 !inner.matches(element, ancestors, siblings, following_siblings)
             }
             Selector::PseudoElement(_) => false, // Handled separately
-            Selector::Compound(parts) => {
-                parts.iter().all(|s| s.matches(element, ancestors, siblings, following_siblings))
-            }
+            Selector::Compound(parts) => parts
+                .iter()
+                .all(|s| s.matches(element, ancestors, siblings, following_siblings)),
             Selector::Descendant(ancestor_sel, self_sel) => {
                 if !self_sel.matches(element, ancestors, siblings, following_siblings) {
                     return false;
@@ -265,10 +279,7 @@ impl Selector {
 
                 if part == ">" && i + 1 < parts.len() {
                     let right = Self::parse_simple(&parts[i + 1])?;
-                    result = Some(Selector::Child(
-                        Box::new(result?),
-                        Box::new(right),
-                    ));
+                    result = Some(Selector::Child(Box::new(result?), Box::new(right)));
                     i += 2;
                 } else if part == "+" && i + 1 < parts.len() {
                     let right = Self::parse_simple(&parts[i + 1])?;
@@ -279,10 +290,7 @@ impl Selector {
                     i += 2;
                 } else if part == "~" && i + 1 < parts.len() {
                     let right = Self::parse_simple(&parts[i + 1])?;
-                    result = Some(Selector::GeneralSibling(
-                        Box::new(result?),
-                        Box::new(right),
-                    ));
+                    result = Some(Selector::GeneralSibling(Box::new(result?), Box::new(right)));
                     i += 2;
                 } else {
                     let sel = Self::parse_simple(part)?;
@@ -308,8 +316,14 @@ impl Selector {
 
         for ch in input.chars() {
             match ch {
-                '(' => { depth += 1; current.push(ch); }
-                ')' => { if depth > 0 { depth -= 1; } current.push(ch); }
+                '(' => {
+                    depth += 1;
+                    current.push(ch);
+                }
+                ')' => {
+                    depth = depth.saturating_sub(1);
+                    current.push(ch);
+                }
                 ' ' | '\t' | '\n' if depth == 0 => {
                     let trimmed = current.trim().to_string();
                     if !trimmed.is_empty() {
@@ -317,7 +331,9 @@ impl Selector {
                     }
                     current.clear();
                 }
-                _ => { current.push(ch); }
+                _ => {
+                    current.push(ch);
+                }
             }
         }
         let trimmed = current.trim().to_string();
@@ -347,7 +363,7 @@ impl Selector {
                     current.push(chars.next().unwrap());
                 }
                 ')' => {
-                    if paren_depth > 0 { paren_depth -= 1; }
+                    paren_depth = paren_depth.saturating_sub(1);
                     current.push(chars.next().unwrap());
                 }
                 '.' | '#' if !current.is_empty() && paren_depth == 0 => {
@@ -396,10 +412,10 @@ impl Selector {
     }
 
     fn parse_single_simple(input: &str) -> Option<Self> {
-        if input.starts_with('#') {
-            Some(Selector::Id(input[1..].to_string()))
-        } else if input.starts_with('.') {
-            Some(Selector::Class(input[1..].to_string()))
+        if let Some(stripped) = input.strip_prefix('#') {
+            Some(Selector::Id(stripped.to_string()))
+        } else if let Some(stripped) = input.strip_prefix('.') {
+            Some(Selector::Class(stripped.to_string()))
         } else if input.starts_with('[') && input.ends_with(']') {
             let inner = &input[1..input.len() - 1];
             if let Some(eq_pos) = inner.find('=') {
@@ -413,28 +429,19 @@ impl Selector {
             } else {
                 Some(Selector::Attribute(inner.to_string(), None))
             }
-        } else if input.starts_with("::") {
-            Some(Selector::PseudoElement(input[2..].to_string()))
-        } else if input.starts_with(':') {
-            let pseudo = &input[1..];
+        } else if let Some(stripped) = input.strip_prefix("::") {
+            Some(Selector::PseudoElement(stripped.to_string()))
+        } else if let Some(pseudo) = input.strip_prefix(':') {
             // Detect functional pseudo-classes: :nth-child(...), :not(...), etc.
             if let Some(paren_pos) = pseudo.find('(') {
                 if pseudo.ends_with(')') {
                     let name = &pseudo[..paren_pos];
-                    let arg  = &pseudo[paren_pos + 1..pseudo.len() - 1];
+                    let arg = &pseudo[paren_pos + 1..pseudo.len() - 1];
                     match name {
-                        "nth-child" => {
-                            NthPattern::parse(arg).map(Selector::NthChild)
-                        }
-                        "nth-of-type" => {
-                            NthPattern::parse(arg).map(Selector::NthOfType)
-                        }
-                        "nth-last-child" => {
-                            NthPattern::parse(arg).map(Selector::NthLastChild)
-                        }
-                        "not" => {
-                            Selector::parse(arg).map(|inner| Selector::Not(Box::new(inner)))
-                        }
+                        "nth-child" => NthPattern::parse(arg).map(Selector::NthChild),
+                        "nth-of-type" => NthPattern::parse(arg).map(Selector::NthOfType),
+                        "nth-last-child" => NthPattern::parse(arg).map(Selector::NthLastChild),
+                        "not" => Selector::parse(arg).map(|inner| Selector::Not(Box::new(inner))),
                         _ => Some(Selector::PseudoClass(pseudo.to_string())),
                     }
                 } else {

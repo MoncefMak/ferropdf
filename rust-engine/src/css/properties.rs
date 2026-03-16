@@ -309,7 +309,7 @@ impl ComputedStyle {
     pub fn color(&self) -> Color {
         self.get(&CssProperty::Color)
             .and_then(|v| v.as_color())
-            .unwrap_or(Color::black())
+            .unwrap_or_default()
     }
 
     /// Get background color (defaults to transparent).
@@ -349,18 +349,25 @@ impl ComputedStyle {
     /// Defaults to "right" when direction is RTL, "left" for LTR.
     /// Also resolves the CSS `start` / `end` keywords based on direction.
     pub fn text_align(&self) -> &str {
-        let explicit = self.get(&CssProperty::TextAlign)
-            .and_then(|v| match v {
-                CssValue::Keyword(s) => Some(s.as_str()),
-                _ => None,
-            });
+        let explicit = self.get(&CssProperty::TextAlign).and_then(|v| match v {
+            CssValue::Keyword(s) => Some(s.as_str()),
+            _ => None,
+        });
 
         match explicit {
             Some("start") | None => {
-                if self.is_rtl() { "right" } else { "left" }
+                if self.is_rtl() {
+                    "right"
+                } else {
+                    "left"
+                }
             }
             Some("end") => {
-                if self.is_rtl() { "left" } else { "right" }
+                if self.is_rtl() {
+                    "left"
+                } else {
+                    "right"
+                }
             }
             Some(s) => s,
         }
@@ -431,10 +438,19 @@ impl ComputedStyle {
         style.set(CssProperty::Display, CssValue::Keyword("block".to_string()));
         style.set(CssProperty::FontSize, CssValue::Length(Length::px(16.0)));
         style.set(CssProperty::FontWeight, CssValue::Number(400.0));
-        style.set(CssProperty::FontFamily, CssValue::Keyword("serif".to_string()));
+        style.set(
+            CssProperty::FontFamily,
+            CssValue::Keyword("serif".to_string()),
+        );
         style.set(CssProperty::Color, CssValue::Color(Color::black()));
-        style.set(CssProperty::BackgroundColor, CssValue::Color(Color::white()));
-        style.set(CssProperty::LineHeight, CssValue::Keyword("normal".to_string()));
+        style.set(
+            CssProperty::BackgroundColor,
+            CssValue::Color(Color::white()),
+        );
+        style.set(
+            CssProperty::LineHeight,
+            CssValue::Keyword("normal".to_string()),
+        );
         // Note: TextAlign is NOT set here. The text_align() method will
         // return a direction-aware default ("left" for LTR, "right" for RTL).
         style
