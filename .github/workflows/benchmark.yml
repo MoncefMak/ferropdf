@@ -48,6 +48,9 @@ jobs:
             git checkout main
           fi
 
+      - name: Clean uncommitted changes before branch switch
+        run: git checkout -- .
+
       - name: Store benchmark result
         uses: benchmark-action/github-action-benchmark@v1
         with:
