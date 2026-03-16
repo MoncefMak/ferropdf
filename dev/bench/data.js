@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1773644469346,
+  "lastUpdate": 1773645624335,
   "repoUrl": "https://github.com/MoncefMak/ferropdf",
   "entries": {
     "FastPDF Criterion Benchmarks": [
@@ -377,6 +377,132 @@ window.BENCHMARK_DATA = {
             "name": "05_stages/pdf_generate",
             "value": 439435,
             "range": "± 1789",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "72460183+MoncefMak@users.noreply.github.com",
+            "name": "MoncefMak",
+            "username": "MoncefMak"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "69094e90f49f81cffedfec777e92fb6f171b1d9d",
+          "message": "Merge pull request #2 from MoncefMak/fix/clippy-lint-and-code-quality\n\nfix: convert batch speedup assertion to warning for CI stability",
+          "timestamp": "2026-03-16T08:15:32+01:00",
+          "tree_id": "281098913f0c169c2893deb7d48605844e7ebaa2",
+          "url": "https://github.com/MoncefMak/ferropdf/commit/69094e90f49f81cffedfec777e92fb6f171b1d9d"
+        },
+        "date": 1773645624084,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "01_parse/html_simple",
+            "value": 4222,
+            "range": "± 36",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "01_parse/html_complex",
+            "value": 52238,
+            "range": "± 241",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "01_parse/css_basic",
+            "value": 6031,
+            "range": "± 45",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "01_parse/css_complex",
+            "value": 10345,
+            "range": "± 41",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "01_parse/default_stylesheet",
+            "value": 3928,
+            "range": "± 157",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "02_full_pipeline/simple_html",
+            "value": 118018,
+            "range": "± 695",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "02_full_pipeline/styled_html",
+            "value": 320656,
+            "range": "± 1675",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "02_full_pipeline/complex_report",
+            "value": 1076436,
+            "range": "± 10632",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "03_tables/rows/10",
+            "value": 713563,
+            "range": "± 6765",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "03_tables/rows/25",
+            "value": 1500038,
+            "range": "± 6328",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "03_tables/rows/50",
+            "value": 2812139,
+            "range": "± 11855",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "03_tables/rows/100",
+            "value": 5367334,
+            "range": "± 58083",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "04_tailwind/extract_classes",
+            "value": 7962,
+            "range": "± 96",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "04_tailwind/resolve_classes",
+            "value": 9115,
+            "range": "± 97",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "05_stages/layout_complex",
+            "value": 443519,
+            "range": "± 1536",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "05_stages/render_paint_cmds",
+            "value": 34451,
+            "range": "± 188",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "05_stages/pdf_generate",
+            "value": 433727,
+            "range": "± 5469",
             "unit": "ns/iter"
           }
         ]
