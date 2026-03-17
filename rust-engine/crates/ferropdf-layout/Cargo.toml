@@ -1,0 +1,14 @@
+[package]
+name    = "ferropdf-layout"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ferropdf-core  = { workspace = true }
+ferropdf-parse = { workspace = true }
+thiserror      = { workspace = true }
+log            = { workspace = true }
+cosmic-text    = { workspace = true }
+ttf-parser     = { workspace = true }
+taffy          = { workspace = true }
+unicode-bidi   = "0.3"

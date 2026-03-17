@@ -1,0 +1,26 @@
+[package]
+name    = "fastpdf-engine"
+version = "0.1.2"
+edition = "2021"
+authors = ["FastPDF Contributors"]
+description = "High-performance PDF generation engine with HTML/CSS rendering"
+license = "MIT OR Apache-2.0"
+
+[lib]
+name       = "_engine"
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default         = ["extension-module"]
+extension-module = ["pyo3/extension-module"]
+
+[dependencies]
+ferropdf-core   = { workspace = true }
+ferropdf-parse  = { workspace = true }
+ferropdf-layout = { workspace = true }
+ferropdf-page   = { workspace = true }
+ferropdf-render = { workspace = true }
+pyo3            = { workspace = true }
+log             = { workspace = true }
+env_logger      = { workspace = true }
+rayon           = { workspace = true }

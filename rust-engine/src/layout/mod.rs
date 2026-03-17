@@ -9,6 +9,6 @@ pub mod pagination;
 pub mod style_resolver;
 pub mod table_layout;
 
-pub use box_model::{BoxDimensions, EdgeSizes, LayoutBox, LayoutBoxType, Rect};
+pub use box_model::{BoxDimensions, EdgeSizes, FloatSide, LayoutBox, LayoutBoxType, PositionType, Rect};
 pub use engine::LayoutEngine;
 pub use pagination::{Page, PageLayout, PageSize};

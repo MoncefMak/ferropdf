@@ -1,0 +1,89 @@
+/* User-agent (default browser) stylesheet.
+   Parsed once at startup and applied before author styles. */
+
+/* Universal box-sizing */
+* { box-sizing: border-box; }
+
+/* Block-level elements */
+html, body { display: block; margin: 0; padding: 0; }
+body { font-family: serif; font-size: 16px; color: #000; background: #fff; }
+
+div, section, article, aside, header, footer, main, nav, figure, figcaption,
+details, summary, address, dialog, blockquote {
+    display: block;
+}
+
+/* Headings */
+h1 { display: block; font-size: 2em;    font-weight: bold; margin-top: 0.67em; margin-bottom: 0.67em; }
+h2 { display: block; font-size: 1.5em;  font-weight: bold; margin-top: 0.75em; margin-bottom: 0.75em; }
+h3 { display: block; font-size: 1.17em; font-weight: bold; margin-top: 0.83em; margin-bottom: 0.83em; }
+h4 { display: block; font-size: 1em;    font-weight: bold; margin-top: 1.12em; margin-bottom: 1.12em; }
+h5 { display: block; font-size: 0.83em; font-weight: bold; margin-top: 1.5em;  margin-bottom: 1.5em; }
+h6 { display: block; font-size: 0.67em; font-weight: bold; margin-top: 1.67em; margin-bottom: 1.67em; }
+
+/* Paragraphs */
+p { display: block; margin-top: 1em; margin-bottom: 1em; }
+
+/* Lists */
+ul, ol { display: block; margin-top: 1em; margin-bottom: 1em; padding-left: 40px; }
+li { display: list-item; }
+ul > li { list-style-type: disc;    }
+ol > li { list-style-type: decimal; }
+dl { display: block; }
+dt { display: block; font-weight: bold; }
+dd { display: block; margin-left: 40px; }
+
+/* Inline elements */
+span, label, abbr, acronym, cite, dfn, q, time, mark, var, samp { display: inline; }
+a { color: #0000ee; text-decoration: underline; }
+
+/* Typography */
+strong, b     { font-weight: bold;     }
+em, i, dfn    { font-style: italic;   }
+u             { text-decoration: underline; }
+s, strike, del { text-decoration: line-through; }
+small         { font-size: 0.83em; }
+big           { font-size: 1.17em; }
+sub           { font-size: 0.83em; }
+sup           { font-size: 0.83em; }
+
+/* Monospace */
+code, pre, kbd, samp, tt { font-family: monospace; }
+pre { display: block; white-space: pre; margin-top: 1em; margin-bottom: 1em; }
+
+/* HR */
+hr {
+    display: block;
+    margin-top: 0.5em;
+    margin-bottom: 0.5em;
+    border-top-width: 1px;
+    border-top-style: solid;
+    border-top-color: #aaa;
+}
+
+/* Tables */
+table  { display: table;              border-spacing: 2px; }
+thead  { display: table-header-group; }
+tbody  { display: table-row-group;    }
+tfoot  { display: table-footer-group; }
+tr     { display: table-row;          }
+th     { display: table-cell; font-weight: bold; text-align: center; padding: 2px; }
+td     { display: table-cell; padding: 2px; }
+caption { display: block; text-align: center; }
+
+/* Form elements (non-interactive in PDF) */
+input, textarea, select, button {
+    display: inline-block;
+    border-width: 1px;
+    border-style: solid;
+    border-color: #aaa;
+    padding: 2px 4px;
+}
+
+/* Images */
+img { display: inline; max-width: 100%; }
+
+/* @page defaults */
+@page {
+    margin: 20mm;
+}

@@ -54,7 +54,7 @@ Issues = "https://github.com/MoncefMak/ferropdf/issues"
 Changelog = "https://github.com/MoncefMak/ferropdf/blob/main/CHANGELOG.md"
 
 [tool.maturin]
-manifest-path = "rust-engine/Cargo.toml"
+manifest-path = "rust-engine/bindings/python/Cargo.toml"
 python-source = "python-wrapper"
 module-name = "fastpdf._engine"
 features = ["pyo3/extension-module"]

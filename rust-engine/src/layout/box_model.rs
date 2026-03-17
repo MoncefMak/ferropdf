@@ -159,6 +159,8 @@ pub enum LayoutBoxType {
     InlineBlock,
     /// A flex container.
     Flex,
+    /// A grid container.
+    Grid,
     /// A table box.
     Table,
     /// A table row.
@@ -173,6 +175,23 @@ pub enum LayoutBoxType {
     AnonymousInline,
     /// An image/replaced element.
     Replaced,
+}
+
+/// CSS position value for a layout box.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum PositionType {
+    Static,
+    Relative,
+    Absolute,
+    Fixed,
+}
+
+/// CSS float value.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum FloatSide {
+    None,
+    Left,
+    Right,
 }
 
 /// A layout box with computed dimensions and styles.
@@ -202,6 +221,12 @@ pub struct LayoutBox {
     pub inline_style: Option<String>,
     /// Element attributes (for rendering anchors, etc.).
     pub attributes: std::collections::HashMap<String, String>,
+    /// CSS position type (static, relative, absolute, fixed).
+    pub position_type: PositionType,
+    /// Children that are positioned out of flow (absolute/fixed).
+    pub out_of_flow_children: Vec<LayoutBox>,
+    /// CSS float value (none, left, right).
+    pub float_side: FloatSide,
 }
 
 impl LayoutBox {
@@ -219,6 +244,9 @@ impl LayoutBox {
             avoid_break_inside: false,
             inline_style: None,
             attributes: std::collections::HashMap::new(),
+            position_type: PositionType::Static,
+            out_of_flow_children: Vec::new(),
+            float_side: FloatSide::None,
         }
     }
 

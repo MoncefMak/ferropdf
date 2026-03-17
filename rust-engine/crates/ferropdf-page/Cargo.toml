@@ -1,0 +1,11 @@
+[package]
+name    = "ferropdf-page"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ferropdf-core   = { workspace = true }
+ferropdf-layout = { workspace = true }
+ferropdf-parse  = { workspace = true }
+thiserror       = { workspace = true }
+log             = { workspace = true }

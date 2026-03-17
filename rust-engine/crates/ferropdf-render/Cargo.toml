@@ -1,0 +1,19 @@
+[package]
+name    = "ferropdf-render"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ferropdf-core   = { workspace = true }
+ferropdf-parse  = { workspace = true }
+ferropdf-layout = { workspace = true }
+ferropdf-page   = { workspace = true }
+thiserror       = { workspace = true }
+log             = { workspace = true }
+pdf-writer      = { workspace = true }
+ttf-parser      = { workspace = true }
+miniz_oxide     = { workspace = true }
+image           = { workspace = true }
+resvg           = { workspace = true }
+usvg            = { workspace = true }
+cosmic-text     = { workspace = true }
