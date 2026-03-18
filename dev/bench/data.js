@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1773872826909,
+  "lastUpdate": 1773873546334,
   "repoUrl": "https://github.com/MoncefMak/ferropdf",
   "entries": {
     "FastPDF Criterion Benchmarks": [
@@ -871,6 +871,54 @@ window.BENCHMARK_DATA = {
             "name": "render_invoice_cached",
             "value": 867720,
             "range": "± 16524",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "moncefmak@users.noreply.github.com",
+            "name": "Makti Moncef",
+            "username": "MoncefMak"
+          },
+          "committer": {
+            "email": "moncefmak@users.noreply.github.com",
+            "name": "Makti Moncef",
+            "username": "MoncefMak"
+          },
+          "distinct": true,
+          "id": "9e40bf8df33f8043a8b4a145652acc3688a57629",
+          "message": "chore: bump version to 0.2.2\n\n- PyO3 0.24 security fix (RUSTSEC-2025-0020)\n- Python 3.13 support\n- All clippy/fmt/audit clean",
+          "timestamp": "2026-03-18T23:37:05+01:00",
+          "tree_id": "c74dda07e373b9fe37551f337bf544696bc05c95",
+          "url": "https://github.com/MoncefMak/ferropdf/commit/9e40bf8df33f8043a8b4a145652acc3688a57629"
+        },
+        "date": 1773873545517,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "render_simple",
+            "value": 3805191,
+            "range": "± 48800",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice",
+            "value": 4496886,
+            "range": "± 41440",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_simple_cached",
+            "value": 224336,
+            "range": "± 1254",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice_cached",
+            "value": 873780,
+            "range": "± 24140",
             "unit": "ns/iter"
           }
         ]
