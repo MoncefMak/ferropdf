@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1773662284269,
+  "lastUpdate": 1773858047869,
   "repoUrl": "https://github.com/MoncefMak/ferropdf",
   "entries": {
     "FastPDF Criterion Benchmarks": [
@@ -629,6 +629,56 @@ window.BENCHMARK_DATA = {
             "name": "05_stages/pdf_generate",
             "value": 440653,
             "range": "± 2162",
+            "unit": "ns/iter"
+          }
+        ]
+      }
+    ],
+    "ferropdf Criterion Benchmarks": [
+      {
+        "commit": {
+          "author": {
+            "email": "moncefmak@users.noreply.github.com",
+            "name": "Makti Moncef",
+            "username": "MoncefMak"
+          },
+          "committer": {
+            "email": "moncefmak@users.noreply.github.com",
+            "name": "Makti Moncef",
+            "username": "MoncefMak"
+          },
+          "distinct": true,
+          "id": "e1cb20e1d037f1051efa07cbb64e0d7ef10ec962",
+          "message": "perf: font subsetting + caching — 8-13x faster than WeasyPrint\n\n- Add font subsetting via subsetter crate (821KB → 5-8KB per font)\n- Use fast zlib compression (level 1 instead of 6)\n- Cache FontDatabase in Engine (OnceLock) for cross-render reuse\n- Share fontdb between cosmic-text layout and PDF writing\n- Add Criterion benchmarks and Python comparison script\n- Fix CI workflows (remove rust-engine references)\n- Bump version to 0.2.1",
+          "timestamp": "2026-03-18T19:17:10+01:00",
+          "tree_id": "84c1db395d7e2764c4904605fda4abc59b434079",
+          "url": "https://github.com/MoncefMak/ferropdf/commit/e1cb20e1d037f1051efa07cbb64e0d7ef10ec962"
+        },
+        "date": 1773858047603,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "render_simple",
+            "value": 3824394,
+            "range": "± 21100",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice",
+            "value": 4515476,
+            "range": "± 129541",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_simple_cached",
+            "value": 225259,
+            "range": "± 3499",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice_cached",
+            "value": 867709,
+            "range": "± 6323",
             "unit": "ns/iter"
           }
         ]
