@@ -1,12 +1,51 @@
+//! CSS Cascade: sort declarations by origin, specificity, and source order.
+//!
+//! Specificity comes from `selectors::Selector::specificity()` — we never
+//! compute it by hand.
+
 use ferropdf_core::*;
 use ferropdf_parse::{Declaration, CssProperty, CssValue};
+use crate::matching::ScoredDeclaration;
 
-pub fn apply_declarations(
+/// Apply declarations sorted by cascade order:
+/// 1. Non-important, sorted by (specificity, source_order)
+/// 2. Important, sorted by (specificity, source_order)
+///
+/// Within each group, higher specificity wins; equal specificity → later source order wins.
+pub fn apply_scored_declarations(
+    style: &mut ComputedStyle,
+    scored: &mut Vec<ScoredDeclaration>,
+    root_font_size: f32,
+) {
+    // Partition into non-important and important
+    let mut non_important: Vec<&ScoredDeclaration> = scored.iter()
+        .filter(|sd| !sd.declaration.important)
+        .collect();
+    let mut important: Vec<&ScoredDeclaration> = scored.iter()
+        .filter(|sd| sd.declaration.important)
+        .collect();
+
+    // Sort by (specificity, source_order) — both ascending, so last wins
+    non_important.sort_by_key(|sd| (sd.specificity, sd.source_order));
+    important.sort_by_key(|sd| (sd.specificity, sd.source_order));
+
+    // Apply in order: non-important first, then important overrides
+    for sd in &non_important {
+        apply_single(style, &sd.declaration.property, &sd.declaration.value, root_font_size);
+    }
+    for sd in &important {
+        apply_single(style, &sd.declaration.property, &sd.declaration.value, root_font_size);
+    }
+}
+
+/// Apply inline style declarations (no specificity needed — inline always wins
+/// over stylesheet rules, but loses to !important stylesheet rules).
+/// In our simplified cascade, we apply inline styles after all stylesheet rules.
+pub fn apply_inline_declarations(
     style: &mut ComputedStyle,
     declarations: &[Declaration],
     root_font_size: f32,
 ) {
-    // Sort by specificity: non-important first, then important
     let mut non_important: Vec<&Declaration> = Vec::new();
     let mut important: Vec<&Declaration> = Vec::new();
 
@@ -24,14 +63,6 @@ pub fn apply_declarations(
     for decl in &important {
         apply_single(style, &decl.property, &decl.value, root_font_size);
     }
-}
-
-pub fn apply_rule_declarations(
-    style: &mut ComputedStyle,
-    declarations: &[Declaration],
-    root_font_size: f32,
-) {
-    apply_declarations(style, declarations, root_font_size);
 }
 
 fn apply_single(
@@ -267,7 +298,6 @@ fn apply_single(
             };
         }
         CssProperty::Flex => {
-            // flex shorthand: flex-grow [flex-shrink] [flex-basis]
             let parts: Vec<&str> = raw.split_whitespace().collect();
             if let Some(g) = parts.first().and_then(|s| s.parse::<f32>().ok()) {
                 style.flex_grow = g;
@@ -297,21 +327,27 @@ fn apply_single(
         CssProperty::PageBreakBefore => {
             style.page_break_before = match raw {
                 "always" => PageBreak::Always,
-                "avoid" => PageBreak::Avoid,
+                "page"   => PageBreak::Page,
+                "left"   => PageBreak::Left,
+                "right"  => PageBreak::Right,
+                "avoid"  => PageBreak::Avoid,
                 _ => PageBreak::Auto,
             };
         }
         CssProperty::PageBreakAfter => {
             style.page_break_after = match raw {
                 "always" => PageBreak::Always,
-                "avoid" => PageBreak::Avoid,
+                "page"   => PageBreak::Page,
+                "left"   => PageBreak::Left,
+                "right"  => PageBreak::Right,
+                "avoid"  => PageBreak::Avoid,
                 _ => PageBreak::Auto,
             };
         }
         CssProperty::PageBreakInside => {
             style.page_break_inside = match raw {
-                "avoid" => PageBreak::Avoid,
-                _ => PageBreak::Auto,
+                "avoid" => PageBreakInside::Avoid,
+                _ => PageBreakInside::Auto,
             };
         }
         CssProperty::Orphans => {
@@ -455,7 +491,6 @@ fn parse_border_style(s: &str) -> BorderStyle {
 fn resolve_font_size(raw: &str, parent_size: f32, root_font_size: f32) -> f32 {
     let raw = raw.trim();
 
-    // Named sizes
     match raw {
         "xx-small" => return 9.0,
         "x-small" => return 10.0,

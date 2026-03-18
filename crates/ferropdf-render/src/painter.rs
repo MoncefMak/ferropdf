@@ -6,8 +6,13 @@ use crate::display_list::{DrawOp, PageDisplayList};
 pub fn paint_page(page: &Page, config: &PageConfig) -> PageDisplayList {
     let mut ops = Vec::new();
 
+    // Offsets and container width in CSS pixels
+    let offset_x = config.margin_left_px();
+    let offset_y = config.margin_top_px();
+    let container_width = config.content_width_px();
+
     for layout_box in &page.content {
-        paint_box(layout_box, &mut ops, config.margins.left, config.margins.top);
+        paint_box(layout_box, &mut ops, offset_x, offset_y, container_width);
     }
 
     PageDisplayList {
@@ -17,7 +22,7 @@ pub fn paint_page(page: &Page, config: &PageConfig) -> PageDisplayList {
     }
 }
 
-fn paint_box(layout_box: &LayoutBox, ops: &mut Vec<DrawOp>, offset_x: f32, offset_y: f32) {
+fn paint_box(layout_box: &LayoutBox, ops: &mut Vec<DrawOp>, offset_x: f32, offset_y: f32, parent_content_width: f32) {
     let style = &layout_box.style;
 
     if !style.visibility {
@@ -41,7 +46,7 @@ fn paint_box(layout_box: &LayoutBox, ops: &mut Vec<DrawOp>, offset_x: f32, offse
     // Borders
     paint_borders(layout_box, ops, rect);
 
-    // Text content
+    // Text content — use parent block's content width for text-align
     if let Some(ref text) = layout_box.text_content {
         let text = text.trim();
         if !text.is_empty() {
@@ -56,13 +61,16 @@ fn paint_box(layout_box: &LayoutBox, ops: &mut Vec<DrawOp>, offset_x: f32, offse
                 font_family: style.font_family.clone(),
                 bold: style.font_weight.is_bold(),
                 italic: style.font_style == ferropdf_core::FontStyle::Italic,
+                text_align: style.text_align,
+                container_width: parent_content_width,
             });
         }
     }
 
-    // Children
+    // Children — pass this box's content width as the parent width for descendants
+    let my_content_width = layout_box.content.width;
     for child in &layout_box.children {
-        paint_box(child, ops, offset_x, offset_y);
+        paint_box(child, ops, offset_x, offset_y, my_content_width);
     }
 }
 

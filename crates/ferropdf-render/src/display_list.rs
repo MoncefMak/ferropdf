@@ -26,6 +26,8 @@ pub enum DrawOp {
         font_family: Vec<String>,
         bold: bool,
         italic: bool,
+        text_align: ferropdf_core::TextAlign,
+        container_width: f32,
     },
     /// Draw an image
     DrawImage {

@@ -1,9 +1,9 @@
-use ferropdf_core::{LayoutBox, PageConfig, PageBreak, Rect};
+use ferropdf_core::{LayoutBox, PageConfig, PageBreak, PageBreakInside, Rect};
 use ferropdf_core::layout::Page;
 
 /// Fragment a layout tree into pages based on available height.
 pub fn fragment_into_pages(root: &LayoutBox, config: &PageConfig) -> Vec<Page> {
-    let page_height = config.content_height();
+    let page_height = config.content_height_px();
     let mut pages: Vec<Page> = Vec::new();
     let mut current_content: Vec<LayoutBox> = Vec::new();
     let mut current_y = 0.0_f32;
@@ -44,14 +44,33 @@ fn fragment_box(
     }
 
     let box_height = layout_box.margin_box_height();
+    let fits_on_current = *current_y + box_height <= page_height;
+    let fits_on_new_page = box_height <= page_height;
+    let avoid_break = layout_box.style.page_break_inside == PageBreakInside::Avoid;
 
-    // If the box fits on the current page, add it
-    if *current_y + box_height <= page_height || current_content.is_empty() {
+    if fits_on_current {
+        // Box fits on the current page — just add it
+        current_content.push(layout_box.clone());
+        *current_y += box_height;
+    } else if avoid_break && fits_on_new_page {
+        // page-break-inside: avoid — flush current page, place intact on new page
+        flush_page(pages, current_content, current_y);
+        current_content.push(layout_box.clone());
+        *current_y += box_height;
+    } else if !layout_box.children.is_empty() {
+        // Box has children and doesn't fit — recurse into children to fragment them
+        for child in &layout_box.children {
+            fragment_box(child, config, page_height, pages, current_content, current_y);
+        }
+    } else if current_content.is_empty() {
+        // Anti-infinite-loop: leaf box too large even alone — force placement
         current_content.push(layout_box.clone());
         *current_y += box_height;
     } else {
-        // Start a new page
+        // Leaf box doesn't fit — flush current page, place on new page
         flush_page(pages, current_content, current_y);
+        // After flushing, check if leaf fits on a fresh page; if not, force it
+        // (anti-infinite-loop: current_content is now empty after flush)
         current_content.push(layout_box.clone());
         *current_y += box_height;
     }

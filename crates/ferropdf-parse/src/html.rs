@@ -5,7 +5,7 @@ use html5ever::{
 };
 use markup5ever::interface::tree_builder::{NodeOrText, TreeSink, ElementFlags, QuirksMode};
 use markup5ever::interface::{QualName, Attribute, ExpandedName};
-use markup5ever::{expanded_name, ns, namespace_url, local_name};
+use markup5ever::{ns, namespace_url, local_name};
 use html5ever::tendril::StrTendril;
 use ferropdf_core::{Document, NodeId};
 use crate::ParseResult;
@@ -116,7 +116,6 @@ impl TreeSink for DomSink {
         sibling: &Self::Handle,
         new_node: NodeOrText<Self::Handle>,
     ) {
-        // Insert before sibling: find parent, then insert before
         if let Some(parent_id) = self.doc.nodes[*sibling].parent {
             match new_node {
                 NodeOrText::AppendNode(id) => {

@@ -20,7 +20,7 @@ cssparser    = "0.31"
 selectors    = "0.25"
 
 # Layout — NE PAS écrire de moteur de layout maison
-taffy        = "0.5"
+taffy        = { version = "0.5", features = ["flexbox", "grid", "block_layout"] }
 
 # Text + Fonts — NE PAS écrire de text shaper maison
 cosmic-text  = "0.12"

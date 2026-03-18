@@ -18,12 +18,52 @@ pub fn render(html: &str, opts: &RenderOptions) -> ferropdf_core::Result<Vec<u8>
     // 1. Parse HTML
     let parse_result = ferropdf_parse::parse(html)?;
 
-    // 2. Parse stylesheets (UA + inline)
+    // 2. Parse stylesheets (UA + inline + external)
     let ua_css = ferropdf_parse::css::UA_CSS;
     let mut stylesheets = vec![];
     for css_text in &parse_result.inline_styles {
         if let Ok(sheet) = ferropdf_parse::parse_stylesheet(css_text) {
             stylesheets.push(sheet);
+        }
+    }
+
+    // Load external stylesheets (local files only for v1)
+    for stylesheet_url in &parse_result.external_stylesheets {
+        if stylesheet_url.starts_with("http://") || stylesheet_url.starts_with("https://") {
+            eprintln!(
+                "[ferropdf] warning: external HTTP stylesheet ignored: {}",
+                stylesheet_url
+            );
+            continue;
+        }
+
+        // Resolve relative path against base_url if provided
+        let path = if let Some(ref base) = opts.base_url {
+            let base_dir = std::path::Path::new(base);
+            let base_dir = if base_dir.is_file() {
+                base_dir.parent().unwrap_or(base_dir)
+            } else {
+                base_dir
+            };
+            base_dir.join(stylesheet_url)
+        } else {
+            std::path::PathBuf::from(stylesheet_url)
+        };
+
+        match std::fs::read_to_string(&path) {
+            Ok(css_content) => {
+                match ferropdf_parse::parse_stylesheet(&css_content) {
+                    Ok(sheet) => stylesheets.push(sheet),
+                    Err(e) => eprintln!(
+                        "[ferropdf] warning: failed to parse {}: {}",
+                        path.display(), e
+                    ),
+                }
+            }
+            Err(e) => eprintln!(
+                "[ferropdf] warning: could not read {}: {}",
+                path.display(), e
+            ),
         }
     }
 
@@ -39,15 +79,15 @@ pub fn render(html: &str, opts: &RenderOptions) -> ferropdf_core::Result<Vec<u8>
         &parse_result.document,
         &stylesheets,
         ua_css,
-        page_config.content_width(),
+        page_config.content_width_px(),
     )?;
 
-    // 5. Layout with Taffy
+    // 5. Layout with Taffy (all in CSS pixels)
     let layout_tree = ferropdf_layout::layout(
         &parse_result.document,
         &styles,
-        page_config.content_width(),
-        page_config.content_height(),
+        page_config.content_width_px(),
+        page_config.content_height_px(),
     )?;
 
     // 6. Paginate

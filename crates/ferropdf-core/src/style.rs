@@ -39,7 +39,7 @@ impl FontWeight {
 #[derive(Debug, Clone, PartialEq, Default)]
 pub enum FontStyle { #[default] Normal, Italic, Oblique }
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum TextAlign { #[default] Left, Right, Center, Justify }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -64,7 +64,10 @@ pub enum AlignItems { FlexStart, FlexEnd, Center, #[default] Stretch, Baseline }
 pub enum AlignSelf { #[default] Auto, FlexStart, FlexEnd, Center, Stretch, Baseline }
 
 #[derive(Debug, Clone, PartialEq, Default)]
-pub enum PageBreak { #[default] Auto, Always, Avoid }
+pub enum PageBreak { #[default] Auto, Always, Page, Left, Right, Avoid }
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub enum PageBreakInside { #[default] Auto, Avoid }
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub enum BorderStyle { #[default] None, Solid, Dashed, Dotted, Double }
@@ -153,10 +156,16 @@ pub struct ComputedStyle {
     pub column_gap:      Length,
     pub row_gap:         Length,
 
+    // Positioning offsets (CSS left/right/top/bottom)
+    pub left:   Length,
+    pub right:  Length,
+    pub top:    Length,
+    pub bottom: Length,
+
     // Pagination
     pub page_break_before: PageBreak,
     pub page_break_after:  PageBreak,
-    pub page_break_inside: PageBreak,
+    pub page_break_inside: PageBreakInside,
     pub orphans:           u32,
     pub widows:            u32,
 }
@@ -201,9 +210,13 @@ impl Default for ComputedStyle {
             flex_basis:       Length::Auto,
             column_gap:       Length::Zero,
             row_gap:          Length::Zero,
+            left:              Length::Auto,
+            right:             Length::Auto,
+            top:               Length::Auto,
+            bottom:            Length::Auto,
             page_break_before: PageBreak::Auto,
             page_break_after:  PageBreak::Auto,
-            page_break_inside: PageBreak::Auto,
+            page_break_inside: PageBreakInside::Auto,
             orphans:           2,
             widows:            2,
         }

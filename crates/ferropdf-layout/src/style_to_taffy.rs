@@ -128,18 +128,36 @@ pub fn convert(style: &ComputedStyle) -> taffy::Style {
 /// The table becomes a grid with `num_cols` columns, each sized `auto` (min-content/max-content).
 /// This lets Taffy handle column alignment natively instead of our manual pre-pass.
 pub fn convert_table_to_grid(style: &ComputedStyle, num_cols: usize) -> taffy::Style {
+    let col_widths: Vec<f32> = vec![0.0; num_cols];
+    convert_table_to_grid_with_widths(style, &col_widths)
+}
+
+/// Convert a `<table>` into a CSS Grid with pre-computed column widths.
+///
+/// If all widths are 0 (no content measured), falls back to minmax(min-content, 1fr).
+/// Otherwise, each column gets a fixed width proportional to its content.
+pub fn convert_table_to_grid_with_widths(style: &ComputedStyle, col_widths: &[f32]) -> taffy::Style {
     use taffy::style::{TrackSizingFunction, MinTrackSizingFunction, MaxTrackSizingFunction};
     use taffy::geometry::MinMax;
 
-    // Each column: minmax(min-content, 1fr) — fills available space equally
-    let col_template: Vec<TrackSizingFunction> = (0..num_cols)
-        .map(|_| {
+    let total_min: f32 = col_widths.iter().sum();
+    let has_measured = total_min > 0.0;
+
+    let col_template: Vec<TrackSizingFunction> = col_widths.iter().map(|&w| {
+        if has_measured && w > 0.0 {
+            // Use measured min-content as the minimum, and 1fr for proportional growth
+            TrackSizingFunction::Single(MinMax {
+                min: MinTrackSizingFunction::Fixed(LengthPercentage::Length(w)),
+                max: MaxTrackSizingFunction::Fraction(w / total_min),
+            })
+        } else {
+            // Fallback: auto sizing
             TrackSizingFunction::Single(MinMax {
                 min: MinTrackSizingFunction::MinContent,
                 max: MaxTrackSizingFunction::Fraction(1.0),
             })
-        })
-        .collect();
+        }
+    }).collect();
 
     taffy::Style {
         display: Display::Grid,

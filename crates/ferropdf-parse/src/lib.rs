@@ -2,18 +2,17 @@ mod html;
 pub mod css;
 
 pub use html::parse_html;
+// Assure-toi d'avoir tes définitions CSS dans le module css/
 pub use css::{parse_stylesheet, Stylesheet, StyleRule, Declaration, CssProperty, CssValue};
 
-/// Résultat du parsing HTML complet
+use ferropdf_core::{Document, Result};
+
 pub struct ParseResult {
-    pub document:             ferropdf_core::Document,
-    /// Contenu des balises <style>
+    pub document:             Document,
     pub inline_styles:        Vec<String>,
-    /// href des balises <link rel="stylesheet">
     pub external_stylesheets: Vec<String>,
 }
 
-/// Parser du HTML et collecter les feuilles de style
-pub fn parse(html: &str) -> ferropdf_core::Result<ParseResult> {
+pub fn parse(html: &str) -> Result<ParseResult> {
     html::parse_full(html)
 }

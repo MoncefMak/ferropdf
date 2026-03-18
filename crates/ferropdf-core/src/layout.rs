@@ -20,6 +20,8 @@ pub struct ShapedLine {
 pub struct LayoutBox {
     pub node_id:      Option<NodeId>,
     pub style:        ComputedStyle,
+    /// Border-box rectangle (x, y, width, height) in absolute coordinates.
+    pub rect:         Rect,
     pub content:      Rect,
     pub padding:      Insets,
     pub border:       Insets,
@@ -28,6 +30,11 @@ pub struct LayoutBox {
     pub shaped_lines: Vec<ShapedLine>,
     pub image_src:    Option<String>,
     pub text_content: Option<String>,
+    /// True if this box is absolutely positioned (out of normal flow).
+    pub out_of_flow:      bool,
+    /// Visual offset from position: relative (does not affect flow).
+    pub visual_offset_x:  f32,
+    pub visual_offset_y:  f32,
 }
 
 impl Default for LayoutBox {
@@ -35,6 +42,7 @@ impl Default for LayoutBox {
         Self {
             node_id:      None,
             style:        ComputedStyle::default(),
+            rect:         Rect::zero(),
             content:      Rect::zero(),
             padding:      Insets::zero(),
             border:       Insets::zero(),
@@ -43,6 +51,9 @@ impl Default for LayoutBox {
             shaped_lines: Vec::new(),
             image_src:    None,
             text_content: None,
+            out_of_flow:     false,
+            visual_offset_x: 0.0,
+            visual_offset_y: 0.0,
         }
     }
 }
@@ -75,6 +86,14 @@ pub struct LayoutTree {
 
 impl LayoutTree {
     pub fn new() -> Self { Self::default() }
+
+    /// Return references to the root's direct children.
+    pub fn root_children_boxes(&self) -> Vec<&LayoutBox> {
+        match &self.root {
+            Some(root) => root.children.iter().collect(),
+            None => Vec::new(),
+        }
+    }
 }
 
 /// Une page paginée = un sous-ensemble du LayoutTree

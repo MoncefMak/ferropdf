@@ -16,7 +16,7 @@ pub use dom::{Document, Node, NodeId, NodeType};
 pub use style::{
     ComputedStyle, Display, Position, FontWeight, FontStyle,
     TextAlign, FlexDirection, FlexWrap, JustifyContent,
-    AlignItems, AlignSelf, PageBreak, BorderSide, BorderStyle,
+    AlignItems, AlignSelf, PageBreak, PageBreakInside, BorderSide, BorderStyle,
     BorderRadius,
 };
 pub use layout::{LayoutBox, LayoutTree, ShapedLine, ShapedGlyph};

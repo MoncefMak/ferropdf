@@ -1,5 +1,8 @@
 const MM_TO_PT: f32 = 2.834_646;
 
+/// Conversion factor: 1 pt = 96/72 px.
+pub const PT_TO_PX: f32 = 96.0 / 72.0;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum PageSize { A3, A4, A5, Letter, Legal, Custom(f32, f32) }
 
@@ -102,12 +105,30 @@ impl Default for PageConfig {
 }
 
 impl PageConfig {
-    pub fn content_width(&self) -> f32 {
+    /// Content width in points (pt).
+    pub fn content_width_pt(&self) -> f32 {
         let (w, _) = self.size.dimensions_pt();
         (w - self.margins.left - self.margins.right).max(0.0)
     }
-    pub fn content_height(&self) -> f32 {
+    /// Content height in points (pt).
+    pub fn content_height_pt(&self) -> f32 {
         let (_, h) = self.size.dimensions_pt();
         (h - self.margins.top - self.margins.bottom).max(0.0)
+    }
+    /// Content width in CSS pixels (px). Use for layout.
+    pub fn content_width_px(&self) -> f32 {
+        self.content_width_pt() * PT_TO_PX
+    }
+    /// Content height in CSS pixels (px). Use for layout & pagination.
+    pub fn content_height_px(&self) -> f32 {
+        self.content_height_pt() * PT_TO_PX
+    }
+    /// Left margin in CSS pixels.
+    pub fn margin_left_px(&self) -> f32 {
+        self.margins.left * PT_TO_PX
+    }
+    /// Top margin in CSS pixels.
+    pub fn margin_top_px(&self) -> f32 {
+        self.margins.top * PT_TO_PX
     }
 }

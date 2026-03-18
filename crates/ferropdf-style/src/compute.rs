@@ -22,7 +22,7 @@ pub fn apply_tag_defaults(style: &mut ComputedStyle, tag: Option<&str>) {
 /// Resolve relative units (em, rem) to px
 pub fn resolve_units(
     style: &mut ComputedStyle,
-    parent_style: Option<&ComputedStyle>,
+    _parent_style: Option<&ComputedStyle>,
     root_font_size: f32,
 ) {
     let font_size = style.font_size;
@@ -51,6 +51,15 @@ pub fn resolve_units(
     resolve_length_em_rem(&mut style.flex_basis, font_size, root_font_size);
     resolve_length_em_rem(&mut style.column_gap, font_size, root_font_size);
     resolve_length_em_rem(&mut style.row_gap, font_size, root_font_size);
+
+    // Ensure line-height is reasonable for the current font-size.
+    // CSS 'normal' line-height is ~1.2 × font-size. When line_height is inherited
+    // as an absolute value from a parent with a smaller font-size, it can be too
+    // small (e.g. body: 16px→19.2, h2: 24px but line_height still 19.2).
+    // Re-compute only if line_height < font_size (clearly inherited and stale).
+    if style.line_height < font_size {
+        style.line_height = font_size * 1.2;
+    }
 }
 
 fn resolve_length_em_rem(length: &mut Length, font_size: f32, root_font_size: f32) {
