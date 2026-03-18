@@ -2,16 +2,58 @@ name: Release to PyPI
 
 on:
   push:
-    tags:
-      - "v*"
+    branches: [main]
+    paths:
+      - "pyproject.toml"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
+  # ── Detect version change and auto-tag ──────────────────────────────
+  version-gate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # needed to push the tag
+    outputs:
+      should_release: ${{ steps.check.outputs.should_release }}
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0   # full history for tag comparison
+      - name: Check version change
+        id: check
+        run: |
+          VERSION=$(python3 -c "
+          import re, pathlib
+          text = pathlib.Path('pyproject.toml').read_text()
+          m = re.search(r'^version\s*=\s*\"(.+?)\"', text, re.M)
+          print(m.group(1))
+          ")
+          TAG="v${VERSION}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+          if git rev-parse "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "Tag ${TAG} already exists — skipping release"
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "New version ${VERSION} detected — will release"
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Create and push tag
+        if: steps.check.outputs.should_release == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "v${{ steps.check.outputs.version }}"
+          git push origin "v${{ steps.check.outputs.version }}"
+
   # ── Build wheels for Linux (x86_64 + aarch64) ──────────────────────
   linux:
+    needs: [version-gate]
+    if: needs.version-gate.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -34,6 +76,8 @@ jobs:
 
   # ── Build wheels for macOS (x86_64 + arm64) ────────────────────────
   macos:
+    needs: [version-gate]
+    if: needs.version-gate.outputs.should_release == 'true'
     runs-on: macos-latest
     strategy:
       matrix:
@@ -55,6 +99,8 @@ jobs:
 
   # ── Build wheels for Windows ────────────────────────────────────────
   windows:
+    needs: [version-gate]
+    if: needs.version-gate.outputs.should_release == 'true'
     runs-on: windows-latest
     strategy:
       matrix:
@@ -77,6 +123,8 @@ jobs:
 
   # ── Build source distribution ───────────────────────────────────────
   sdist:
+    needs: [version-gate]
+    if: needs.version-gate.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
