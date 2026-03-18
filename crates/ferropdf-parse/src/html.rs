@@ -99,6 +99,17 @@ impl TreeSink for DomSink {
         match child {
             NodeOrText::AppendNode(id)   => self.doc.append_child(*parent, id),
             NodeOrText::AppendText(text) => {
+                // html5ever splits text at character references (e.g. &#39; ' &amp;).
+                // Merge consecutive text nodes to keep "Jus d'orange" as one node.
+                let parent_children = &self.doc.nodes[*parent].children;
+                if let Some(&last_child_id) = parent_children.last() {
+                    if self.doc.nodes[last_child_id].is_text() {
+                        if let Some(ref mut existing) = self.doc.nodes[last_child_id].text {
+                            existing.push_str(text.as_ref());
+                            return;
+                        }
+                    }
+                }
                 let id = self.doc.create_text(text.as_ref());
                 self.doc.append_child(*parent, id);
             }
@@ -128,6 +139,19 @@ impl TreeSink for DomSink {
                     }
                 }
                 NodeOrText::AppendText(text) => {
+                    // Merge with preceding text sibling if available
+                    let children = &self.doc.nodes[parent_id].children;
+                    if let Some(pos) = children.iter().position(|&c| c == *sibling) {
+                        if pos > 0 {
+                            let prev_id = children[pos - 1];
+                            if self.doc.nodes[prev_id].is_text() {
+                                if let Some(ref mut existing) = self.doc.nodes[prev_id].text {
+                                    existing.push_str(text.as_ref());
+                                    return;
+                                }
+                            }
+                        }
+                    }
                     let id = self.doc.create_text(text.as_ref());
                     self.doc.nodes[id].parent = Some(parent_id);
                     let children = &mut self.doc.nodes[parent_id].children;

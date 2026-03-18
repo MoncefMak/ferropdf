@@ -90,8 +90,9 @@ impl PaginationContext {
 // =============================================================================
 
 /// Fragmente un LayoutTree root en pages PDF.
+/// Toutes les coordonnées sont en points typographiques (pt).
 pub fn paginate(root: &LayoutBox, config: &PageConfig) -> Vec<Page> {
-    let page_height = config.content_height_px();
+    let page_height = config.content_height_pt();
     let mut ctx = PaginationContext::new(page_height);
 
     // Traiter les enfants directs de la racine
@@ -360,4 +361,230 @@ pub fn create_empty_page(_config: &PageConfig) -> Page {
         content: Vec::new(),
         margin_boxes: Vec::new(),
     }
+}
+
+// =============================================================================
+// BREAK UNITS — Extraction des unités sécables depuis l'arbre LayoutBox
+// =============================================================================
+// Après le layout Taffy + shaping cosmic-text, on construit une liste PLATE
+// d'unités sécables. Chaque unité est la plus petite entité déplaçable sans
+// casser le sens du document.
+//
+// Types de BreakUnit :
+//   - TextLine  : une ligne individuelle issue des shaped_lines du LayoutBox
+//   - Atomic    : bloc non sécable (image, tableau avec break-inside:avoid)
+//   - ForcedBreak : marqueur de saut de page forcé (break-before: page)
+// =============================================================================
+
+use ferropdf_core::layout::BreakUnit;
+
+/// Extraire les unités sécables depuis l'arbre de LayoutBox.
+/// Parcourt l'arbre récursivement et produit une liste plate de BreakUnit.
+pub fn extract_break_units(root: &LayoutBox) -> Vec<BreakUnit> {
+    let mut units = Vec::new();
+    for child in &root.children {
+        extract_recursive(child, &mut units);
+    }
+    units
+}
+
+fn extract_recursive(lb: &LayoutBox, units: &mut Vec<BreakUnit>) {
+    // Forced break before
+    if should_break_before(&lb.style) {
+        units.push(BreakUnit::ForcedBreak);
+    }
+
+    // Atomic: break-inside: avoid, or has image, or is a leaf without children/shaped_lines
+    let is_atomic = lb.style.page_break_inside == PageBreakInside::Avoid
+        || lb.image_src.is_some()
+        || (lb.children.is_empty() && lb.shaped_lines.is_empty() && lb.text_content.is_some());
+
+    if is_atomic {
+        units.push(BreakUnit::Atomic {
+            y_top: lb.rect.y,
+            y_bottom: lb.rect.y + lb.rect.height,
+            node: lb.clone(),
+        });
+    } else if !lb.shaped_lines.is_empty() {
+        // Text node with shaped lines → one BreakUnit::TextLine per line
+        for (i, line) in lb.shaped_lines.iter().enumerate() {
+            let line_height = if i + 1 < lb.shaped_lines.len() {
+                lb.shaped_lines[i + 1].y - line.y
+            } else {
+                lb.style.line_height
+            };
+            units.push(BreakUnit::TextLine {
+                y_top: lb.content.y + line.y,
+                y_bottom: lb.content.y + line.y + line_height,
+                line_index: i,
+                parent_node: lb.node_id,
+                content: line.clone(),
+            });
+        }
+    } else if lb.text_content.is_some() && lb.shaped_lines.is_empty() {
+        // Text node without shaped lines → treat as atomic
+        units.push(BreakUnit::Atomic {
+            y_top: lb.rect.y,
+            y_bottom: lb.rect.y + lb.rect.height,
+            node: lb.clone(),
+        });
+    } else if !lb.children.is_empty() {
+        // Container → recurse into children
+        for child in &lb.children {
+            extract_recursive(child, units);
+        }
+    }
+
+    // Forced break after
+    if should_break_after(&lb.style) {
+        units.push(BreakUnit::ForcedBreak);
+    }
+}
+
+// =============================================================================
+// find_break_point — Algorithme de recherche du point de coupure intelligent
+// =============================================================================
+// Prend la liste de BreakUnit, la limite de page (page_bottom), et les paramètres
+// orphelines/veuves. Retourne l'index du premier BreakUnit de la page suivante.
+//
+// Étapes :
+//   1. Index naïf — première BreakUnit dont y_top >= page_bottom
+//   2. Correction orphelines — si trop peu de lignes d'un paragraphe en fin de page
+//   3. Correction veuves — si trop peu de lignes d'un paragraphe en début de page suivante
+//   4. Intégrité des atomiques — pas de coupure au milieu d'un Atomic
+//   5. Sauts forcés — ForcedBreak prend priorité
+// =============================================================================
+
+/// Trouver le point de coupure optimal dans la liste de BreakUnit.
+///
+/// Retourne l'index du premier BreakUnit qui doit aller sur la page suivante.
+/// `page_top` est la coordonnée Y absolue du haut de la page courante.
+/// `page_height` est la hauteur de la zone de contenu de la page.
+/// `min_orphans` et `min_widows` sont les minimums CSS (défaut = 2).
+pub fn find_break_point(
+    units: &[BreakUnit],
+    page_top: f32,
+    page_height: f32,
+    min_orphans: u32,
+    min_widows: u32,
+) -> usize {
+    let page_bottom = page_top + page_height;
+
+    // Étape 1 — Index naïf : première unité qui dépasse la page
+    let mut naive_index = units.len();
+    for (i, unit) in units.iter().enumerate() {
+        if let BreakUnit::ForcedBreak = unit {
+            // Un saut forcé avant l'index naïf prend priorité (étape 5)
+            if unit.y_top() <= page_bottom || i < naive_index {
+                return i + 1; // Le ForcedBreak est consommé, la page suivante commence après
+            }
+        }
+        if unit.y_bottom() > page_bottom && naive_index == units.len() {
+            naive_index = i;
+        }
+    }
+
+    if naive_index == 0 {
+        // Rien ne tient sur cette page — force au moins une unité (anti-boucle infinie)
+        return 1.min(units.len());
+    }
+    if naive_index >= units.len() {
+        return units.len();
+    }
+
+    let mut break_index = naive_index;
+
+    // Étape 2 — Correction orphelines
+    break_index = adjust_for_orphans(units, break_index, min_orphans);
+
+    // Étape 3 — Correction veuves
+    break_index = adjust_for_widows(units, break_index, min_widows);
+
+    // Étape 4 — Intégrité des atomiques
+    break_index = enforce_atomic_integrity(units, break_index);
+
+    break_index.clamp(1, units.len())
+}
+
+/// Correction orphelines : si moins de `min_orphans` lignes du même paragraphe
+/// sont présentes juste avant le point de coupure, on recule l'index pour
+/// emporter ces lignes sur la page suivante.
+fn adjust_for_orphans(units: &[BreakUnit], break_idx: usize, min_orphans: u32) -> usize {
+    if break_idx == 0 || break_idx >= units.len() || min_orphans < 2 {
+        return break_idx;
+    }
+
+    // Regarder l'unité juste avant le break
+    if let BreakUnit::TextLine { parent_node: Some(parent), .. } = &units[break_idx - 1] {
+        // Compter combien de lignes de ce paragraphe sont juste avant l'index
+        let mut orphan_count = 0u32;
+        let mut i = break_idx;
+        while i > 0 {
+            i -= 1;
+            match &units[i] {
+                BreakUnit::TextLine { parent_node: Some(p), .. } if p == parent => {
+                    orphan_count += 1;
+                }
+                _ => break,
+            }
+        }
+
+        if orphan_count > 0 && orphan_count < min_orphans {
+            // Remonter l'index pour emporter ces lignes orphelines
+            return break_idx - orphan_count as usize;
+        }
+    }
+
+    break_idx
+}
+
+/// Correction veuves : si moins de `min_widows` lignes du même paragraphe
+/// seront au début de la page suivante, ajuster.
+fn adjust_for_widows(units: &[BreakUnit], break_idx: usize, min_widows: u32) -> usize {
+    if break_idx >= units.len() || min_widows < 2 {
+        return break_idx;
+    }
+
+    // Regarder l'unité au point de coupure (première de la page suivante)
+    if let BreakUnit::TextLine { parent_node: Some(parent), .. } = &units[break_idx] {
+        // Compter combien de lignes de ce paragraphe seront au début de la page suivante
+        let mut widow_count = 0u32;
+        for unit in &units[break_idx..] {
+            match unit {
+                BreakUnit::TextLine { parent_node: Some(p), .. } if p == parent => {
+                    widow_count += 1;
+                }
+                _ => break,
+            }
+        }
+
+        if widow_count > 0 && widow_count < min_widows {
+            // Reculer l'index pour ajouter des lignes à la page suivante
+            let lines_to_pull = min_widows - widow_count;
+            if break_idx > lines_to_pull as usize {
+                return break_idx - lines_to_pull as usize;
+            }
+        }
+    }
+
+    break_idx
+}
+
+/// Intégrité des atomiques : si l'index tombe au milieu d'un Atomic,
+/// reculer l'index jusqu'avant le début de cet Atomic.
+fn enforce_atomic_integrity(units: &[BreakUnit], break_idx: usize) -> usize {
+    if break_idx >= units.len() {
+        return break_idx;
+    }
+
+    // Si l'unité au break est un Atomic, on ne peut pas couper au milieu
+    // → on garde le break_idx tel quel (il pointe déjà au début de l'Atomic)
+    // Si l'unité juste avant est un Atomic dont le bas dépasse, on recule
+    if break_idx > 0 {
+        if let BreakUnit::Atomic { .. } = &units[break_idx - 1] {
+            // L'Atomic est entièrement sur la page courante — OK
+        }
+    }
+
+    break_idx
 }

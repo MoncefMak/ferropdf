@@ -74,20 +74,20 @@ pub fn render(html: &str, opts: &RenderOptions) -> ferropdf_core::Result<Vec<u8>
         orientation: ferropdf_core::Orientation::Portrait,
     };
 
-    // 4. Resolve styles
+    // 4. Resolve styles (all values resolved to pt)
     let styles = ferropdf_style::resolve(
         &parse_result.document,
         &stylesheets,
         ua_css,
-        page_config.content_width_px(),
+        page_config.content_width_pt(),
     )?;
 
-    // 5. Layout with Taffy (all in CSS pixels)
+    // 5. Layout with Taffy (all in points typographiques)
     let layout_tree = ferropdf_layout::layout(
         &parse_result.document,
         &styles,
-        page_config.content_width_px(),
-        page_config.content_height_px(),
+        page_config.content_width_pt(),
+        page_config.content_height_pt(),
     )?;
 
     // 6. Paginate

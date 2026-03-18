@@ -198,7 +198,8 @@ pub fn convert_table_to_grid_with_widths(style: &ComputedStyle, col_widths: &[f3
 
 fn length_to_dim(l: &Length) -> Dimension {
     match l {
-        Length::Px(v)      => Dimension::Length(*v),
+        Length::Pt(v)      => Dimension::Length(*v),  // pt is the internal unit
+        Length::Px(v)      => Dimension::Length(*v * 0.75), // fallback: shouldn't appear after resolution
         Length::Percent(v) => Dimension::Percent(v / 100.0),
         Length::Auto       => Dimension::Auto,
         Length::Zero       => Dimension::Length(0.0),
@@ -212,7 +213,8 @@ fn length_to_dim(l: &Length) -> Dimension {
 
 fn lp(l: &Length) -> LengthPercentage {
     match l {
-        Length::Px(v)      => LengthPercentage::Length(*v),
+        Length::Pt(v)      => LengthPercentage::Length(*v),
+        Length::Px(v)      => LengthPercentage::Length(*v * 0.75),
         Length::Percent(v) => LengthPercentage::Percent(v / 100.0),
         Length::Zero       => LengthPercentage::Length(0.0),
         _                  => LengthPercentage::Length(0.0),
@@ -221,7 +223,8 @@ fn lp(l: &Length) -> LengthPercentage {
 
 fn lpa(l: &Length) -> LengthPercentageAuto {
     match l {
-        Length::Px(v)      => LengthPercentageAuto::Length(*v),
+        Length::Pt(v)      => LengthPercentageAuto::Length(*v),
+        Length::Px(v)      => LengthPercentageAuto::Length(*v * 0.75),
         Length::Percent(v) => LengthPercentageAuto::Percent(v / 100.0),
         Length::Auto       => LengthPercentageAuto::Auto,
         Length::Zero       => LengthPercentageAuto::Length(0.0),

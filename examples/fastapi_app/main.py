@@ -100,9 +100,16 @@ async def home():
 async def invoice_pdf(invoice_id: int):
     """Facture PDF avec table de lignes et totaux."""
     items = [
-        {"desc": "Développement Rust", "qty": 10, "price": 150},
-        {"desc": "Intégration Python", "qty": 5, "price": 120},
-        {"desc": "Tests et QA", "qty": 3, "price": 100},
+        {"desc": "Développement moteur Rust (module PDF)", "qty": 12, "price": 180},
+        {"desc": "Intégration Python / PyO3 bindings", "qty": 8, "price": 150},
+        {"desc": "Développement API REST (FastAPI)", "qty": 6, "price": 140},
+        {"desc": "Intégration CI/CD (GitHub Actions)", "qty": 4, "price": 120},
+        {"desc": "Tests unitaires et d'intégration", "qty": 5, "price": 110},
+        {"desc": "Audit sécurité OWASP Top 10", "qty": 3, "price": 200},
+        {"desc": "Documentation technique (Sphinx)", "qty": 4, "price": 100},
+        {"desc": "Formation équipe backend (2 jours)", "qty": 2, "price": 950},
+        {"desc": "Support post-livraison (1 mois)", "qty": 1, "price": 1500},
+        {"desc": "Licence FerroSuite Enterprise (annuelle)", "qty": 1, "price": 2400},
     ]
     html = templates.get_template("invoice.html").render(
         invoice_id=invoice_id,
@@ -136,10 +143,19 @@ async def receipt_pdf():
         {"name": "Jus d'orange pressé", "qty": 1, "price": 3.80},
         {"name": "Pain au chocolat", "qty": 2, "price": 1.40},
         {"name": "Tartine confiture", "qty": 1, "price": 2.90},
+        {"name": "Baguette tradition", "qty": 2, "price": 1.30},
+        {"name": "Éclair au chocolat", "qty": 1, "price": 3.50},
+        {"name": "Tarte aux pommes (part)", "qty": 2, "price": 4.20},
+        {"name": "Quiche lorraine (part)", "qty": 1, "price": 4.80},
+        {"name": "Bouteille d'eau 50cl", "qty": 3, "price": 1.50},
+        {"name": "Cookie chocolat noir", "qty": 4, "price": 1.80},
+        {"name": "Macaron assortiment x3", "qty": 1, "price": 5.40},
     ]
-    subtotal = sum(i["qty"] * i["price"] for i in items)
-    tax = subtotal * 0.20
-    total = subtotal + tax
+    for item in items:
+        item["line_total"] = round(item["qty"] * item["price"], 2)
+    subtotal = round(sum(i["line_total"] for i in items), 2)
+    tax = round(subtotal * 0.20, 2)
+    total = round(subtotal + tax, 2)
 
     html = templates.get_template("receipt.html").render(
         shop_name="Boulangerie du Code",
@@ -168,6 +184,10 @@ async def dashboard_pdf(period: str = "T1 2026"):
         {"name": "Services", "revenue": 182000, "margin": 42.5, "trend": "up"},
         {"name": "Formation", "revenue": 67000, "margin": 55.1, "trend": "stable"},
         {"name": "Support", "revenue": 43000, "margin": 31.8, "trend": "down"},
+        {"name": "Cloud & Hosting", "revenue": 128000, "margin": 72.4, "trend": "up"},
+        {"name": "Consulting", "revenue": 95000, "margin": 48.7, "trend": "stable"},
+        {"name": "Licences tierces", "revenue": 31000, "margin": 15.2, "trend": "down"},
+        {"name": "Maintenance", "revenue": 52000, "margin": 61.0, "trend": "up"},
     ]
     top_products = [
         {"name": "FerroSuite Enterprise", "units": 342, "revenue": 171000},
@@ -175,6 +195,11 @@ async def dashboard_pdf(period: str = "T1 2026"):
         {"name": "Consulting On-Site", "units": 15, "revenue": 45000},
         {"name": "Formation Rust Avancé", "units": 28, "revenue": 33600},
         {"name": "Support Premium", "units": 120, "revenue": 24000},
+        {"name": "FerroCloud Starter", "units": 890, "revenue": 44500},
+        {"name": "Audit Sécurité", "units": 8, "revenue": 32000},
+        {"name": "Migration Legacy", "units": 5, "revenue": 25000},
+        {"name": "FerroCI Pipeline", "units": 210, "revenue": 21000},
+        {"name": "Workshop Équipe", "units": 12, "revenue": 18000},
     ]
     total_revenue = sum(c["revenue"] for c in categories)
     avg_margin = sum(c["margin"] for c in categories) / len(categories)
@@ -187,7 +212,7 @@ async def dashboard_pdf(period: str = "T1 2026"):
         top_products=top_products,
         total_revenue=total_revenue,
         avg_margin=avg_margin,
-        transactions=1085,
+        transactions=2210,
     )
     return await _render_pdf(html, f"dashboard-{period}.pdf")
 
@@ -213,15 +238,33 @@ async def letter_pdf():
         paragraphs=[
             "Suite à notre entretien du 10 mars dernier, nous avons le plaisir de vous "
             "transmettre notre proposition de partenariat pour l'intégration de notre moteur "
-            "de rendu PDF haute performance dans votre plateforme documentaire.",
+            "de rendu PDF haute performance dans votre plateforme documentaire. Cette solution "
+            "a été spécifiquement conçue pour répondre aux exigences de performance et de "
+            "qualité typographique des environnements de production.",
             "Notre solution, ferropdf, repose sur un pipeline Rust optimisé capable de "
             "convertir du HTML/CSS en PDF en quelques millisecondes. Compatible avec Python "
-            "via PyO3, elle s'intègre nativement avec FastAPI et Django.",
+            "via PyO3, elle s'intègre nativement avec FastAPI et Django. Le moteur supporte "
+            "les tableaux CSS, le flexbox, les marges collapsantes, la pagination automatique, "
+            "l'embarquement des polices système et le rendu typographique de haute fidélité "
+            "via cosmic-text.",
+            "Le pipeline se compose de six crates Rust indépendants : ferropdf-parse (HTML5 "
+            "via html5ever), ferropdf-style (cascade CSS + résolution des unités), "
+            "ferropdf-layout (Taffy pour flexbox/grid + cosmic-text pour le shaping), "
+            "ferropdf-page (pagination et fragmentation), ferropdf-render (display list + "
+            "pdf-writer), et ferropdf-core (types partagés). Chaque crate peut évoluer "
+            "indépendamment, facilitant la maintenance et les mises à jour.",
             "Nous proposons un accompagnement technique complet incluant la formation de "
             "vos équipes, l'intégration dans votre CI/CD, et un support prioritaire pendant "
-            "les six premiers mois.",
+            "les six premiers mois. Notre équipe de consultants Rust certifiés sera disponible "
+            "pour des sessions de pair-programming et des revues de code hebdomadaires.",
+            "En termes de performance, nos benchmarks internes montrent un temps de rendu "
+            "moyen de 12ms pour un document A4 standard, contre 800ms pour les solutions "
+            "headless Chromium. La consommation mémoire est réduite de 95%, permettant de "
+            "servir des centaines de requêtes simultanées sur une instance modeste.",
             "Nous restons à votre disposition pour tout complément d'information et espérons "
-            "que cette collaboration sera le début d'un partenariat fructueux.",
+            "que cette collaboration sera le début d'un partenariat fructueux. N'hésitez pas "
+            "à nous contacter directement à l'adresse tech@ferrotech.dev ou au 01 42 67 89 10 "
+            "pour planifier une démonstration personnalisée.",
         ],
     )
     return await _render_pdf(html, "lettre.pdf", margin="20mm")

@@ -69,6 +69,13 @@ pub enum PageBreak { #[default] Auto, Always, Page, Left, Right, Avoid }
 #[derive(Debug, Clone, PartialEq, Default)]
 pub enum PageBreakInside { #[default] Auto, Avoid }
 
+/// CSS box-decoration-break : comportement des bordures/fond quand un conteneur
+/// est fragmenté sur plusieurs pages.
+///   clone → bordures et padding répétés sur chaque fragment
+///   slice → découpe franche sans répétition des décorations (défaut CSS)
+#[derive(Debug, Clone, PartialEq, Default)]
+pub enum BoxDecorationBreak { #[default] Slice, Clone }
+
 #[derive(Debug, Clone, PartialEq, Default)]
 pub enum BorderStyle { #[default] None, Solid, Dashed, Dotted, Double }
 
@@ -166,6 +173,7 @@ pub struct ComputedStyle {
     pub page_break_before: PageBreak,
     pub page_break_after:  PageBreak,
     pub page_break_inside: PageBreakInside,
+    pub box_decoration_break: BoxDecorationBreak,
     pub orphans:           u32,
     pub widows:            u32,
 }
@@ -193,10 +201,10 @@ impl Default for ComputedStyle {
             background_color: Color::transparent(),
             opacity:          1.0,
             font_family:      vec!["sans-serif".to_string()],
-            font_size:        16.0,
+            font_size:        12.0,  // 16px × 0.75 = 12pt
             font_weight:      FontWeight::Normal,
             font_style:       FontStyle::Normal,
-            line_height:      19.2,
+            line_height:      14.4,  // 12pt × 1.2 = 14.4pt
             text_align:       TextAlign::Left,
             text_decoration:  TextDecoration::None,
             letter_spacing:   0.0,
@@ -217,6 +225,7 @@ impl Default for ComputedStyle {
             page_break_before: PageBreak::Auto,
             page_break_after:  PageBreak::Auto,
             page_break_inside: PageBreakInside::Auto,
+            box_decoration_break: BoxDecorationBreak::Slice,
             orphans:           2,
             widows:            2,
         }

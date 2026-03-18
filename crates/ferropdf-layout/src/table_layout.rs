@@ -10,7 +10,7 @@
 // les TrackSizingFunction Taffy pour le CSS Grid.
 // =============================================================================
 
-use ferropdf_core::{Document, NodeId, ComputedStyle, Length};
+use ferropdf_core::{Document, NodeId, Length};
 use ferropdf_style::StyleTree;
 use cosmic_text::{Buffer, FontSystem, Metrics, Attrs, Family, Shaping, Wrap};
 use taffy::{
@@ -115,6 +115,7 @@ fn compute_column_widths(
                 .find_map(|row| row.get(col_idx))
                 .and_then(|&cell_id| styles.get(&cell_id))
                 .and_then(|style| match &style.width {
+                    Length::Pt(v) => Some(*v),
                     Length::Px(px) => Some(*px),
                     Length::Percent(p) => Some(table_width * p / 100.0),
                     _ => None,
@@ -146,22 +147,28 @@ fn compute_column_widths(
 
     // Étape 3: Distribution
     let fixed_total: f32 = fixed_widths.iter().filter_map(|w| *w).sum();
-    let flexible_min_total: f32 = (0..num_cols)
-        .filter(|&i| fixed_widths[i].is_none())
-        .map(|i| min_content_widths[i])
-        .sum();
     let available_for_flexible = (table_width - fixed_total).max(0.0);
+
+    // Distribute available space proportionally to min-content widths.
+    // CSS §17.5: columns never shrink below their min-content width.
+    // If total min-content > available, the table overflows (columns keep min-content).
+    // If total min-content <= available, extra space is distributed proportionally.
+    let total_min: f32 = min_content_widths.iter().sum();
 
     (0..num_cols)
         .map(|i| {
             if let Some(fixed) = fixed_widths[i] {
                 fixed
-            } else if flexible_min_total > 0.0 {
-                let ratio = min_content_widths[i] / flexible_min_total;
-                let allocated = available_for_flexible * ratio;
-                allocated.max(min_content_widths[i])
-            } else {
+            } else if total_min <= 0.0 {
                 available_for_flexible / (num_cols as f32)
+            } else if total_min <= available_for_flexible {
+                // Enough space: min-content + proportional share of remaining
+                let remaining = available_for_flexible - total_min;
+                let ratio = min_content_widths[i] / total_min;
+                min_content_widths[i] + remaining * ratio
+            } else {
+                // Not enough space: keep min-content width (table overflows)
+                min_content_widths[i]
             }
         })
         .collect()
@@ -191,8 +198,12 @@ fn compute_row_heights(
                     let font_family = style.font_family.first()
                         .cloned().unwrap_or_else(|| "sans-serif".to_string());
                     let padding_v = resolve_px(&style.padding[0]) + resolve_px(&style.padding[2]);
+                    let padding_h = resolve_px(&style.padding[1]) + resolve_px(&style.padding[3]);
+                    // Measure text at the content width (column width minus cell padding),
+                    // matching the width Taffy will give the cell content area.
+                    let content_width = (cell_width - padding_h).max(0.0);
 
-                    measure_text_height(&text, cell_width, font_size, &font_family, font_system)
+                    measure_text_height(&text, content_width, font_size, &font_family, font_system)
                         + padding_v
                 })
                 .fold(0.0_f32, f32::max)
@@ -222,7 +233,7 @@ pub fn build_taffy_row_tracks(row_heights: &[f32]) -> Vec<TrackSizingFunction> {
         .map(|&h| {
             TrackSizingFunction::Single(MinMax {
                 min: MinTrackSizingFunction::Fixed(LengthPercentage::Length(h)),
-                max: MaxTrackSizingFunction::Fixed(LengthPercentage::Length(h)),
+                max: MaxTrackSizingFunction::Auto,
             })
         })
         .collect()
@@ -336,6 +347,7 @@ fn collect_text_raw(doc: &Document, node_id: NodeId, out: &mut String) {
 
 fn resolve_px(length: &Length) -> f32 {
     match length {
+        Length::Pt(v)  => *v,
         Length::Px(px) => *px,
         Length::Zero   => 0.0,
         _              => 0.0,

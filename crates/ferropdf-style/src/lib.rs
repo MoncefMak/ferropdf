@@ -38,7 +38,7 @@ pub fn resolve(
 
     let root = document.root();
     let mut style_tree = StyleTree::new();
-    let root_font_size = 16.0_f32;
+    let root_font_size = 12.0_f32; // 16px × 0.75 = 12pt
 
     resolve_recursive(document, root, &rules, &mut style_tree, None, root_font_size);
 
@@ -79,7 +79,7 @@ fn resolve_recursive(
         // Apply tag-specific defaults (only if stylesheet didn't override)
         compute::apply_tag_defaults(&mut style, node.tag());
 
-        // Resolve relative units (em/rem → px)
+        // Resolve relative units (em/rem/px/mm → pt)
         compute::resolve_units(&mut style, parent_style, root_font_size);
     }
 

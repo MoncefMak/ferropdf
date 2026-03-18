@@ -19,7 +19,7 @@ pub fn apply_tag_defaults(style: &mut ComputedStyle, tag: Option<&str>) {
     }
 }
 
-/// Resolve relative units (em, rem) to px
+/// Resolve relative units (em, rem, px, mm) to pt (points typographiques)
 pub fn resolve_units(
     style: &mut ComputedStyle,
     _parent_style: Option<&ComputedStyle>,
@@ -29,15 +29,15 @@ pub fn resolve_units(
 
     // Resolve margin
     for m in &mut style.margin {
-        if let Some(px) = m.to_px(font_size, root_font_size) {
-            *m = Length::Px(px);
+        if let Some(pt) = m.to_pt(font_size, root_font_size) {
+            *m = Length::Pt(pt);
         }
     }
 
     // Resolve padding
     for p in &mut style.padding {
-        if let Some(px) = p.to_px(font_size, root_font_size) {
-            *p = Length::Px(px);
+        if let Some(pt) = p.to_pt(font_size, root_font_size) {
+            *p = Length::Pt(pt);
         }
     }
 
@@ -64,10 +64,10 @@ pub fn resolve_units(
 
 fn resolve_length_em_rem(length: &mut Length, font_size: f32, root_font_size: f32) {
     match length {
-        Length::Em(v) => *length = Length::Px(*v * font_size),
-        Length::Rem(v) => *length = Length::Px(*v * root_font_size),
-        Length::Pt(v) => *length = Length::Px(*v * 1.333_333),
-        Length::Mm(v) => *length = Length::Px(*v * 3.779_528),
-        _ => {} // Px, Percent, Auto, Zero, None — keep as is
+        Length::Em(v) => *length = Length::Pt(*v * font_size),
+        Length::Rem(v) => *length = Length::Pt(*v * root_font_size),
+        Length::Px(v) => *length = Length::Pt(*v * 0.75),   // 1px = 72/96 pt
+        Length::Mm(v) => *length = Length::Pt(*v * 2.834_646),
+        _ => {} // Pt, Percent, Auto, Zero, None — keep as is
     }
 }

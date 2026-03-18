@@ -1,6 +1,10 @@
 /// Longueur CSS avant résolution.
 /// Les valeurs em/rem sont résolues par ferropdf-style.
 /// Les valeurs Percent sont passées à Taffy qui les résout pendant le layout.
+///
+/// UNITÉ INTERNE : toutes les valeurs résolues sont en POINTS TYPOGRAPHIQUES (pt).
+/// 1 pt = 1/72 pouce. Les conversions depuis px/mm/cm/in sont faites lors de
+/// la résolution des styles, AVANT la construction de l'arbre Taffy.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Length {
     Px(f32),
@@ -23,15 +27,21 @@ impl Length {
     pub fn is_percent(&self) -> bool { matches!(self, Length::Percent(_)) }
     pub fn is_none(&self)    -> bool { matches!(self, Length::None) }
 
-    /// Résoudre en px quand le contexte est connu.
+    /// Résoudre en points typographiques (pt) quand le contexte est connu.
     /// Retourne None pour Auto, None, Percent (résolu par Taffy).
-    pub fn to_px(&self, font_size_px: f32, root_font_size: f32) -> Option<f32> {
+    ///
+    /// Facteurs de conversion :
+    ///   1 px = 72/96 pt = 0.75 pt
+    ///   1 mm = 2.834646 pt
+    ///   1 em = font_size_pt
+    ///   1 rem = root_font_size_pt
+    pub fn to_pt(&self, font_size_pt: f32, root_font_size_pt: f32) -> Option<f32> {
         match self {
-            Length::Px(v)      => Some(*v),
-            Length::Pt(v)      => Some(v * 1.333_333),
-            Length::Mm(v)      => Some(v * 3.779_528),
-            Length::Em(v)      => Some(v * font_size_px),
-            Length::Rem(v)     => Some(v * root_font_size),
+            Length::Px(v)      => Some(v * 0.75),        // 1px = 72/96 pt
+            Length::Pt(v)      => Some(*v),              // identité
+            Length::Mm(v)      => Some(v * 2.834_646),   // 1mm = 2.834646 pt
+            Length::Em(v)      => Some(v * font_size_pt),
+            Length::Rem(v)     => Some(v * root_font_size_pt),
             Length::Zero       => Some(0.0),
             Length::Percent(_) => None,
             Length::Auto       => None,

@@ -57,7 +57,7 @@
         <td>{{ item.name }}</td>
         <td class="align-center">{{ item.qty }}</td>
         <td class="align-right">{{ item.price }} €</td>
-        <td class="align-right">{{ item.line_total }} €</td>
+        <td class="align-right">{{ item.line_total|floatformat:2 }} €</td>
       </tr>
       {% endfor %}
     </tbody>

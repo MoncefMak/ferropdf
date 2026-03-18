@@ -14,6 +14,66 @@ pub struct ShapedLine {
     pub glyphs: Vec<ShapedGlyph>,
     pub width:  f32,
     pub y:      f32,
+    /// The text content of this line (for encoding in the PDF).
+    pub text:   String,
+}
+
+// =============================================================================
+// BreakUnit — Unité sécable pour la pagination intelligente
+// =============================================================================
+// Après le layout Taffy + shaping cosmic-text, on construit une liste PLATE
+// d'unités sécables. Chaque unité est la plus petite entité déplaçable sans
+// casser le sens du document.
+// =============================================================================
+
+/// Une unité sécable — la plus petite entité qui peut être déplacée
+/// sans casser le sens du document.
+#[derive(Debug, Clone)]
+pub enum BreakUnit {
+    /// Une ligne individuelle issue des layout_runs() de cosmic-text.
+    TextLine {
+        /// Coordonnée Y du haut de la ligne (espace continu absolu, en pt).
+        y_top: f32,
+        /// Coordonnée Y du bas de la ligne (espace continu absolu, en pt).
+        y_bottom: f32,
+        /// Index de la ligne dans son paragraphe parent.
+        line_index: usize,
+        /// NodeId du nœud texte parent (pour regrouper les lignes d'un même paragraphe).
+        parent_node: Option<NodeId>,
+        /// Contenu shapé de la ligne.
+        content: ShapedLine,
+    },
+    /// Bloc non sécable (image, conteneur avec break-inside: avoid).
+    Atomic {
+        /// Coordonnée Y du haut du bloc (espace continu absolu, en pt).
+        y_top: f32,
+        /// Coordonnée Y du bas du bloc (espace continu absolu, en pt).
+        y_bottom: f32,
+        /// Le LayoutBox complet.
+        node: LayoutBox,
+    },
+    /// Marqueur de saut de page forcé (break-before: page).
+    ForcedBreak,
+}
+
+impl BreakUnit {
+    /// Y du haut de l'unité dans l'espace continu (pt).
+    pub fn y_top(&self) -> f32 {
+        match self {
+            BreakUnit::TextLine { y_top, .. } => *y_top,
+            BreakUnit::Atomic { y_top, .. } => *y_top,
+            BreakUnit::ForcedBreak => 0.0,
+        }
+    }
+
+    /// Y du bas de l'unité dans l'espace continu (pt).
+    pub fn y_bottom(&self) -> f32 {
+        match self {
+            BreakUnit::TextLine { y_bottom, .. } => *y_bottom,
+            BreakUnit::Atomic { y_bottom, .. } => *y_bottom,
+            BreakUnit::ForcedBreak => 0.0,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

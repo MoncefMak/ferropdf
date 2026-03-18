@@ -157,7 +157,7 @@ fn apply_single(
         CssProperty::BorderBottom => style.border_bottom = parse_border_shorthand(raw),
         CssProperty::BorderLeft => style.border_left = parse_border_shorthand(raw),
         CssProperty::BorderWidth => {
-            if let Some(w) = parse_length_to_px(raw) {
+            if let Some(w) = parse_length_to_pt(raw) {
                 style.border_top.width = w;
                 style.border_right.width = w;
                 style.border_bottom.width = w;
@@ -180,7 +180,7 @@ fn apply_single(
             style.border_left.style = bs;
         }
         CssProperty::BorderRadius => {
-            if let Some(r) = parse_length_to_px(raw) {
+            if let Some(r) = parse_length_to_pt(raw) {
                 style.border_radius = BorderRadius::uniform(r);
             }
         }
@@ -227,8 +227,8 @@ fn apply_single(
             };
         }
         CssProperty::LineHeight => {
-            if let Some(px) = parse_length_to_px(raw) {
-                style.line_height = px;
+            if let Some(pt) = parse_length_to_pt(raw) {
+                style.line_height = pt;
             } else if let Ok(factor) = raw.parse::<f32>() {
                 style.line_height = factor * style.font_size;
             }
@@ -250,8 +250,8 @@ fn apply_single(
             };
         }
         CssProperty::LetterSpacing => {
-            if let Some(px) = parse_length_to_px(raw) {
-                style.letter_spacing = px;
+            if let Some(pt) = parse_length_to_pt(raw) {
+                style.letter_spacing = pt;
             }
         }
 
@@ -358,6 +358,12 @@ fn apply_single(
         CssProperty::Widows => {
             if let Ok(v) = raw.parse::<u32>() { style.widows = v; }
         }
+        CssProperty::Unknown(ref name) if name == "box-decoration-break" => {
+            style.box_decoration_break = match raw {
+                "clone" => ferropdf_core::BoxDecorationBreak::Clone,
+                _ => ferropdf_core::BoxDecorationBreak::Slice,
+            };
+        }
         CssProperty::Visibility => {
             style.visibility = raw != "hidden";
         }
@@ -404,21 +410,24 @@ fn parse_shorthand_lengths(s: &str) -> Vec<Length> {
     s.split_whitespace().map(parse_length).collect()
 }
 
-fn parse_length_to_px(s: &str) -> Option<f32> {
+/// Parse a CSS length string directly to pt (points typographiques).
+/// Used for properties stored as f32 (border widths, border-radius, etc.)
+fn parse_length_to_pt(s: &str) -> Option<f32> {
     let s = s.trim();
     if s == "0" || s == "0px" { return Some(0.0); }
 
     if s.ends_with("px") {
-        return s[..s.len()-2].trim().parse::<f32>().ok();
+        return s[..s.len()-2].trim().parse::<f32>().ok().map(|v| v * 0.75);
     }
     if s.ends_with("pt") {
-        return s[..s.len()-2].trim().parse::<f32>().ok().map(|v| v * 1.333_333);
+        return s[..s.len()-2].trim().parse::<f32>().ok();
     }
     if s.ends_with("mm") {
-        return s[..s.len()-2].trim().parse::<f32>().ok().map(|v| v * 3.779_528);
+        return s[..s.len()-2].trim().parse::<f32>().ok().map(|v| v * 2.834_646);
     }
 
-    s.parse::<f32>().ok()
+    // Bare number → treated as px
+    s.parse::<f32>().ok().map(|v| v * 0.75)
 }
 
 fn parse_color(s: &str) -> Option<Color> {
@@ -465,7 +474,7 @@ fn parse_border_shorthand(s: &str) -> BorderSide {
     let mut side = BorderSide::default();
 
     for part in &parts {
-        if let Some(w) = parse_length_to_px(part) {
+        if let Some(w) = parse_length_to_pt(part) {
             side.width = w;
             if side.style == BorderStyle::None {
                 side.style = BorderStyle::Solid;
@@ -493,14 +502,15 @@ fn parse_border_style(s: &str) -> BorderStyle {
 fn resolve_font_size(raw: &str, parent_size: f32, root_font_size: f32) -> f32 {
     let raw = raw.trim();
 
+    // Font-size keywords (values in pt: 16px default = 12pt)
     match raw {
-        "xx-small" => return 9.0,
-        "x-small" => return 10.0,
-        "small" => return 13.0,
-        "medium" => return 16.0,
-        "large" => return 18.0,
-        "x-large" => return 24.0,
-        "xx-large" => return 32.0,
+        "xx-small" => return 6.75,   // 9px × 0.75
+        "x-small" => return 7.5,     // 10px × 0.75
+        "small" => return 9.75,      // 13px × 0.75
+        "medium" => return 12.0,     // 16px × 0.75
+        "large" => return 13.5,      // 18px × 0.75
+        "x-large" => return 18.0,    // 24px × 0.75
+        "xx-large" => return 24.0,   // 32px × 0.75
         "smaller" => return parent_size * 0.833,
         "larger" => return parent_size * 1.2,
         _ => {}
@@ -523,17 +533,22 @@ fn resolve_font_size(raw: &str, parent_size: f32, root_font_size: f32) -> f32 {
     }
     if raw.ends_with("px") {
         if let Ok(v) = raw[..raw.len()-2].trim().parse::<f32>() {
-            return v;
+            return v * 0.75;  // 1px = 72/96 pt
         }
     }
     if raw.ends_with("pt") {
         if let Ok(v) = raw[..raw.len()-2].trim().parse::<f32>() {
-            return v * 1.333_333;
+            return v;  // pt is the internal unit
+        }
+    }
+    if raw.ends_with("mm") {
+        if let Ok(v) = raw[..raw.len()-2].trim().parse::<f32>() {
+            return v * 2.834_646;
         }
     }
 
     if let Ok(v) = raw.parse::<f32>() {
-        return v;
+        return v * 0.75;  // bare numbers treated as px
     }
 
     parent_size

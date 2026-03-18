@@ -1,9 +1,9 @@
-use ferropdf_core::{LayoutBox, PageConfig, PageBreak, PageBreakInside, Rect};
+use ferropdf_core::{LayoutBox, PageConfig, PageBreak, PageBreakInside};
 use ferropdf_core::layout::Page;
 
 /// Fragment a layout tree into pages based on available height.
 pub fn fragment_into_pages(root: &LayoutBox, config: &PageConfig) -> Vec<Page> {
-    let page_height = config.content_height_px();
+    let page_height = config.content_height_pt();
     let mut pages: Vec<Page> = Vec::new();
     let mut current_content: Vec<LayoutBox> = Vec::new();
     let mut current_y = 0.0_f32;
@@ -95,7 +95,7 @@ fn flush_page(pages: &mut Vec<Page>, content: &mut Vec<LayoutBox>, current_y: &m
     *current_y = 0.0;
 }
 
-pub fn create_empty_page(config: &PageConfig) -> Page {
+pub fn create_empty_page(_config: &PageConfig) -> Page {
     Page {
         page_number: 1,
         total_pages: 1,

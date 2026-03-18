@@ -3,13 +3,14 @@ use ferropdf_core::layout::Page;
 use crate::display_list::{DrawOp, PageDisplayList};
 
 /// Paint a page into a display list.
+/// All coordinates are in points typographiques (pt).
 pub fn paint_page(page: &Page, config: &PageConfig) -> PageDisplayList {
     let mut ops = Vec::new();
 
-    // Offsets and container width in CSS pixels
-    let offset_x = config.margin_left_px();
-    let offset_y = config.margin_top_px();
-    let container_width = config.content_width_px();
+    // Offsets and container width in points (pt)
+    let offset_x = config.margins.left;
+    let offset_y = config.margins.top;
+    let container_width = config.content_width_pt();
 
     for layout_box in &page.content {
         paint_box(layout_box, &mut ops, offset_x, offset_y, container_width);
@@ -46,24 +47,51 @@ fn paint_box(layout_box: &LayoutBox, ops: &mut Vec<DrawOp>, offset_x: f32, offse
     // Borders
     paint_borders(layout_box, ops, rect);
 
-    // Text content — use parent block's content width for text-align
+    // Text content — use shaped_lines from cosmic-text when available,
+    // otherwise fall back to full text (will be re-wrapped in pdf.rs).
     if let Some(ref text) = layout_box.text_content {
         let text = text.trim();
         if !text.is_empty() {
             let text_x = layout_box.content.x + offset_x;
-            let text_y = layout_box.content.y + offset_y + style.font_size;
-            ops.push(DrawOp::DrawText {
-                text: text.to_string(),
-                x: text_x,
-                y: text_y,
-                font_size: style.font_size,
-                color: style.color,
-                font_family: style.font_family.clone(),
-                bold: style.font_weight.is_bold(),
-                italic: style.font_style == ferropdf_core::FontStyle::Italic,
-                text_align: style.text_align,
-                container_width: parent_content_width,
-            });
+
+            if !layout_box.shaped_lines.is_empty() {
+                // Emit one DrawText per shaped line — no re-wrap needed in pdf.rs
+                for line in &layout_box.shaped_lines {
+                    let line_text = line.text.trim();
+                    if line_text.is_empty() {
+                        continue;
+                    }
+                    // y = content origin + line's baseline Y (from cosmic-text)
+                    let line_y = layout_box.content.y + offset_y + line.y;
+                    ops.push(DrawOp::DrawText {
+                        text: line_text.to_string(),
+                        x: text_x,
+                        y: line_y,
+                        font_size: style.font_size,
+                        color: style.color,
+                        font_family: style.font_family.clone(),
+                        bold: style.font_weight.is_bold(),
+                        italic: style.font_style == ferropdf_core::FontStyle::Italic,
+                        text_align: style.text_align,
+                        container_width: parent_content_width,
+                    });
+                }
+            } else {
+                // Fallback: emit the full text (pdf.rs will word-wrap it)
+                let text_y = layout_box.content.y + offset_y + style.font_size * 0.8;
+                ops.push(DrawOp::DrawText {
+                    text: text.to_string(),
+                    x: text_x,
+                    y: text_y,
+                    font_size: style.font_size,
+                    color: style.color,
+                    font_family: style.font_family.clone(),
+                    bold: style.font_weight.is_bold(),
+                    italic: style.font_style == ferropdf_core::FontStyle::Italic,
+                    text_align: style.text_align,
+                    container_width: parent_content_width,
+                });
+            }
         }
     }
 

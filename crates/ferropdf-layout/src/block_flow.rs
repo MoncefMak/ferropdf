@@ -128,7 +128,7 @@ fn layout_block_children(parent: &mut LayoutBox, ctx: &mut BlockFormattingContex
         let dy = block_y - child.rect.y;
         if dy.abs() > 0.001 {
             if std::env::var("FERROPDF_DEBUG").is_ok() {
-                let tag = child.node_id.map(|_| "").unwrap_or("");
+                let _tag = child.node_id.map(|_| "").unwrap_or("");
                 let text = child.text_content.as_deref().unwrap_or("").chars().take(20).collect::<String>();
                 eprintln!("[block_flow] MOVE dy={:.1} old_y={:.1} new_y={:.1} text=\"{}\"",
                     dy, child.rect.y, block_y, text);
@@ -261,6 +261,7 @@ fn is_empty_block(style: &ComputedStyle, height: f32) -> bool {
 /// Convertit une valeur Length CSS en pixels absolus.
 fn resolve_length_to_px(length: &Length, containing_width: f32) -> f32 {
     match length {
+        Length::Pt(v)       => *v,
         Length::Px(px)      => *px,
         Length::Percent(p)  => containing_width * p / 100.0,
         Length::Em(em)      => em * 16.0,

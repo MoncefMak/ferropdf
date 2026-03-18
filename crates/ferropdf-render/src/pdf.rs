@@ -12,17 +12,14 @@ use crate::RenderOptions;
 // CONVERSION COORDONNÉES HTML/CSS → PDF
 // =============================================================================
 //
-// HTML/CSS : Y=0 en HAUT, Y augmente vers le BAS, unité = pixel (1/96 pouce)
-// PDF      : Y=0 en BAS,  Y augmente vers le HAUT, unité = point (1/72 pouce)
+// UNITÉ INTERNE : points typographiques (pt), 1 pt = 1/72 pouce
+// C'est l'unité native du format PDF → pas de conversion de taille nécessaire.
 //
-// Facteur de conversion pixels CSS → points PDF :
-//   1 point = 1/72 pouce
-//   1 pixel = 1/96 pouce
-//   ratio   = 72/96 = 0.75
+// SEULE TRANSFORMATION : inversion de l'axe Y
+//   HTML/CSS : Y=0 en HAUT, Y augmente vers le BAS
+//   PDF      : Y=0 en BAS,  Y augmente vers le HAUT
+//   Formule  : pdf_y = page_height_pt - html_y_pt - html_height_pt
 // =============================================================================
-
-/// Facteur de conversion pixels CSS → points PDF.
-const PX_TO_PT: f32 = 72.0 / 96.0;
 
 /// Rectangle en coordonnées PDF (origine bas-gauche, unité = points).
 #[derive(Debug, Clone, Copy)]
@@ -33,40 +30,28 @@ struct PdfRect {
     height: f32, // points
 }
 
-/// Convertit un rectangle HTML/CSS (origine haut-gauche, pixels)
-/// en rectangle PDF (origine bas-gauche, points).
-///
-/// Formule :
-///   pdf_x     = html_x * PX_TO_PT
-///   pdf_y     = page_height_pt - (html_y * PX_TO_PT) - (html_height * PX_TO_PT)
-///   pdf_width = html_width  * PX_TO_PT
-///   pdf_h     = html_height * PX_TO_PT
-fn html_to_pdf_rect(
-    html_x:         f32,
-    html_y:         f32,
-    html_width:     f32,
-    html_height:    f32,
+/// Convertit un rectangle (origine haut-gauche, pt)
+/// en rectangle PDF (origine bas-gauche, pt).
+/// Seule l'axe Y est inversé, pas de changement d'unité.
+fn to_pdf_rect(
+    x:              f32,
+    y:              f32,
+    width:          f32,
+    height:         f32,
     page_height_pt: f32,
 ) -> PdfRect {
     PdfRect {
-        x:      html_x      * PX_TO_PT,
-        y:      page_height_pt
-                - (html_y      * PX_TO_PT)
-                - (html_height * PX_TO_PT),
-        width:  html_width  * PX_TO_PT,
-        height: html_height * PX_TO_PT,
+        x,
+        y:      page_height_pt - y - height,
+        width,
+        height,
     }
 }
 
-/// Convertit une coordonnée Y ponctuelle (ex: position de texte)
-/// de HTML/CSS (pixels, depuis le haut) vers PDF (points, depuis le bas).
-fn html_y_to_pdf(html_y: f32, page_height_pt: f32) -> f32 {
-    page_height_pt - (html_y * PX_TO_PT)
-}
-
-/// Convertit une taille de police pixels → points PDF.
-fn font_size_to_pt(px: f32) -> f32 {
-    px * PX_TO_PT
+/// Convertit une coordonnée Y ponctuelle (pt, depuis le haut)
+/// vers PDF (pt, depuis le bas).
+fn y_to_pdf(y: f32, page_height_pt: f32) -> f32 {
+    page_height_pt - y
 }
 
 /// A resolved font ready to be embedded in the PDF.
@@ -216,35 +201,35 @@ pub fn write_pdf(
                 DrawOp::FillRect { rect, color, .. } => {
                     if !color.is_transparent() {
                         content.set_fill_rgb(color.r, color.g, color.b);
-                        let pr = html_to_pdf_rect(rect.x, rect.y, rect.width, rect.height, page_h);
+                        let pr = to_pdf_rect(rect.x, rect.y, rect.width, rect.height, page_h);
                         content.rect(pr.x, pr.y, pr.width, pr.height);
                         content.fill_nonzero();
                     }
                 }
                 DrawOp::StrokeRect { rect, color, width, .. } => {
                     content.set_stroke_rgb(color.r, color.g, color.b);
-                    content.set_line_width(*width * PX_TO_PT);
+                    content.set_line_width(*width);
                     // Borders are lines — use move_to/line_to for precise placement
                     // StrokeRect encodes a single border side as a degenerate rect:
                     //   height==0 → horizontal line, width==0 → vertical line
                     if rect.height < 0.01 {
                         // Horizontal line at rect.y
-                        let py = html_y_to_pdf(rect.y, page_h);
-                        let x1 = rect.x * PX_TO_PT;
-                        let x2 = (rect.x + rect.width) * PX_TO_PT;
+                        let py = y_to_pdf(rect.y, page_h);
+                        let x1 = rect.x;
+                        let x2 = rect.x + rect.width;
                         content.move_to(x1, py);
                         content.line_to(x2, py);
                         content.stroke();
                     } else if rect.width < 0.01 {
                         // Vertical line at rect.x
-                        let px = rect.x * PX_TO_PT;
-                        let y1 = html_y_to_pdf(rect.y, page_h);
-                        let y2 = html_y_to_pdf(rect.y + rect.height, page_h);
+                        let px = rect.x;
+                        let y1 = y_to_pdf(rect.y, page_h);
+                        let y2 = y_to_pdf(rect.y + rect.height, page_h);
                         content.move_to(px, y1);
                         content.line_to(px, y2);
                         content.stroke();
                     } else {
-                        let pr = html_to_pdf_rect(rect.x, rect.y, rect.width, rect.height, page_h);
+                        let pr = to_pdf_rect(rect.x, rect.y, rect.width, rect.height, page_h);
                         content.rect(pr.x, pr.y, pr.width.max(0.1), pr.height.max(0.1));
                         content.stroke();
                     }
@@ -263,56 +248,48 @@ pub fn write_pdf(
                         .and_then(|pdf_name| embedded_fonts.iter().find(|f| &f.pdf_name == pdf_name));
                     let font_data = ef_option.map(|ef| ef.data.as_slice());
 
-                    // Convert px values to pt for PDF
-                    let font_size_pt = font_size_to_pt(*font_size);
+                    // Font size is already in pt — no conversion needed
+                    let font_size_pt = *font_size;
 
-                    // Word-wrap uses pixel units (layout is in px)
-                    let lines = wrap_text(text, *font_size, *container_width, font_data);
-                    let line_height_px = font_size * 1.2;
-
-                    for (line_idx, line) in lines.iter().enumerate() {
-                        let line_text = line.trim();
-                        if line_text.is_empty() {
-                            continue;
-                        }
-
-                        // Measure in pixels, then scale for alignment
-                        let line_width_px = measure_text_width(line_text, *font_size, font_data);
-
-                        // Compute aligned X in pixels, then convert to pt
-                        let aligned_x_px = match text_align {
-                            ferropdf_core::TextAlign::Left => *x,
-                            ferropdf_core::TextAlign::Right => *x + container_width - line_width_px,
-                            ferropdf_core::TextAlign::Center => *x + (container_width - line_width_px) / 2.0,
-                            ferropdf_core::TextAlign::Justify => *x,
-                        };
-
-                        let line_y_px = *y + (line_idx as f32) * line_height_px;
-
-                        // Convert to PDF coordinates
-                        let pdf_x = aligned_x_px * PX_TO_PT;
-                        let pdf_y = html_y_to_pdf(line_y_px, page_h);
-
-                        content.set_fill_rgb(color.r, color.g, color.b);
-                        content.begin_text();
-
-                        match ef_option {
-                            Some(ef) => {
-                                content.set_font(Name(ef.pdf_name.as_bytes()), font_size_pt);
-                                content.next_line(pdf_x, pdf_y);
-                                let encoded = encode_for_cid_font(line_text, &ef.data);
-                                content.show(Str(&encoded));
-                            }
-                            None => {
-                                let font_name = if *bold { "F2" } else if *italic { "F3" } else { "F1" };
-                                content.set_font(Name(font_name.as_bytes()), font_size_pt);
-                                content.next_line(pdf_x, pdf_y);
-                                content.show(Str(&encode_winansi(line_text)));
-                            }
-                        }
-
-                        content.end_text();
+                    let line_text = text.trim();
+                    if line_text.is_empty() {
+                        continue;
                     }
+
+                    // Measure line width for text-align
+                    let line_width_pt = measure_text_width(line_text, *font_size, font_data);
+
+                    // Compute aligned X in pt
+                    let aligned_x = match text_align {
+                        ferropdf_core::TextAlign::Left => *x,
+                        ferropdf_core::TextAlign::Right => *x + container_width - line_width_pt,
+                        ferropdf_core::TextAlign::Center => *x + (container_width - line_width_pt) / 2.0,
+                        ferropdf_core::TextAlign::Justify => *x,
+                    };
+
+                    // Convert to PDF coordinates (Y-axis flip only, no unit conversion)
+                    let pdf_x = aligned_x;
+                    let pdf_y = y_to_pdf(*y, page_h);
+
+                    content.set_fill_rgb(color.r, color.g, color.b);
+                    content.begin_text();
+
+                    match ef_option {
+                        Some(ef) => {
+                            content.set_font(Name(ef.pdf_name.as_bytes()), font_size_pt);
+                            content.next_line(pdf_x, pdf_y);
+                            let encoded = encode_for_cid_font(line_text, &ef.data);
+                            content.show(Str(&encoded));
+                        }
+                        None => {
+                            let font_name = if *bold { "F2" } else if *italic { "F3" } else { "F1" };
+                            content.set_font(Name(font_name.as_bytes()), font_size_pt);
+                            content.next_line(pdf_x, pdf_y);
+                            content.show(Str(&encode_winansi(line_text)));
+                        }
+                    }
+
+                    content.end_text();
                 }
                 DrawOp::Save => { content.save_state(); }
                 DrawOp::Restore => { content.restore_state(); }
@@ -691,49 +668,3 @@ fn unicode_to_winansi(c: char) -> u8 {
     }
 }
 
-/// Word-wrap text into lines that fit within `max_width`.
-/// Uses glyph-level width measurements when font data is available.
-fn wrap_text(
-    text: &str,
-    font_size: f32,
-    max_width: f32,
-    font_data: Option<&[u8]>,
-) -> Vec<String> {
-    // If container is very small or zero, don't wrap — just return as-is
-    if max_width <= 0.0 {
-        return vec![text.to_string()];
-    }
-
-    let mut lines: Vec<String> = Vec::new();
-    let mut current_line = String::new();
-    let mut current_width = 0.0f32;
-
-    for word in text.split_inclusive(|c: char| c.is_whitespace()) {
-        let word_width = measure_text_width(word, font_size, font_data);
-
-        if current_line.is_empty() {
-            // First word on the line — always add it
-            current_line.push_str(word);
-            current_width = word_width;
-        } else if current_width + word_width <= max_width {
-            // Word fits on current line
-            current_line.push_str(word);
-            current_width += word_width;
-        } else {
-            // Word doesn't fit — flush current line and start new one
-            lines.push(current_line);
-            current_line = word.to_string();
-            current_width = word_width;
-        }
-    }
-
-    if !current_line.is_empty() {
-        lines.push(current_line);
-    }
-
-    if lines.is_empty() {
-        lines.push(text.to_string());
-    }
-
-    lines
-}

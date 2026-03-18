@@ -17,7 +17,7 @@ pub use style::{
     ComputedStyle, Display, Position, FontWeight, FontStyle,
     TextAlign, FlexDirection, FlexWrap, JustifyContent,
     AlignItems, AlignSelf, PageBreak, PageBreakInside, BorderSide, BorderStyle,
-    BorderRadius,
+    BorderRadius, BoxDecorationBreak,
 };
-pub use layout::{LayoutBox, LayoutTree, ShapedLine, ShapedGlyph};
+pub use layout::{LayoutBox, LayoutTree, ShapedLine, ShapedGlyph, BreakUnit};
 pub use error::{FerroError, Result};

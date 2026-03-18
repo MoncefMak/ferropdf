@@ -195,18 +195,19 @@ fn build_table_as_grid(
         }
     }
 
-    // Build grid style with computed column and row tracks
+    // Build grid style with computed column and row tracks.
+    // Column widths from compute_table_layout already include min-content
+    // guarantees and proportional extra-space distribution. Use Fixed/Fixed
+    // tracks so Taffy doesn't further shrink columns below their min-content.
     let mut grid_style = style_to_taffy::convert_table_to_grid_with_widths(
         &table_style,
         &table_result.column_widths,
     );
-    // Override rows with computed tracks
+    // Override with Fixed/Fixed column tracks to enforce exact computed widths
+    grid_style.grid_template_columns = table_result.taffy_columns;
+    // Override rows with computed tracks (min-height with auto growth)
     if !table_result.taffy_rows.is_empty() {
         grid_style.grid_template_rows = table_result.taffy_rows;
-    }
-    // Override columns with fixed tracks (from phase 3)
-    if !table_result.taffy_columns.is_empty() {
-        grid_style.grid_template_columns = table_result.taffy_columns;
     }
 
     let grid_node = taffy.new_with_children(grid_style, &cell_taffy_ids)
@@ -370,6 +371,7 @@ fn resolve_margin_insets(style: &ComputedStyle) -> Insets {
 
 fn length_to_px(l: &Length) -> f32 {
     match l {
+        Length::Pt(v) => *v,
         Length::Px(v) => *v,
         Length::Zero => 0.0,
         _ => 0.0,
@@ -421,6 +423,7 @@ fn measure_min_content_width(
 
 fn resolve_length(l: &Length) -> f32 {
     match l {
+        Length::Pt(v) => *v,
         Length::Px(v) => *v,
         Length::Zero => 0.0,
         _ => 0.0,
