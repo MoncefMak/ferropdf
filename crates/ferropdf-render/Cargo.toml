@@ -1,6 +1,6 @@
 [package]
 name    = "ferropdf-render"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 
 [dependencies]
@@ -17,6 +17,14 @@ tiny-skia       = { workspace = true }
 cosmic-text     = { workspace = true }
 fontdb          = { workspace = true }
 ttf-parser      = { workspace = true }
+subsetter       = { workspace = true }
 flate2          = { workspace = true }
 base64          = { workspace = true }
 log             = { workspace = true }
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name    = "render_bench"
+harness = false

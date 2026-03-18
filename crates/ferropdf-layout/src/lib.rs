@@ -16,7 +16,18 @@ pub fn layout(
     available_width: f32,
     available_height: f32,
 ) -> ferropdf_core::Result<LayoutTree> {
-    let font_db = FontDatabase::new();
+    let owned_font_db = FontDatabase::new();
+    layout_with_fonts(document, styles, available_width, available_height, &owned_font_db)
+}
+
+/// Same as `layout` but reuses an existing FontDatabase (avoids reloading system fonts).
+pub fn layout_with_fonts(
+    document: &Document,
+    styles: &StyleTree,
+    available_width: f32,
+    available_height: f32,
+    font_db: &FontDatabase,
+) -> ferropdf_core::Result<LayoutTree> {
     let mut font_system = font_db.font_system_mut();
     let mut tree = taffy_bridge::build_layout(
         document,

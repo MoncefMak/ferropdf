@@ -88,6 +88,23 @@ impl FontDatabase {
     pub fn font_system_mut(&self) -> std::sync::MutexGuard<'_, FontSystem> {
         self.inner.lock().unwrap()
     }
+
+    /// Accède au fontdb::Database interne de cosmic-text (lecture seule).
+    /// Permet de réutiliser la même base de polices pour l'écriture PDF.
+    pub fn fontdb(&self) -> FontDbGuard<'_> {
+        FontDbGuard { guard: self.inner.lock().unwrap() }
+    }
+}
+
+/// RAII guard that provides read access to the inner fontdb::Database.
+pub struct FontDbGuard<'a> {
+    guard: std::sync::MutexGuard<'a, FontSystem>,
+}
+
+impl<'a> FontDbGuard<'a> {
+    pub fn db(&self) -> &fontdb::Database {
+        self.guard.db()
+    }
 }
 
 /// Measure a text node using cosmic-text.

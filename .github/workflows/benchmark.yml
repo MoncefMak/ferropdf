@@ -27,13 +27,12 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            rust-engine/target
-          key: bench-${{ runner.os }}-cargo-${{ hashFiles('rust-engine/Cargo.lock') }}
+            target
+          key: bench-${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
           restore-keys: bench-${{ runner.os }}-cargo-
 
       - name: Run benchmarks
-        working-directory: rust-engine
-        run: cargo bench --bench render_bench -- --output-format bencher 2>&1 | tee bench_output.txt
+        run: cargo bench --package ferropdf-render --bench render_bench -- --output-format bencher 2>&1 | tee bench_output.txt
 
       - name: Ensure gh-pages branch exists
         if: github.ref == 'refs/heads/main'
@@ -54,9 +53,9 @@ jobs:
       - name: Store benchmark result
         uses: benchmark-action/github-action-benchmark@v1
         with:
-          name: FastPDF Criterion Benchmarks
+          name: ferropdf Criterion Benchmarks
           tool: cargo
-          output-file-path: rust-engine/bench_output.txt
+          output-file-path: bench_output.txt
           # Only push results on main branch
           auto-push: ${{ github.ref == 'refs/heads/main' }}
           alert-threshold: "130%"
@@ -71,5 +70,5 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: criterion-report
-          path: rust-engine/target/criterion
+          path: target/criterion
           retention-days: 30

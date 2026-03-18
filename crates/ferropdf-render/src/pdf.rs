@@ -56,10 +56,12 @@ fn y_to_pdf(y: f32, page_height_pt: f32) -> f32 {
 
 /// A resolved font ready to be embedded in the PDF.
 struct EmbeddedFont {
-    /// Raw TTF/OTF bytes
-    data: Vec<u8>,
-    /// Parsed face for metric/glyph lookups
-    /// We store indices into `data` and re-parse as needed
+    /// Original raw TTF/OTF bytes (for char→glyph lookups)
+    original_data: Vec<u8>,
+    /// Subsetted TTF/OTF bytes (for embedding — much smaller)
+    subset_data: Vec<u8>,
+    /// Mapping from original glyph IDs to subsetted glyph IDs (if subsetted)
+    gid_remapping: Option<HashMap<u16, u16>>,
     /// PDF object refs
     type0_ref: Ref,
     font_stream_ref: Ref,
@@ -83,6 +85,7 @@ pub fn write_pdf(
     pages: &[PageDisplayList],
     config: &PageConfig,
     opts: &RenderOptions,
+    ext_font_db: Option<&fontdb::Database>,
 ) -> ferropdf_core::Result<Vec<u8>> {
     let mut pdf = Pdf::new();
     let mut ref_id = 1u32;
@@ -99,14 +102,28 @@ pub fn write_pdf(
     let (page_w, page_h) = config.size.dimensions_pt();
 
     // ── Resolve embedded fonts ──
-    let mut font_db = fontdb::Database::new();
-    font_db.load_system_fonts();
+    let owned_db;
+    let font_db: &fontdb::Database = match ext_font_db {
+        Some(db) => db,
+        None => {
+            owned_db = {
+                let mut db = fontdb::Database::new();
+                db.load_system_fonts();
+                db
+            };
+            &owned_db
+        }
+    };
 
     let mut font_cache: HashMap<FontKey, Option<String>> = HashMap::new();
     let mut embedded_fonts: Vec<EmbeddedFont> = Vec::new();
     let mut font_name_counter = 3u32; // F1, F2, F3 are reserved for Type1
 
-    // Scan all DrawText ops to discover which fonts we need
+    // Temporary: collect raw font data and used glyphs per font
+    let mut font_raw_data: HashMap<String, Vec<u8>> = HashMap::new(); // pdf_name → raw data
+    let mut font_used_chars: HashMap<String, std::collections::HashSet<u16>> = HashMap::new(); // pdf_name → glyph IDs
+
+    // Phase 1: Discover which fonts are needed
     for display_list in pages {
         for op in &display_list.ops {
             if let DrawOp::DrawText { font_family, bold, italic, .. } = op {
@@ -124,31 +141,71 @@ pub fn write_pdf(
                     Some(data) => {
                         font_name_counter += 1;
                         let pdf_name = format!("F{}", font_name_counter);
-
-                        let type0_ref = next_ref();
-                        let cid_font_ref = next_ref();
-                        let descriptor_ref = next_ref();
-                        let font_stream_ref = next_ref();
-                        let tounicode_ref = next_ref();
-
-                        font_cache.insert(key, Some(pdf_name.clone()));
-                        embedded_fonts.push(EmbeddedFont {
-                            data,
-                            type0_ref,
-                            font_stream_ref,
-                            descriptor_ref,
-                            cid_font_ref,
-                            tounicode_ref,
-                            pdf_name,
-                        });
+                        font_raw_data.insert(pdf_name.clone(), data);
+                        font_used_chars.insert(pdf_name.clone(), std::collections::HashSet::new());
+                        font_cache.insert(key, Some(pdf_name));
                     }
                     None => {
-                        // No system font found — will fall back to Helvetica
                         font_cache.insert(key, None);
                     }
                 }
             }
         }
+    }
+
+    // Phase 2: Collect all glyph IDs used per font
+    for display_list in pages {
+        for op in &display_list.ops {
+            if let DrawOp::DrawText { text, font_family, bold, italic, .. } = op {
+                let family_name = font_family.first().cloned().unwrap_or_default();
+                let key = FontKey {
+                    family: family_name,
+                    bold: *bold,
+                    italic: *italic,
+                };
+                if let Some(Some(pdf_name)) = font_cache.get(&key) {
+                    if let (Some(raw_data), Some(used_gids)) = (font_raw_data.get(pdf_name), font_used_chars.get_mut(pdf_name)) {
+                        if let Ok(face) = ttf_parser::Face::parse(raw_data, 0) {
+                            // Always include .notdef (GID 0)
+                            used_gids.insert(0);
+                            for ch in text.chars() {
+                                if let Some(gid) = face.glyph_index(ch) {
+                                    used_gids.insert(gid.0);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Phase 3: Subset fonts and build EmbeddedFont entries
+    let pdf_names: Vec<String> = font_raw_data.keys().cloned().collect();
+    for pdf_name in pdf_names {
+        let raw_data = font_raw_data.remove(&pdf_name).unwrap();
+        let used_gids = font_used_chars.remove(&pdf_name).unwrap();
+
+        let type0_ref = next_ref();
+        let cid_font_ref = next_ref();
+        let descriptor_ref = next_ref();
+        let font_stream_ref = next_ref();
+        let tounicode_ref = next_ref();
+
+        // Subset the font to only include used glyphs
+        let (subset_data, gid_remapping) = subset_font(&raw_data, &used_gids);
+
+        embedded_fonts.push(EmbeddedFont {
+            original_data: raw_data,
+            subset_data,
+            gid_remapping,
+            type0_ref,
+            font_stream_ref,
+            descriptor_ref,
+            cid_font_ref,
+            tounicode_ref,
+            pdf_name,
+        });
     }
 
     // Collect page refs
@@ -246,7 +303,7 @@ pub fn write_pdf(
                     let ef_option = font_cache.get(&key)
                         .and_then(|v| v.as_ref())
                         .and_then(|pdf_name| embedded_fonts.iter().find(|f| &f.pdf_name == pdf_name));
-                    let font_data = ef_option.map(|ef| ef.data.as_slice());
+                    let font_data = ef_option.map(|ef| ef.original_data.as_slice());
 
                     // Font size is already in pt — no conversion needed
                     let font_size_pt = *font_size;
@@ -278,7 +335,7 @@ pub fn write_pdf(
                         Some(ef) => {
                             content.set_font(Name(ef.pdf_name.as_bytes()), font_size_pt);
                             content.next_line(pdf_x, pdf_y);
-                            let encoded = encode_for_cid_font(line_text, &ef.data);
+                            let encoded = encode_for_cid_font(line_text, &ef.original_data, ef.gid_remapping.as_ref());
                             content.show(Str(&encoded));
                         }
                         None => {
@@ -354,7 +411,8 @@ fn load_font_data(
 // ── CIDFont embedding ──
 
 fn write_cid_font(pdf: &mut Pdf, ef: &EmbeddedFont) -> ferropdf_core::Result<()> {
-    let face = ttf_parser::Face::parse(&ef.data, 0)
+    // Parse the ORIGINAL font for metrics (ascender, bbox, etc.)
+    let face = ttf_parser::Face::parse(&ef.original_data, 0)
         .map_err(|e| FerroError::Font(format!("Failed to parse TTF: {:?}", e)))?;
 
     let units_per_em = face.units_per_em() as f32;
@@ -378,11 +436,11 @@ fn write_cid_font(pdf: &mut Pdf, ef: &EmbeddedFont) -> ferropdf_core::Result<()>
         .map(|adv| adv as f32 * scale)
         .unwrap_or(500.0);
 
-    // 1. Write compressed font stream
-    let compressed = compress_data(&ef.data)?;
+    // 1. Write compressed font stream (subsetted — much smaller)
+    let compressed = compress_data(&ef.subset_data)?;
     let mut stream = pdf.stream(ef.font_stream_ref, &compressed);
     stream.filter(Filter::FlateDecode);
-    stream.pair(Name(b"Length1"), ef.data.len() as i32);
+    stream.pair(Name(b"Length1"), ef.subset_data.len() as i32);
     stream.finish();
 
     // 2. Write FontDescriptor
@@ -433,14 +491,24 @@ fn write_cid_font(pdf: &mut Pdf, ef: &EmbeddedFont) -> ferropdf_core::Result<()>
     cid_font.default_width(default_width);
 
     // Build per-glyph W (widths) array so PDF viewers space characters correctly.
-    // Collect all glyph IDs that have a horizontal advance, then emit consecutive runs.
+    // When subsetted, iterate only the subsetted font's glyphs (much fewer).
     {
-        let num_glyphs = face.number_of_glyphs();
+        let width_face = if ef.gid_remapping.is_some() {
+            // Parse the subsetted font for width info
+            ttf_parser::Face::parse(&ef.subset_data, 0).ok()
+        } else {
+            None
+        };
+        let wf = width_face.as_ref().unwrap_or(&face);
+        let num_glyphs = wf.number_of_glyphs();
+        let wf_units_per_em = wf.units_per_em() as f32;
+        let wf_scale = 1000.0 / wf_units_per_em;
+
         let mut glyph_widths: Vec<(u16, f32)> = Vec::new();
         for gid in 0..num_glyphs {
             let glyph_id = ttf_parser::GlyphId(gid);
-            if let Some(adv) = face.glyph_hor_advance(glyph_id) {
-                let w = adv as f32 * scale;
+            if let Some(adv) = wf.glyph_hor_advance(glyph_id) {
+                let w = adv as f32 * wf_scale;
                 glyph_widths.push((gid, w));
             }
         }
@@ -474,7 +542,7 @@ fn write_cid_font(pdf: &mut Pdf, ef: &EmbeddedFont) -> ferropdf_core::Result<()>
     cid_font.finish();
 
     // 4. Write ToUnicode CMap
-    let tounicode_cmap = build_tounicode_cmap(&face);
+    let tounicode_cmap = build_tounicode_cmap(&face, ef.gid_remapping.as_ref());
     pdf.stream(ef.tounicode_ref, tounicode_cmap.as_bytes());
 
     // 5. Write Type0 font
@@ -490,7 +558,7 @@ fn write_cid_font(pdf: &mut Pdf, ef: &EmbeddedFont) -> ferropdf_core::Result<()>
 
 // ── Text encoding for CIDFont (glyph IDs as big-endian u16) ──
 
-fn encode_for_cid_font(text: &str, font_data: &[u8]) -> Vec<u8> {
+fn encode_for_cid_font(text: &str, font_data: &[u8], gid_remapping: Option<&HashMap<u16, u16>>) -> Vec<u8> {
     let face = match ttf_parser::Face::parse(font_data, 0) {
         Ok(f) => f,
         Err(_) => return encode_winansi(text), // fallback
@@ -499,17 +567,21 @@ fn encode_for_cid_font(text: &str, font_data: &[u8]) -> Vec<u8> {
     let mut bytes = Vec::with_capacity(text.len() * 2);
     for ch in text.chars() {
         let gid = face.glyph_index(ch).map(|g| g.0).unwrap_or(0);
-        bytes.push((gid >> 8) as u8);
-        bytes.push((gid & 0xFF) as u8);
+        // If font was subsetted, map original GID → subsetted GID
+        let mapped_gid = match gid_remapping {
+            Some(map) => *map.get(&gid).unwrap_or(&0),
+            None => gid,
+        };
+        bytes.push((mapped_gid >> 8) as u8);
+        bytes.push((mapped_gid & 0xFF) as u8);
     }
     bytes
 }
 
 // ── ToUnicode CMap builder ──
 
-fn build_tounicode_cmap(face: &ttf_parser::Face) -> String {
-    // Build a mapping of glyph ID → Unicode codepoint
-    // by iterating over the cmap subtables
+fn build_tounicode_cmap(face: &ttf_parser::Face, gid_remapping: Option<&HashMap<u16, u16>>) -> String {
+    // Build a mapping of (remapped) glyph ID → Unicode codepoint
     let mut gid_to_unicode: HashMap<u16, char> = HashMap::new();
 
     if let Some(subtable) = face.tables().cmap {
@@ -520,7 +592,15 @@ fn build_tounicode_cmap(face: &ttf_parser::Face) -> String {
             sub.codepoints(|cp| {
                 if let Some(ch) = char::from_u32(cp) {
                     if let Some(gid) = face.glyph_index(ch) {
-                        gid_to_unicode.entry(gid.0).or_insert(ch);
+                        // Use the remapped GID if font was subsetted
+                        let mapped = match gid_remapping {
+                            Some(map) => match map.get(&gid.0) {
+                                Some(&new_gid) => new_gid,
+                                None => return, // glyph not in subset, skip
+                            },
+                            None => gid.0,
+                        };
+                        gid_to_unicode.entry(mapped).or_insert(ch);
                     }
                 }
             });
@@ -569,13 +649,47 @@ fn write_type1_font(pdf: &mut Pdf, font_ref: Ref, base_font: &str) {
 }
 
 fn compress_data(data: &[u8]) -> ferropdf_core::Result<Vec<u8>> {
-    let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
+    let mut encoder = ZlibEncoder::new(Vec::new(), Compression::fast());
     encoder
         .write_all(data)
         .map_err(|e| FerroError::PdfWrite(format!("Compression error: {}", e)))?;
     encoder
         .finish()
         .map_err(|e| FerroError::PdfWrite(format!("Compression finish error: {}", e)))
+}
+
+/// Subset a font to only include the specified glyph IDs.
+/// Returns (subsetted_data, gid_remapping) on success, or (original_data, None) on failure.
+fn subset_font(
+    font_data: &[u8],
+    used_gids: &std::collections::HashSet<u16>,
+) -> (Vec<u8>, Option<HashMap<u16, u16>>) {
+    // Build a sorted list of GIDs the subsetter should retain
+    let mut gids: Vec<u16> = used_gids.iter().copied().collect();
+    gids.sort_unstable();
+
+    // Create a remapper and register all used glyphs
+    let mut remapper = subsetter::GlyphRemapper::new();
+    for &gid in &gids {
+        remapper.remap(gid);
+    }
+
+    match subsetter::subset(font_data, 0, &remapper) {
+        Ok(subsetted) => {
+            // Build the remapping: old GID → new GID
+            let mut mapping = HashMap::new();
+            for &old_gid in &gids {
+                if let Some(new_gid) = remapper.get(old_gid) {
+                    mapping.insert(old_gid, new_gid);
+                }
+            }
+            (subsetted, Some(mapping))
+        }
+        Err(_) => {
+            // Subsetting failed — fall back to full font
+            (font_data.to_vec(), None)
+        }
+    }
 }
 
 fn sanitize_ps_name(name: &str) -> String {

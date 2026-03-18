@@ -1,5 +1,6 @@
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
+use std::sync::OnceLock;
 
 pyo3::create_exception!(ferropdf, FerroError,  pyo3::exceptions::PyRuntimeError);
 pyo3::create_exception!(ferropdf, ParseError,  FerroError);
@@ -61,6 +62,7 @@ impl From<PyOptions> for ferropdf_render::RenderOptions {
 #[pyclass(name = "Engine")]
 pub struct PyEngine {
     options: PyOptions,
+    font_db: OnceLock<ferropdf_render::FontDatabase>,
 }
 
 #[pymethods]
@@ -68,13 +70,16 @@ impl PyEngine {
     #[new]
     #[pyo3(signature = (options = None))]
     fn new(options: Option<PyOptions>) -> Self {
-        Self { options: options.unwrap_or_else(|| PyOptions {
-            page_size: "A4".to_string(),
-            margin:    "20mm".to_string(),
-            base_url:  None,
-            title:     None,
-            author:    None,
-        })}
+        Self {
+            options: options.unwrap_or_else(|| PyOptions {
+                page_size: "A4".to_string(),
+                margin:    "20mm".to_string(),
+                base_url:  None,
+                title:     None,
+                author:    None,
+            }),
+            font_db: OnceLock::new(),
+        }
     }
 
     /// Rendre du HTML en PDF.
@@ -83,8 +88,10 @@ impl PyEngine {
         let html = html.to_string();
         let opts = self.options.clone();
 
+        let font_db = self.font_db.get_or_init(ferropdf_render::FontDatabase::new);
+
         let result = py.allow_threads(move || {
-            ferropdf_render::render(&html, &opts.into())
+            ferropdf_render::render_with_cache(&html, &opts.into(), font_db)
         });
 
         match result {

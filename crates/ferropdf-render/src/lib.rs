@@ -3,6 +3,7 @@ mod painter;
 mod pdf;
 
 use ferropdf_core::{PageConfig, PageSize, PageMargins};
+pub use ferropdf_layout::FontDatabase;
 
 /// Rendering options passed from Python bindings.
 pub struct RenderOptions {
@@ -15,6 +16,17 @@ pub struct RenderOptions {
 
 /// Main entry point: render HTML string to PDF bytes.
 pub fn render(html: &str, opts: &RenderOptions) -> ferropdf_core::Result<Vec<u8>> {
+    // Create one FontDatabase, use it for both layout and PDF writing
+    let font_db = FontDatabase::new();
+    render_with_cache(html, opts, &font_db)
+}
+
+/// Render HTML to PDF, reusing a cached FontDatabase for speed.
+pub fn render_with_cache(
+    html: &str,
+    opts: &RenderOptions,
+    font_db: &FontDatabase,
+) -> ferropdf_core::Result<Vec<u8>> {
     // 1. Parse HTML
     let parse_result = ferropdf_parse::parse(html)?;
 
@@ -83,11 +95,12 @@ pub fn render(html: &str, opts: &RenderOptions) -> ferropdf_core::Result<Vec<u8>
     )?;
 
     // 5. Layout with Taffy (all in points typographiques)
-    let layout_tree = ferropdf_layout::layout(
+    let layout_tree = ferropdf_layout::layout_with_fonts(
         &parse_result.document,
         &styles,
         page_config.content_width_pt(),
         page_config.content_height_pt(),
+        font_db,
     )?;
 
     // 6. Paginate
@@ -98,8 +111,9 @@ pub fn render(html: &str, opts: &RenderOptions) -> ferropdf_core::Result<Vec<u8>
         .map(|page| painter::paint_page(page, &page_config))
         .collect();
 
-    // 8. Write PDF
-    let pdf_bytes = pdf::write_pdf(&display_lists, &page_config, opts)?;
+    // 8. Write PDF (reuse fontdb from cosmic-text — no second load_system_fonts)
+    let db_guard = font_db.fontdb();
+    let pdf_bytes = pdf::write_pdf(&display_lists, &page_config, opts, Some(db_guard.db()))?;
 
     Ok(pdf_bytes)
 }
