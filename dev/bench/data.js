@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1773908168064,
+  "lastUpdate": 1773908449612,
   "repoUrl": "https://github.com/MoncefMak/ferropdf",
   "entries": {
     "FastPDF Criterion Benchmarks": [
@@ -1063,6 +1063,54 @@ window.BENCHMARK_DATA = {
             "name": "render_invoice_cached",
             "value": 907874,
             "range": "± 3502",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "moncefmak@users.noreply.github.com",
+            "name": "Makti Moncef",
+            "username": "MoncefMak"
+          },
+          "committer": {
+            "email": "moncefmak@users.noreply.github.com",
+            "name": "Makti Moncef",
+            "username": "MoncefMak"
+          },
+          "distinct": true,
+          "id": "9bf5e1e84d5c99275648bbb47c55248e1953efec",
+          "message": "fix: resolve clippy lint warnings (tuple pattern deref, manual_strip)",
+          "timestamp": "2026-03-19T09:18:39+01:00",
+          "tree_id": "91ed97cddbfae32cea1b1c7470ab31a5efdccee1",
+          "url": "https://github.com/MoncefMak/ferropdf/commit/9bf5e1e84d5c99275648bbb47c55248e1953efec"
+        },
+        "date": 1773908449335,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "render_simple",
+            "value": 3845113,
+            "range": "± 115950",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice",
+            "value": 4568959,
+            "range": "± 105802",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_simple_cached",
+            "value": 235209,
+            "range": "± 2466",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice_cached",
+            "value": 915696,
+            "range": "± 6520",
             "unit": "ns/iter"
           }
         ]
