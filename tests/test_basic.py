@@ -118,6 +118,84 @@ class TestLayout:
         assert pages <= 2, f"Invoice : {pages} pages détectées (max 2)"
 
 
+def extract_text_positions(pdf_bytes):
+    """Extract (x, y, font_name) tuples from PDF text operations."""
+    import re
+    content = pdf_bytes.decode('latin-1', errors='replace')
+    positions = []
+    current_font = None
+    for line in content.split('\n'):
+        line = line.strip()
+        font_m = re.match(r'/(\w+)\s+[\d.]+\s+Tf', line)
+        if font_m:
+            current_font = font_m.group(1)
+        td_m = re.match(r'([\d.]+)\s+([\d.]+)\s+Td', line)
+        if td_m:
+            positions.append((float(td_m.group(1)), float(td_m.group(2)), current_font))
+    return positions
+
+
+class TestInlineLayout:
+    """Tests for inline element rendering (<strong>, <em>, <span>, <a>, etc.)."""
+
+    def test_inline_bold_italic_same_line(self):
+        """Inline elements should render on the same line, not stack vertically."""
+        html = "<p>This is <strong>bold</strong> and <em>italic</em> text.</p>"
+        pdf = ferropdf.from_html(html)
+        assert pdf_is_valid(pdf)
+        positions = extract_text_positions(pdf)
+        assert len(positions) >= 3, f"Expected at least 3 text segments, got {len(positions)}"
+        # All segments must share the same Y value (horizontal flow)
+        ys = set(y for _, y, _ in positions)
+        assert len(ys) == 1, f"Text should be on one line, but got Y values: {sorted(ys)}"
+        # X values must be increasing (left-to-right)
+        xs = [x for x, _, _ in positions]
+        assert xs == sorted(xs), f"X positions should increase: {xs}"
+
+    def test_inline_uses_correct_fonts(self):
+        """Bold text should use a different font than normal text."""
+        html = "<p>Normal <strong>bold</strong> normal</p>"
+        pdf = ferropdf.from_html(html)
+        assert pdf_is_valid(pdf)
+        positions = extract_text_positions(pdf)
+        fonts = [f for _, _, f in positions if f]
+        assert len(set(fonts)) >= 2, f"Expected at least 2 distinct fonts, got: {fonts}"
+
+    def test_inline_span_no_crash(self):
+        """Span elements should render as inline without crashing."""
+        html = '<p>Hello <span style="color:red">world</span>!</p>'
+        pdf = ferropdf.from_html(html)
+        assert pdf_is_valid(pdf)
+
+    def test_inline_link(self):
+        """Links should render inline."""
+        html = '<p>Click <a href="#">here</a> for more.</p>'
+        pdf = ferropdf.from_html(html)
+        assert pdf_is_valid(pdf)
+        positions = extract_text_positions(pdf)
+        ys = set(y for _, y, _ in positions)
+        assert len(ys) == 1, f"Link should be inline, but got Y values: {sorted(ys)}"
+
+    def test_nested_inline(self):
+        """Nested inline elements should work."""
+        html = "<p>This is <strong><em>bold italic</em></strong> text.</p>"
+        pdf = ferropdf.from_html(html)
+        assert pdf_is_valid(pdf)
+        positions = extract_text_positions(pdf)
+        ys = set(y for _, y, _ in positions)
+        assert len(ys) == 1, f"Nested inline should be one line, got Y: {sorted(ys)}"
+
+    def test_inline_does_not_break_block(self):
+        """Block elements after inline paragraphs should still work."""
+        html = """
+        <p>Paragraph with <strong>bold</strong> text.</p>
+        <div style="background:blue; height:50px">Block</div>
+        <p>Another <em>italic</em> paragraph.</p>
+        """
+        pdf = ferropdf.from_html(html)
+        assert pdf_is_valid(pdf)
+
+
 class TestEngine:
     def test_reusable(self):
         engine = ferropdf.Engine()

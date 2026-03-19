@@ -95,7 +95,7 @@ impl Document {
         self.root.expect("Document has no root node")
     }
 
-    /// Itérer sur tous les nœuds (pre-order depth-first)
+    /// Iterate over all nodes (pre-order depth-first)
     pub fn iter_preorder(&self, start: NodeId) -> PreorderIter<'_> {
         PreorderIter {
             doc: self,

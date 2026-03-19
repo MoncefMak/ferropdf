@@ -1,5 +1,5 @@
 """
-Exemple basique — génère un PDF simple dans output/
+Basic example — generates a simple PDF in output/
 """
 import ferropdf
 from pathlib import Path
@@ -11,7 +11,7 @@ output_dir.mkdir(exist_ok=True)
 ferropdf.write_pdf("<h1>Hello ferropdf!</h1>", str(output_dir / "hello.pdf"))
 print(f"✓ {output_dir / 'hello.pdf'}")
 
-# 2. PDF avec styles
+# 2. PDF with styles
 html = """
 <html>
 <head><style>
@@ -21,11 +21,11 @@ html = """
   .card p { margin: 8px 0; }
 </style></head>
 <body>
-  <h1>Rapport de test</h1>
+  <h1>Test Report</h1>
   <div class="card">
-    <p><strong>Projet :</strong> ferropdf</p>
-    <p><strong>Version :</strong> 0.1.0</p>
-    <p><strong>Status :</strong> Tous les tests passent</p>
+    <p><strong>Project:</strong> ferropdf</p>
+    <p><strong>Version:</strong> 0.1.0</p>
+    <p><strong>Status:</strong> All tests passing</p>
   </div>
 </body>
 </html>
@@ -33,9 +33,9 @@ html = """
 ferropdf.write_pdf(html, str(output_dir / "styled.pdf"))
 print(f"✓ {output_dir / 'styled.pdf'}")
 
-# 3. Facture
+# 3. Invoice
 invoice = open(Path(__file__).parent.parent / "tests" / "fixtures" / "invoice.html").read()
 ferropdf.write_pdf(invoice, str(output_dir / "invoice.pdf"))
 print(f"✓ {output_dir / 'invoice.pdf'}")
 
-print(f"\n📄 PDFs générés dans {output_dir}/")
+print(f"\n📄 PDFs generated in {output_dir}/")

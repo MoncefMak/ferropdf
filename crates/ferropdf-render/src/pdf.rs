@@ -9,30 +9,30 @@ use std::collections::HashMap;
 use std::io::Write;
 
 // =============================================================================
-// CONVERSION COORDONNÉES HTML/CSS → PDF
+// HTML/CSS → PDF COORDINATE CONVERSION
 // =============================================================================
 //
-// UNITÉ INTERNE : points typographiques (pt), 1 pt = 1/72 pouce
-// C'est l'unité native du format PDF → pas de conversion de taille nécessaire.
+// INTERNAL UNIT: typographic points (pt), 1 pt = 1/72 inch
+// This is the native PDF format unit → no size conversion needed.
 //
-// SEULE TRANSFORMATION : inversion de l'axe Y
-//   HTML/CSS : Y=0 en HAUT, Y augmente vers le BAS
-//   PDF      : Y=0 en BAS,  Y augmente vers le HAUT
-//   Formule  : pdf_y = page_height_pt - html_y_pt - html_height_pt
+// ONLY TRANSFORMATION: Y-axis inversion
+//   HTML/CSS: Y=0 at TOP, Y increases DOWNWARD
+//   PDF     : Y=0 at BOTTOM, Y increases UPWARD
+//   Formula : pdf_y = page_height_pt - html_y_pt - html_height_pt
 // =============================================================================
 
-/// Rectangle en coordonnées PDF (origine bas-gauche, unité = points).
+/// Rectangle in PDF coordinates (origin bottom-left, unit = points).
 #[derive(Debug, Clone, Copy)]
 struct PdfRect {
-    x: f32,      // points, depuis le bord gauche
-    y: f32,      // points, depuis le bord BAS (convention PDF)
+    x: f32,      // points, from the left edge
+    y: f32,      // points, from the BOTTOM edge (PDF convention)
     width: f32,  // points
     height: f32, // points
 }
 
-/// Convertit un rectangle (origine haut-gauche, pt)
-/// en rectangle PDF (origine bas-gauche, pt).
-/// Seule l'axe Y est inversé, pas de changement d'unité.
+/// Converts a rectangle (origin top-left, pt)
+/// to a PDF rectangle (origin bottom-left, pt).
+/// Only the Y-axis is inverted, no unit change.
 fn to_pdf_rect(x: f32, y: f32, width: f32, height: f32, page_height_pt: f32) -> PdfRect {
     PdfRect {
         x,
@@ -42,8 +42,8 @@ fn to_pdf_rect(x: f32, y: f32, width: f32, height: f32, page_height_pt: f32) -> 
     }
 }
 
-/// Convertit une coordonnée Y ponctuelle (pt, depuis le haut)
-/// vers PDF (pt, depuis le bas).
+/// Converts a point Y coordinate (pt, from top)
+/// to PDF (pt, from bottom).
 fn y_to_pdf(y: f32, page_height_pt: f32) -> f32 {
     page_height_pt - y
 }

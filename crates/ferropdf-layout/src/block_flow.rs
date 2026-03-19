@@ -1,31 +1,31 @@
 // =============================================================================
-// block_flow.rs — Algorithme de layout Block Flow (CSS 2.1 §8.3.1)
+// block_flow.rs — Block Flow Layout Algorithm (CSS 2.1 §8.3.1)
 // =============================================================================
-// Traduit depuis les algorithmes de Blink (BSD licence) :
+// Translated from Blink's algorithms (BSD licence):
 //   blink/renderer/core/layout/layout_block_flow.cc
 //   blink/renderer/core/layout/layout_block.cc
 //
-// Ce module s'exécute APRÈS Taffy comme un post-pass.
-// Taffy calcule les dimensions (width, height, padding, border).
-// Ce module corrige les positions Y pour le margin collapsing
-// et applique position: relative/absolute.
+// This module runs AFTER Taffy as a post-pass.
+// Taffy computes dimensions (width, height, padding, border).
+// This module corrects Y positions for margin collapsing
+// and applies position: relative/absolute.
 // =============================================================================
 
 use ferropdf_core::{ComputedStyle, Display as FDisplay, LayoutBox, LayoutTree, Length, Position};
 
 // =============================================================================
-// STRUCTURES DE DONNÉES
+// DATA STRUCTURES
 // =============================================================================
 
-/// Contexte de block formatting — stocke l'état courant du layout.
-/// Inspiré de BlockFormattingContext dans Blink LayoutNG.
+/// Block formatting context — stores the current layout state.
+/// Inspired by BlockFormattingContext in Blink LayoutNG.
 #[derive(Debug)]
 struct BlockFormattingContext {
-    /// Position Y courante dans le flux (curseur vertical)
+    /// Current Y position in the flow (vertical cursor)
     current_y: f32,
-    /// Marge bottom du bloc précédent (pour le margin collapsing)
+    /// Bottom margin of the previous block (for margin collapsing)
     pending_margin_bottom: f32,
-    /// Largeur du containing block
+    /// Width of the containing block
     containing_width: f32,
 }
 
@@ -40,11 +40,11 @@ impl BlockFormattingContext {
 }
 
 // =============================================================================
-// POINT D'ENTRÉE PRINCIPAL
+// MAIN ENTRY POINT
 // =============================================================================
 
-/// Applique le block flow layout sur un LayoutTree existant.
-/// Corrige les positions Y après le passage de Taffy.
+/// Applies block flow layout on an existing LayoutTree.
+/// Corrects Y positions after the Taffy pass.
 pub fn apply_block_flow(layout_tree: &mut LayoutTree, page_width: f32) {
     if let Some(ref mut root) = layout_tree.root {
         let mut ctx = BlockFormattingContext::new(page_width);
@@ -53,11 +53,11 @@ pub fn apply_block_flow(layout_tree: &mut LayoutTree, page_width: f32) {
 }
 
 // =============================================================================
-// LAYOUT DES ENFANTS BLOC — VERSION RÉCURSIVE
-// Inspiré de LayoutBlockFlow::LayoutBlockChild() dans Blink
+// BLOCK CHILDREN LAYOUT — RECURSIVE VERSION
+// Inspired by LayoutBlockFlow::LayoutBlockChild() in Blink
 // =============================================================================
 
-/// Applique le margin collapsing + positionnement sur les enfants d'un layout_box.
+/// Applies margin collapsing + positioning on the children of a layout_box.
 fn layout_block_children(parent: &mut LayoutBox, ctx: &mut BlockFormattingContext) {
     // Block flow only applies to block-level containers.
     // Skip tables (grid), flex, inline — their children are positioned by Taffy.
@@ -81,18 +81,18 @@ fn layout_block_children(parent: &mut LayoutBox, ctx: &mut BlockFormattingContex
     let parent_height = parent.rect.height;
     let parent_width = ctx.containing_width;
 
-    // Si le parent a border-top ou padding-top, il crée un nouveau BFC
-    // → les marges des enfants ne fusionnent pas avec l'extérieur
+    // If the parent has border-top or padding-top, it creates a new BFC
+    // → children's margins do not collapse with the outside
     let creates_new_bfc = parent.border.top > 0.0
         || resolve_length_to_px(&parent.style.padding[0], parent_width) > 0.0;
 
     let mut child_ctx = if creates_new_bfc {
-        // Nouveau BFC: curseur part du bord intérieur du parent (après padding-top)
+        // New BFC: cursor starts from the inner edge of the parent (after padding-top)
         let mut bfc = BlockFormattingContext::new(parent_width);
         bfc.current_y = parent_y + parent.border.top + parent.padding.top;
         bfc
     } else {
-        // Pas de BFC propre: utiliser le contexte du parent
+        // No own BFC: use the parent's context
         let mut bfc = BlockFormattingContext::new(parent_width);
         bfc.current_y = parent_y;
         bfc.pending_margin_bottom = ctx.pending_margin_bottom;
@@ -126,15 +126,15 @@ fn layout_block_children(parent: &mut LayoutBox, ctx: &mut BlockFormattingContex
         let is_empty = is_empty_block(&child.style, block_height);
 
         // ─── MARGIN COLLAPSING ──────────────────────────────────────────
-        // CSS 2.1 §8.3.1 : la marge effective entre deux frères est
-        // max(margin_bottom_précédent, margin_top_courant)
-        // et NON leur somme.
+        // CSS 2.1 §8.3.1: the effective margin between two siblings is
+        // max(previous_margin_bottom, current_margin_top)
+        // and NOT their sum.
         let effective_top_margin = collapse_margins(child_ctx.pending_margin_bottom, margin_top);
 
-        // Positionner le bloc à current_y + marge effective
+        // Position the block at current_y + effective margin
         let block_y = child_ctx.current_y + effective_top_margin;
 
-        // Mettre à jour la position Y du LayoutBox
+        // Update the LayoutBox Y position
         let dy = block_y - child.rect.y;
         if dy.abs() > 0.001 && std::env::var("FERROPDF_DEBUG").is_ok() {
             let _tag = child.node_id.map(|_| "").unwrap_or("");
@@ -161,7 +161,7 @@ fn layout_block_children(parent: &mut LayoutBox, ctx: &mut BlockFormattingContex
             shift_subtree_y(&mut child.children, dy);
         }
 
-        // Récurser dans les enfants — for block containers, this recalculates
+        // Recurse into children — for block containers, this recalculates
         // children positions (overriding the shift above when appropriate).
         layout_block_children(child, &mut child_ctx);
 
@@ -170,14 +170,14 @@ fn layout_block_children(parent: &mut LayoutBox, ctx: &mut BlockFormattingContex
             apply_relative_position(child, parent_width, parent_height);
         }
 
-        // Avancer le curseur Y
+        // Advance the Y cursor
         child_ctx.current_y = block_y + block_height;
 
-        // Mémoriser la marge bottom pour le prochain frère
+        // Store the bottom margin for the next sibling
         child_ctx.pending_margin_bottom = margin_bottom;
 
-        // ─── MARGIN COLLAPSING BLOC VIDE ────────────────────────────────
-        // CSS 2.1 §8.3.1 cas 4
+        // ─── EMPTY BLOCK MARGIN COLLAPSING ──────────────────────────────
+        // CSS 2.1 §8.3.1 case 4
         if is_empty {
             child_ctx.pending_margin_bottom = collapse_margins(margin_top, margin_bottom);
             child_ctx.current_y = block_y;
@@ -202,14 +202,14 @@ fn shift_subtree_y(children: &mut [LayoutBox], dy: f32) {
 }
 
 // =============================================================================
-// ALGORITHME DE MARGIN COLLAPSING
-// CSS 2.1 §8.3.1 — traduit depuis Blink CollapseMargins()
+// MARGIN COLLAPSING ALGORITHM
+// CSS 2.1 §8.3.1 — translated from Blink CollapseMargins()
 // =============================================================================
 
-/// Fusionne deux marges verticales adjacentes.
-/// - Les deux positives → max(a, b)
-/// - Les deux négatives → min(a, b)
-/// - Une positive, une négative → somme algébrique
+/// Collapses two adjacent vertical margins.
+/// - Both positive → max(a, b)
+/// - Both negative → min(a, b)
+/// - One positive, one negative → algebraic sum
 fn collapse_margins(margin_a: f32, margin_b: f32) -> f32 {
     match (margin_a >= 0.0, margin_b >= 0.0) {
         (true, true) => margin_a.max(margin_b),
@@ -219,8 +219,8 @@ fn collapse_margins(margin_a: f32, margin_b: f32) -> f32 {
 }
 
 // =============================================================================
-// POSITIONNEMENT (position: relative)
-// Inspiré de LayoutBox::ApplyRelativePositionIfNeeded() dans Blink
+// POSITIONING (position: relative)
+// Inspired by LayoutBox::ApplyRelativePositionIfNeeded() in Blink
 // CSS 2.1 §9.4.3
 // =============================================================================
 
@@ -236,7 +236,7 @@ fn apply_relative_position(
     let offset_top = resolve_length_to_px(&style.top, containing_height);
     let offset_bottom = resolve_length_to_px(&style.bottom, containing_height);
 
-    // Si left et right sont tous deux spécifiés, left l'emporte (LTR)
+    // If both left and right are specified, left wins (LTR)
     let dx = if style.left != Length::Auto {
         offset_left
     } else if style.right != Length::Auto {
@@ -261,8 +261,8 @@ fn apply_relative_position(
 // HELPERS
 // =============================================================================
 
-/// Vérifie si un bloc est "vide" au sens CSS margin collapsing.
-/// CSS 2.1 §8.3.1 cas 4
+/// Checks if a block is "empty" in the CSS margin collapsing sense.
+/// CSS 2.1 §8.3.1 case 4
 fn is_empty_block(style: &ComputedStyle, height: f32) -> bool {
     if height != 0.0 {
         return false;
@@ -276,7 +276,7 @@ fn is_empty_block(style: &ComputedStyle, height: f32) -> bool {
         && style.border_bottom.width == 0.0
 }
 
-/// Convertit une valeur Length CSS en pixels absolus.
+/// Converts a CSS Length value to absolute pixels.
 fn resolve_length_to_px(length: &Length, containing_width: f32) -> f32 {
     match length {
         Length::Pt(v) => *v,
@@ -291,7 +291,7 @@ fn resolve_length_to_px(length: &Length, containing_width: f32) -> f32 {
 }
 
 // =============================================================================
-// TESTS UNITAIRES
+// UNIT TESTS
 // =============================================================================
 
 #[cfg(test)]
@@ -299,22 +299,22 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_collapse_deux_positifs() {
+    fn test_collapse_two_positives() {
         assert_eq!(collapse_margins(30.0, 20.0), 30.0);
     }
 
     #[test]
-    fn test_collapse_deux_negatifs() {
+    fn test_collapse_two_negatives() {
         assert_eq!(collapse_margins(-10.0, -20.0), -20.0);
     }
 
     #[test]
-    fn test_collapse_positif_negatif() {
+    fn test_collapse_positive_negative() {
         assert_eq!(collapse_margins(30.0, -10.0), 20.0);
     }
 
     #[test]
-    fn test_collapse_symetrique() {
+    fn test_collapse_symmetric() {
         assert_eq!(collapse_margins(48.0, 48.0), 48.0);
     }
 

@@ -53,9 +53,48 @@ fn paint_box(
     // Borders
     paint_borders(layout_box, ops, rect);
 
+    // Merged inline text — render with per-segment styling
+    if !layout_box.inline_spans.is_empty() && !layout_box.shaped_lines.is_empty() {
+        let text_x = layout_box.content.x + offset_x;
+        // Use this box's own content width for alignment (not parent's),
+        // because merge_inline_children shaped text at this box's width.
+        let align_container = layout_box.content.width;
+        for line in &layout_box.shaped_lines {
+            if line.segments.is_empty() {
+                continue;
+            }
+            let line_y = layout_box.content.y + offset_y + line.y;
+
+            // Compute text-align offset for the whole line
+            let align_offset = match style.text_align {
+                ferropdf_core::TextAlign::Right => align_container - line.width,
+                ferropdf_core::TextAlign::Center => (align_container - line.width) / 2.0,
+                _ => 0.0,
+            };
+
+            for seg in &line.segments {
+                if seg.text.trim().is_empty() {
+                    continue;
+                }
+                let span = &layout_box.inline_spans[seg.metadata];
+                ops.push(DrawOp::DrawText {
+                    text: seg.text.clone(),
+                    x: text_x + seg.x_offset + align_offset,
+                    y: line_y,
+                    font_size: span.font_size,
+                    color: span.color,
+                    font_family: vec![span.font_family.clone()],
+                    bold: span.bold,
+                    italic: span.italic,
+                    text_align: ferropdf_core::TextAlign::Left,
+                    container_width: 0.0,
+                });
+            }
+        }
+    }
     // Text content — use shaped_lines from cosmic-text when available,
     // otherwise fall back to full text (will be re-wrapped in pdf.rs).
-    if let Some(ref text) = layout_box.text_content {
+    else if let Some(ref text) = layout_box.text_content {
         let text = text.trim();
         if !text.is_empty() {
             let text_x = layout_box.content.x + offset_x;

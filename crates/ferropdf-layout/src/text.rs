@@ -1,32 +1,32 @@
 use cosmic_text::{Attrs, Buffer, Family, FontSystem, Metrics, Shaping};
-use ferropdf_core::layout::{ShapedGlyph, ShapedLine};
+use ferropdf_core::layout::{InlineSpan, ShapedGlyph, ShapedLine, ShapedSegment};
 use std::sync::Mutex;
 use taffy::prelude::*;
 
 /// Context attached to text leaf nodes in the Taffy tree.
 /// Stores the info cosmic-text needs to measure the text on demand.
-/// Toutes les valeurs (font_size, line_height) sont en points typographiques (pt).
+/// All values (font_size, line_height) are in typographic points (pt).
 #[derive(Debug, Clone)]
 pub struct TextContext {
     pub text: String,
-    pub font_size: f32,   // en pt
-    pub line_height: f32, // en pt
+    pub font_size: f32,   // in pt
+    pub line_height: f32, // in pt
     pub font_family: String,
     pub bold: bool,
     pub italic: bool,
 }
 
 // =============================================================================
-// FontDatabase — Wrappeur autour de cosmic_text::FontSystem
+// FontDatabase — Wrapper around cosmic_text::FontSystem
 // =============================================================================
-// cosmic_text::FontSystem n'est pas Send → doit être confiné au thread Rust
-// ou protégé par Mutex si accès multi-thread.
-// Ce wrappeur fournit les méthodes measure() et get_layout_runs() utilisées
-// par le callback de Taffy et par la pagination pour l'extraction des lignes.
+// cosmic_text::FontSystem is not Send → must be confined to the Rust thread
+// or protected by a Mutex for multi-thread access.
+// This wrapper provides measure() and get_layout_runs() methods used
+// by the Taffy callback and by pagination for line extraction.
 // =============================================================================
 
-/// Wrappeur thread-safe autour de cosmic_text::FontSystem.
-/// Centralise l'accès aux polices et le shaping typographique.
+/// Thread-safe wrapper around cosmic_text::FontSystem.
+/// Centralizes font access and typographic shaping.
 pub struct FontDatabase {
     inner: Mutex<FontSystem>,
 }
@@ -38,15 +38,15 @@ impl Default for FontDatabase {
 }
 
 impl FontDatabase {
-    /// Crée une nouvelle FontDatabase avec les polices système chargées.
+    /// Create a new FontDatabase with system fonts loaded.
     pub fn new() -> Self {
         Self {
             inner: Mutex::new(FontSystem::new()),
         }
     }
 
-    /// Mesure un bloc de texte avec wrapping à la largeur donnée.
-    /// Retourne (width, height) en points typographiques.
+    /// Measure a text block with wrapping at the given width.
+    /// Returns (width, height) in typographic points.
     #[allow(clippy::too_many_arguments)]
     pub fn measure(
         &self,
@@ -92,14 +92,14 @@ impl FontDatabase {
         (w.ceil(), h.ceil())
     }
 
-    /// Accède au FontSystem interne (nécessaire pour les appels Taffy
-    /// qui requièrent &mut FontSystem directement).
+    /// Access the internal FontSystem (needed for Taffy calls
+    /// that require &mut FontSystem directly).
     pub fn font_system_mut(&self) -> std::sync::MutexGuard<'_, FontSystem> {
         self.inner.lock().unwrap()
     }
 
-    /// Accède au fontdb::Database interne de cosmic-text (lecture seule).
-    /// Permet de réutiliser la même base de polices pour l'écriture PDF.
+    /// Access the internal cosmic-text fontdb::Database (read-only).
+    /// Allows reusing the same font database for PDF writing.
     pub fn fontdb(&self) -> FontDbGuard<'_> {
         FontDbGuard {
             guard: self.inner.lock().unwrap(),
@@ -249,6 +249,7 @@ pub fn shape_text_lines(
                 y: glyph.y,
                 advance: glyph.w,
                 font_id: 0, // fontdb::ID is opaque; not needed for PDF rendering
+                metadata: 0,
             });
         }
 
@@ -257,6 +258,134 @@ pub fn shape_text_lines(
             width: run.line_w,
             y: run.line_y,
             text: line_text,
+            segments: Vec::new(),
+        });
+    }
+
+    lines
+}
+
+/// Shape merged inline text using cosmic-text's rich text API.
+/// Each InlineSpan maps to a cosmic-text span with per-span bold/italic/font_family.
+/// Returns ShapedLines with per-segment metadata linking back to the span index.
+pub fn shape_rich_text_lines(
+    spans: &[InlineSpan],
+    content_width: f32,
+    font_system: &mut FontSystem,
+) -> Vec<ShapedLine> {
+    if spans.is_empty() {
+        return Vec::new();
+    }
+
+    let font_size = spans[0].font_size;
+    let line_height = spans[0].line_height;
+    let metrics = Metrics::new(font_size, line_height);
+    let mut buffer = Buffer::new(font_system, metrics);
+    buffer.set_size(font_system, Some(content_width), None);
+
+    // Build per-span Attrs with metadata = span index
+    let rich_spans: Vec<(&str, Attrs)> = spans
+        .iter()
+        .enumerate()
+        .map(|(i, span)| {
+            let family = if span.font_family.is_empty() {
+                Family::SansSerif
+            } else {
+                Family::Name(&span.font_family)
+            };
+            let mut attrs = Attrs::new().family(family).metadata(i);
+            if span.bold {
+                attrs = attrs.weight(cosmic_text::Weight::BOLD);
+            }
+            if span.italic {
+                attrs = attrs.style(cosmic_text::Style::Italic);
+            }
+            (span.text.as_str(), attrs)
+        })
+        .collect();
+
+    let default_family = if spans[0].font_family.is_empty() {
+        Family::SansSerif
+    } else {
+        Family::Name(&spans[0].font_family)
+    };
+    let default_attrs = Attrs::new().family(default_family);
+
+    buffer.set_rich_text(font_system, rich_spans, default_attrs, Shaping::Advanced);
+    buffer.shape_until_scroll(font_system, false);
+
+    let mut lines = Vec::new();
+
+    for run in buffer.layout_runs() {
+        let mut glyphs = Vec::new();
+        let mut segments: Vec<ShapedSegment> = Vec::new();
+        let mut current_meta = usize::MAX;
+        let mut seg_start_byte = usize::MAX;
+        let mut seg_end_byte: usize = 0;
+        let mut seg_x: f32 = 0.0;
+
+        for glyph in run.glyphs.iter() {
+            if glyph.metadata != current_meta {
+                // Flush previous segment
+                if current_meta != usize::MAX && seg_start_byte < seg_end_byte {
+                    let seg_text = run
+                        .text
+                        .get(seg_start_byte..seg_end_byte)
+                        .unwrap_or("")
+                        .to_string();
+                    segments.push(ShapedSegment {
+                        text: seg_text,
+                        x_offset: seg_x,
+                        metadata: current_meta,
+                    });
+                }
+                current_meta = glyph.metadata;
+                seg_start_byte = glyph.start;
+                seg_end_byte = glyph.end;
+                seg_x = glyph.x;
+            } else {
+                seg_end_byte = seg_end_byte.max(glyph.end);
+            }
+
+            glyphs.push(ShapedGlyph {
+                glyph_id: glyph.glyph_id,
+                x: glyph.x,
+                y: glyph.y,
+                advance: glyph.w,
+                font_id: 0,
+                metadata: glyph.metadata,
+            });
+        }
+
+        // Flush last segment
+        if current_meta != usize::MAX && seg_start_byte < seg_end_byte {
+            let seg_text = run
+                .text
+                .get(seg_start_byte..seg_end_byte)
+                .unwrap_or("")
+                .to_string();
+            segments.push(ShapedSegment {
+                text: seg_text,
+                x_offset: seg_x,
+                metadata: current_meta,
+            });
+        }
+
+        // Build full line text
+        let line_text = if !run.glyphs.is_empty() {
+            let min_start = run.glyphs.iter().map(|g| g.start).min().unwrap();
+            let max_end = run.glyphs.iter().map(|g| g.end).max().unwrap();
+            run.text.get(min_start..max_end).unwrap_or("").to_string()
+        } else {
+            String::new()
+        };
+
+        lines.push(ShapedLine {
+            glyphs,
+            width: run.line_w,
+            y: run.line_y,
+            text: line_text,
+            segments,
         });
     }
 

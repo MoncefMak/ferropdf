@@ -1,27 +1,27 @@
 // =============================================================================
-// pagination.rs — Algorithme de fragmentation et pagination PDF
+// pagination.rs — PDF fragmentation and pagination algorithm
 // =============================================================================
-// Source d'inspiration :
+// Inspiration:
 //   CSS Fragmentation Module Level 3
 //   https://www.w3.org/TR/css-break-3/
 //
-//   Blink fragmentation utils :
+//   Blink fragmentation utils:
 //   blink/renderer/core/layout/fragmentation_utils.cc
 //   blink/renderer/core/layout/ng/ng_block_break_token.cc
 //
-// Ce module s'exécute APRÈS Taffy + block_flow.
-// Il prend le LayoutTree (ruban infini de contenu) et le découpe en pages.
+// This module runs AFTER Taffy + block_flow.
+// It takes the LayoutTree (infinite ribbon of content) and slices it into pages.
 //
-// MODÈLE MENTAL :
-//   Le ruban de contenu infini (positions Y de 0 à +∞) est découpé
-//   en pages. On parcourt les blocs enfants de la racine et on les
-//   place un par un sur la page courante. Quand un bloc ne tient pas,
-//   on le fragmente (récursivement dans ses enfants) ou on le pousse
-//   sur la page suivante.
+// MENTAL MODEL:
+//   The infinite content ribbon (Y positions from 0 to +∞) is sliced
+//   into pages. We iterate over the root's child blocks and place them
+//   one by one on the current page. When a block doesn't fit,
+//   we fragment it (recursively into its children) or push it
+//   to the next page.
 //
-//   La variable clé est `page_y_offset` : la coordonnée Y absolue
-//   dans le ruban qui correspond à Y=0 sur la page courante.
-//   Pour repositionner un bloc sur la page :
+//   The key variable is `page_y_offset`: the absolute Y coordinate
+//   in the ribbon that corresponds to Y=0 on the current page.
+//   To reposition a block on the page:
 //     y_on_page = y_absolute - page_y_offset
 // =============================================================================
 
@@ -29,21 +29,21 @@ use ferropdf_core::layout::Page;
 use ferropdf_core::{Insets, LayoutBox, PageBreak, PageBreakInside, PageConfig, Rect};
 
 // =============================================================================
-// STRUCTURES DE DONNÉES
+// DATA STRUCTURES
 // =============================================================================
 
-/// État courant du paginateur — inspiré de FragmentainerContext dans Blink.
+/// Current state of the paginator — inspired by FragmentainerContext in Blink.
 #[derive(Debug)]
 struct PaginationContext {
-    /// Position Y absolue (dans le ruban) correspondant au haut de la page courante.
+    /// Absolute Y position (in the ribbon) corresponding to the top of the current page.
     page_y_offset: f32,
-    /// Hauteur consommée sur la page courante (pour savoir combien d'espace reste).
+    /// Height consumed on the current page (to know how much space remains).
     used_height: f32,
-    /// Contenu de la page en cours de construction.
+    /// Content of the page being built.
     current_page_boxes: Vec<LayoutBox>,
-    /// Pages déjà terminées.
+    /// Already completed pages.
     finished_pages: Vec<Page>,
-    /// Hauteur d'une page (content area, en CSS pixels).
+    /// Height of a page (content area, in CSS pixels).
     page_height: f32,
 }
 
@@ -58,15 +58,15 @@ impl PaginationContext {
         }
     }
 
-    /// Espace restant sur la page courante.
+    /// Remaining space on the current page.
     #[allow(dead_code)]
     fn remaining_height(&self) -> f32 {
         (self.page_height - self.used_height).max(0.0)
     }
 
-    /// Flush la page courante et commence une nouvelle.
-    /// `next_y` est la position Y absolue du prochain élément à placer
-    /// (utilisé pour définir page_y_offset de la nouvelle page).
+    /// Flush the current page and start a new one.
+    /// `next_y` is the absolute Y position of the next element to place
+    /// (used to set page_y_offset of the new page).
     fn flush_page(&mut self, next_y: f32) {
         if !self.current_page_boxes.is_empty() {
             let page_number = self.finished_pages.len() as u32 + 1;
@@ -87,26 +87,26 @@ impl PaginationContext {
 }
 
 // =============================================================================
-// POINT D'ENTRÉE PRINCIPAL
+// MAIN ENTRY POINT
 // =============================================================================
 
-/// Fragmente un LayoutTree root en pages PDF.
-/// Toutes les coordonnées sont en points typographiques (pt).
+/// Fragments a LayoutTree root into PDF pages.
+/// All coordinates are in typographic points (pt).
 pub fn paginate(root: &LayoutBox, config: &PageConfig) -> Vec<Page> {
     let page_height = config.content_height_pt();
     let mut ctx = PaginationContext::new(page_height);
 
-    // Traiter les enfants directs de la racine
+    // Process the root's direct children
     for child in &root.children {
         fragment_box(child, &mut ctx);
     }
 
-    // Flush la dernière page si non vide
+    // Flush the last page if not empty
     if !ctx.is_current_page_empty() {
         ctx.flush_page(0.0);
     }
 
-    // Si aucune page n'a été produite, créer une page vide
+    // If no pages were produced, create an empty page
     if ctx.finished_pages.is_empty() {
         ctx.finished_pages.push(Page {
             page_number: 1,
@@ -126,7 +126,7 @@ pub fn paginate(root: &LayoutBox, config: &PageConfig) -> Vec<Page> {
 }
 
 // =============================================================================
-// FRAGMENTATION D'UN LAYOUT BOX
+// LAYOUT BOX FRAGMENTATION
 // CSS Fragmentation Level 3 §4 — Fragmentation Model
 // =============================================================================
 
@@ -134,7 +134,7 @@ fn fragment_box(layout_box: &LayoutBox, ctx: &mut PaginationContext) {
     let style = &layout_box.style;
     let box_height = layout_box.rect.height;
 
-    // ─── Règle 1 : page-break-before ────────────────────────────────────────
+    // ─── Rule 1: page-break-before ────────────────────────────────────────
     if should_break_before(style) && !ctx.is_current_page_empty() {
         ctx.flush_page(layout_box.rect.y);
     }
@@ -145,7 +145,7 @@ fn fragment_box(layout_box: &LayoutBox, ctx: &mut PaginationContext) {
     let fits_on_current_page = box_bottom_on_page <= ctx.page_height;
     let fits_on_new_page = box_height <= ctx.page_height;
 
-    // ─── Règle 2 : page-break-inside: avoid ─────────────────────────────────
+    // ─── Rule 2: page-break-inside: avoid ─────────────────────────────────
     let avoid_break_inside = style.page_break_inside == PageBreakInside::Avoid;
 
     if !fits_on_current_page && avoid_break_inside && fits_on_new_page {
@@ -158,9 +158,9 @@ fn fragment_box(layout_box: &LayoutBox, ctx: &mut PaginationContext) {
         }
         return;
     }
-    // Le bloc est plus grand qu'une page → on ne peut pas éviter la coupure.
+    // The block is taller than a page → we cannot avoid the break.
 
-    // ─── Règle 3 : Le bloc tient sur la page courante ───────────────────────
+    // ─── Rule 3: The block fits on the current page ───────────────────────
     if fits_on_current_page {
         place_box_on_current_page(layout_box, ctx);
         if should_break_after(style) {
@@ -169,18 +169,18 @@ fn fragment_box(layout_box: &LayoutBox, ctx: &mut PaginationContext) {
         return;
     }
 
-    // ─── Règle 4 : Le bloc ne tient pas → fragmentation ─────────────────────
+    // ─── Rule 4: The block doesn't fit → fragmentation ─────────────────────
     if !layout_box.children.is_empty() {
         // Create a container fragment on the current page (preserves background/borders)
         fragment_container(layout_box, ctx);
     } else {
-        // Boîte feuille (texte, image, etc.)
+        // Leaf box (text, image, etc.)
         if ctx.is_current_page_empty() {
-            // Force : même trop grande, on la met sur la page vide (anti-boucle infinie)
+            // Force: even if too large, place it on the empty page (anti-infinite-loop)
             place_box_on_current_page(layout_box, ctx);
             ctx.flush_page(layout_box.rect.y + layout_box.rect.height);
         } else {
-            // Pousse sur la page suivante
+            // Push to the next page
             ctx.flush_page(layout_box.rect.y);
             place_box_on_current_page(layout_box, ctx);
             if box_height > ctx.page_height {
@@ -189,18 +189,18 @@ fn fragment_box(layout_box: &LayoutBox, ctx: &mut PaginationContext) {
         }
     }
 
-    // ─── Règle 5 : page-break-after ─────────────────────────────────────────
+    // ─── Rule 5: page-break-after ─────────────────────────────────────────
     if should_break_after(style) && !ctx.is_current_page_empty() {
         ctx.flush_page(layout_box.rect.y + layout_box.rect.height);
     }
 }
 
 // =============================================================================
-// FRAGMENTATION D'UN CONTENEUR
-// Quand un conteneur ne tient pas sur la page courante, on distribue
-// ses enfants entre la page courante et les suivantes, en créant des
-// "wrapper fragments" sur chaque page pour préserver le contexte visuel
-// (background, borders) du conteneur parent.
+// CONTAINER FRAGMENTATION
+// When a container doesn't fit on the current page, we distribute
+// its children between the current page and subsequent ones, creating
+// "wrapper fragments" on each page to preserve the visual context
+// (background, borders) of the parent container.
 // =============================================================================
 
 fn fragment_container(layout_box: &LayoutBox, ctx: &mut PaginationContext) {
@@ -338,6 +338,7 @@ fn make_container_fragment(
         margin: Insets::zero(),
         children: children.to_vec(),
         shaped_lines: Vec::new(),
+        inline_spans: Vec::new(),
         image_src: None,
         text_content: None,
         out_of_flow: false,
@@ -347,8 +348,8 @@ fn make_container_fragment(
 }
 
 // =============================================================================
-// PLACEMENT D'UNE BOX SUR LA PAGE COURANTE
-// Repositionnement Y : y_page = y_absolute - page_y_offset
+// PLACING A BOX ON THE CURRENT PAGE
+// Y repositioning: y_page = y_absolute - page_y_offset
 // =============================================================================
 
 fn place_box_on_current_page(layout_box: &LayoutBox, ctx: &mut PaginationContext) {
@@ -371,7 +372,7 @@ fn offset_y_recursive(layout_box: &mut LayoutBox, dy: f32) {
 }
 
 // =============================================================================
-// HELPERS — Détection des règles CSS de fragmentation
+// HELPERS — CSS fragmentation rule detection
 // =============================================================================
 
 fn should_break_before(style: &ferropdf_core::ComputedStyle) -> bool {
@@ -388,7 +389,7 @@ fn should_break_after(style: &ferropdf_core::ComputedStyle) -> bool {
     )
 }
 
-/// Crée une page vide.
+/// Creates an empty page.
 pub fn create_empty_page(_config: &PageConfig) -> Page {
     Page {
         page_number: 1,
@@ -399,22 +400,22 @@ pub fn create_empty_page(_config: &PageConfig) -> Page {
 }
 
 // =============================================================================
-// BREAK UNITS — Extraction des unités sécables depuis l'arbre LayoutBox
+// BREAK UNITS — Extracting breakable units from the LayoutBox tree
 // =============================================================================
-// Après le layout Taffy + shaping cosmic-text, on construit une liste PLATE
-// d'unités sécables. Chaque unité est la plus petite entité déplaçable sans
-// casser le sens du document.
+// After the Taffy layout + cosmic-text shaping, we build a FLAT list
+// of breakable units. Each unit is the smallest movable entity without
+// breaking the document's meaning.
 //
-// Types de BreakUnit :
-//   - TextLine  : une ligne individuelle issue des shaped_lines du LayoutBox
-//   - Atomic    : bloc non sécable (image, tableau avec break-inside:avoid)
-//   - ForcedBreak : marqueur de saut de page forcé (break-before: page)
+// BreakUnit types:
+//   - TextLine  : an individual line from the LayoutBox's shaped_lines
+//   - Atomic    : non-breakable block (image, table with break-inside:avoid)
+//   - ForcedBreak : forced page break marker (break-before: page)
 // =============================================================================
 
 use ferropdf_core::layout::BreakUnit;
 
-/// Extraire les unités sécables depuis l'arbre de LayoutBox.
-/// Parcourt l'arbre récursivement et produit une liste plate de BreakUnit.
+/// Extract breakable units from the LayoutBox tree.
+/// Recursively traverses the tree and produces a flat list of BreakUnit.
 pub fn extract_break_units(root: &LayoutBox) -> Vec<BreakUnit> {
     let mut units = Vec::new();
     for child in &root.children {
@@ -477,25 +478,26 @@ fn extract_recursive(lb: &LayoutBox, units: &mut Vec<BreakUnit>) {
 }
 
 // =============================================================================
-// find_break_point — Algorithme de recherche du point de coupure intelligent
+// find_break_point — Intelligent break point search algorithm
 // =============================================================================
-// Prend la liste de BreakUnit, la limite de page (page_bottom), et les paramètres
-// orphelines/veuves. Retourne l'index du premier BreakUnit de la page suivante.
+// Takes the list of BreakUnit, the page limit (page_bottom), and the
+// orphans/widows parameters. Returns the index of the first BreakUnit
+// of the next page.
 //
-// Étapes :
-//   1. Index naïf — première BreakUnit dont y_top >= page_bottom
-//   2. Correction orphelines — si trop peu de lignes d'un paragraphe en fin de page
-//   3. Correction veuves — si trop peu de lignes d'un paragraphe en début de page suivante
-//   4. Intégrité des atomiques — pas de coupure au milieu d'un Atomic
-//   5. Sauts forcés — ForcedBreak prend priorité
+// Steps:
+//   1. Naive index — first BreakUnit whose y_top >= page_bottom
+//   2. Orphans correction — if too few lines of a paragraph at end of page
+//   3. Widows correction — if too few lines of a paragraph at start of next page
+//   4. Atomic integrity — no break in the middle of an Atomic
+//   5. Forced breaks — ForcedBreak takes priority
 // =============================================================================
 
-/// Trouver le point de coupure optimal dans la liste de BreakUnit.
+/// Find the optimal break point in the BreakUnit list.
 ///
-/// Retourne l'index du premier BreakUnit qui doit aller sur la page suivante.
-/// `page_top` est la coordonnée Y absolue du haut de la page courante.
-/// `page_height` est la hauteur de la zone de contenu de la page.
-/// `min_orphans` et `min_widows` sont les minimums CSS (défaut = 2).
+/// Returns the index of the first BreakUnit that must go on the next page.
+/// `page_top` is the absolute Y coordinate of the top of the current page.
+/// `page_height` is the height of the page's content area.
+/// `min_orphans` and `min_widows` are the CSS minimums (default = 2).
 pub fn find_break_point(
     units: &[BreakUnit],
     page_top: f32,
@@ -505,13 +507,13 @@ pub fn find_break_point(
 ) -> usize {
     let page_bottom = page_top + page_height;
 
-    // Étape 1 — Index naïf : première unité qui dépasse la page
+    // Step 1 — Naive index: first unit that exceeds the page
     let mut naive_index = units.len();
     for (i, unit) in units.iter().enumerate() {
         if let BreakUnit::ForcedBreak = unit {
-            // Un saut forcé avant l'index naïf prend priorité (étape 5)
+            // A forced break before the naive index takes priority (step 5)
             if unit.y_top() <= page_bottom || i < naive_index {
-                return i + 1; // Le ForcedBreak est consommé, la page suivante commence après
+                return i + 1; // The ForcedBreak is consumed, next page starts after
             }
         }
         if unit.y_bottom() > page_bottom && naive_index == units.len() {
@@ -520,7 +522,7 @@ pub fn find_break_point(
     }
 
     if naive_index == 0 {
-        // Rien ne tient sur cette page — force au moins une unité (anti-boucle infinie)
+        // Nothing fits on this page — force at least one unit (anti-infinite-loop)
         return 1.min(units.len());
     }
     if naive_index >= units.len() {
@@ -529,33 +531,33 @@ pub fn find_break_point(
 
     let mut break_index = naive_index;
 
-    // Étape 2 — Correction orphelines
+    // Step 2 — Orphans correction
     break_index = adjust_for_orphans(units, break_index, min_orphans);
 
-    // Étape 3 — Correction veuves
+    // Step 3 — Widows correction
     break_index = adjust_for_widows(units, break_index, min_widows);
 
-    // Étape 4 — Intégrité des atomiques
+    // Step 4 — Atomic integrity
     break_index = enforce_atomic_integrity(units, break_index);
 
     break_index.clamp(1, units.len())
 }
 
-/// Correction orphelines : si moins de `min_orphans` lignes du même paragraphe
-/// sont présentes juste avant le point de coupure, on recule l'index pour
-/// emporter ces lignes sur la page suivante.
+/// Orphans correction: if fewer than `min_orphans` lines of the same paragraph
+/// are present just before the break point, move the index back to carry
+/// those lines to the next page.
 fn adjust_for_orphans(units: &[BreakUnit], break_idx: usize, min_orphans: u32) -> usize {
     if break_idx == 0 || break_idx >= units.len() || min_orphans < 2 {
         return break_idx;
     }
 
-    // Regarder l'unité juste avant le break
+    // Look at the unit just before the break
     if let BreakUnit::TextLine {
         parent_node: Some(parent),
         ..
     } = &units[break_idx - 1]
     {
-        // Compter combien de lignes de ce paragraphe sont juste avant l'index
+        // Count how many lines of this paragraph are just before the index
         let mut orphan_count = 0u32;
         let mut i = break_idx;
         while i > 0 {
@@ -572,7 +574,7 @@ fn adjust_for_orphans(units: &[BreakUnit], break_idx: usize, min_orphans: u32) -
         }
 
         if orphan_count > 0 && orphan_count < min_orphans {
-            // Remonter l'index pour emporter ces lignes orphelines
+            // Move the index back to carry these orphan lines
             return break_idx - orphan_count as usize;
         }
     }
@@ -580,20 +582,20 @@ fn adjust_for_orphans(units: &[BreakUnit], break_idx: usize, min_orphans: u32) -
     break_idx
 }
 
-/// Correction veuves : si moins de `min_widows` lignes du même paragraphe
-/// seront au début de la page suivante, ajuster.
+/// Widows correction: if fewer than `min_widows` lines of the same paragraph
+/// will be at the start of the next page, adjust.
 fn adjust_for_widows(units: &[BreakUnit], break_idx: usize, min_widows: u32) -> usize {
     if break_idx >= units.len() || min_widows < 2 {
         return break_idx;
     }
 
-    // Regarder l'unité au point de coupure (première de la page suivante)
+    // Look at the unit at the break point (first on the next page)
     if let BreakUnit::TextLine {
         parent_node: Some(parent),
         ..
     } = &units[break_idx]
     {
-        // Compter combien de lignes de ce paragraphe seront au début de la page suivante
+        // Count how many lines of this paragraph will be at the start of the next page
         let mut widow_count = 0u32;
         for unit in &units[break_idx..] {
             match unit {
@@ -608,7 +610,7 @@ fn adjust_for_widows(units: &[BreakUnit], break_idx: usize, min_widows: u32) -> 
         }
 
         if widow_count > 0 && widow_count < min_widows {
-            // Reculer l'index pour ajouter des lignes à la page suivante
+            // Move the index back to add lines to the next page
             let lines_to_pull = min_widows - widow_count;
             if break_idx > lines_to_pull as usize {
                 return break_idx - lines_to_pull as usize;
@@ -619,16 +621,16 @@ fn adjust_for_widows(units: &[BreakUnit], break_idx: usize, min_widows: u32) -> 
     break_idx
 }
 
-/// Intégrité des atomiques : si l'index tombe au milieu d'un Atomic,
-/// reculer l'index jusqu'avant le début de cet Atomic.
+/// Atomic integrity: if the index falls in the middle of an Atomic,
+/// move the index back to before the start of that Atomic.
 fn enforce_atomic_integrity(units: &[BreakUnit], break_idx: usize) -> usize {
     if break_idx >= units.len() {
         return break_idx;
     }
 
-    // Si l'unité au break est un Atomic, on ne peut pas couper au milieu
-    // → on garde le break_idx tel quel (il pointe déjà au début de l'Atomic)
-    // Si l'unité juste avant est un Atomic dont le bas dépasse, on recule
+    // If the unit at the break is an Atomic, we cannot break in the middle
+    // → we keep break_idx as is (it already points to the start of the Atomic)
+    // If the unit just before is an Atomic whose bottom exceeds, we move back
     if break_idx > 0 {
         if let BreakUnit::Atomic { .. } = &units[break_idx - 1] {
             // L'Atomic est entièrement sur la page courante — OK

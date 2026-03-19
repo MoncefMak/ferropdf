@@ -30,8 +30,8 @@ impl Length {
         matches!(self, Length::None)
     }
 
-    /// Résoudre en points typographiques (pt) quand le contexte est connu.
-    /// Retourne None pour Auto, None, Percent (résolu par Taffy).
+    /// Resolve to typographic points (pt) when context is known.
+    /// Returns None for Auto, None, Percent (resolved by Taffy).
     ///
     /// Facteurs de conversion :
     ///   1 px = 72/96 pt = 0.75 pt

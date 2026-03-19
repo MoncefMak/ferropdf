@@ -1,13 +1,13 @@
 // =============================================================================
-// table_layout.rs — Algorithme de layout de tableaux CSS (§17.5)
+// table_layout.rs — CSS Table Layout Algorithm (§17.5)
 // =============================================================================
-// Traduit depuis les algorithmes de Blink (BSD licence) :
+// Based on Blink’s algorithms (BSD license):
 //   blink/renderer/core/layout/layout_table.cc
 //   blink/renderer/core/layout/layout_table_cell.cc
 //
-// Ce module s'exécute AVANT Taffy.
-// Il calcule les largeurs de colonnes et hauteurs de lignes, puis construit
-// les TrackSizingFunction Taffy pour le CSS Grid.
+// This module runs BEFORE Taffy.
+// It computes column widths and row heights, then builds
+// Taffy TrackSizingFunction for CSS Grid.
 // =============================================================================
 
 use cosmic_text::{Attrs, Buffer, Family, FontSystem, Metrics, Shaping, Wrap};
@@ -19,10 +19,10 @@ use taffy::{
 };
 
 // =============================================================================
-// STRUCTURES DE DONNÉES
+// DATA STRUCTURES
 // =============================================================================
 
-/// Résultat du calcul de layout d'un tableau.
+/// Result of a table layout computation.
 #[derive(Debug)]
 pub struct TableLayoutResult {
     pub column_widths: Vec<f32>,
@@ -34,10 +34,10 @@ pub struct TableLayoutResult {
 }
 
 // =============================================================================
-// POINT D'ENTRÉE — CALCUL COMPLET DU TABLE LAYOUT
+// ENTRY POINT — FULL TABLE LAYOUT COMPUTATION
 // =============================================================================
 
-/// Calcule le layout complet d'un tableau: colonnes, lignes, tracks Taffy.
+/// Compute the full table layout: columns, rows, Taffy tracks.
 ///
 /// 4 phases (CSS 2.1 §17.5):
 ///   0. Build table grid (collect rows/cells from DOM)
@@ -91,8 +91,8 @@ pub fn compute_table_layout(
 }
 
 // =============================================================================
-// PHASE 1 — CALCUL DES LARGEURS DE COLONNES
-// CSS 2.1 §17.5.2 (fixed) + §17.5.3 (auto simplifié)
+// PHASE 1 — COLUMN WIDTH COMPUTATION
+// CSS 2.1 §17.5.2 (fixed) + §17.5.3 (simplified auto)
 // =============================================================================
 
 fn compute_column_widths(
@@ -103,7 +103,7 @@ fn compute_column_widths(
     styles: &StyleTree,
     font_system: &mut FontSystem,
 ) -> Vec<f32> {
-    // Étape 1: Fixed widths from CSS width on first cell of each column
+    // Step 1: Fixed widths from CSS width on first cell of each column
     let fixed_widths: Vec<Option<f32>> = (0..num_cols)
         .map(|col_idx| {
             rows.iter()
@@ -118,7 +118,7 @@ fn compute_column_widths(
         })
         .collect();
 
-    // Étape 2: Min-content width per column
+    // Step 2: Min-content width per column
     let min_content_widths: Vec<f32> = (0..num_cols)
         .map(|col_idx| {
             rows.iter()
@@ -143,7 +143,7 @@ fn compute_column_widths(
         })
         .collect();
 
-    // Étape 3: Distribution
+    // Step 3: Distribution
     let fixed_total: f32 = fixed_widths.iter().filter_map(|w| *w).sum();
     let available_for_flexible = (table_width - fixed_total).max(0.0);
 
@@ -241,7 +241,7 @@ pub fn build_taffy_row_tracks(row_heights: &[f32]) -> Vec<TrackSizingFunction> {
 }
 
 // =============================================================================
-// MESURES DE TEXTE VIA COSMIC-TEXT
+// TEXT MEASUREMENT VIA COSMIC-TEXT
 // =============================================================================
 
 fn measure_min_content_width(
@@ -287,7 +287,7 @@ fn measure_text_height(
 }
 
 // =============================================================================
-// HELPERS DOM
+// DOM HELPERS
 // =============================================================================
 
 /// Collect all rows in a table. Each row is a Vec of cell NodeIds.

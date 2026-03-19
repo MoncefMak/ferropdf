@@ -159,10 +159,10 @@ pub enum PageBreakInside {
     Avoid,
 }
 
-/// CSS box-decoration-break : comportement des bordures/fond quand un conteneur
-/// est fragmenté sur plusieurs pages.
-///   clone → bordures et padding répétés sur chaque fragment
-///   slice → découpe franche sans répétition des décorations (défaut CSS)
+/// CSS box-decoration-break: behavior of borders/background when a container
+/// is fragmented across multiple pages.
+///   clone → borders and padding repeated on each fragment
+///   slice → clean cut without repeating decorations (CSS default)
 #[derive(Debug, Clone, PartialEq, Default)]
 pub enum BoxDecorationBreak {
     #[default]
@@ -228,15 +228,15 @@ impl BorderRadius {
     }
 }
 
-/// Toutes les propriétés résolues en valeurs absolues.
-/// Pas de em/rem ici. Les Percent sont gardés pour Taffy (layout).
+/// All properties resolved to absolute values.
+/// No em/rem here. Percentages are kept for Taffy (layout).
 #[derive(Debug, Clone)]
 pub struct ComputedStyle {
     pub display: Display,
     pub position: Position,
     pub visibility: bool,
 
-    // Dimensions (Percent passé à Taffy, Auto passé à Taffy)
+    // Dimensions (Percent passed to Taffy, Auto passed to Taffy)
     pub width: Length,
     pub height: Length,
     pub min_width: Length,
@@ -255,12 +255,12 @@ pub struct ComputedStyle {
     pub border_left: BorderSide,
     pub border_radius: BorderRadius,
 
-    // Couleurs et fond
+    // Colors and background
     pub color: Color,
     pub background_color: Color,
     pub opacity: f32,
 
-    // Texte (toutes les valeurs en px)
+    // Text (all values in px)
     pub font_family: Vec<String>,
     pub font_size: f32,
     pub font_weight: FontWeight,

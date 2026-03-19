@@ -396,6 +396,7 @@ fn read_layout(
         margin,
         children,
         shaped_lines: Vec::new(),
+        inline_spans: Vec::new(),
         image_src,
         text_content,
         out_of_flow: false,

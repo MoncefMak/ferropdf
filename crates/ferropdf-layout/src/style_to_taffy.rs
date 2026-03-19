@@ -1,10 +1,10 @@
 use ferropdf_core::{ComputedStyle, Length};
 use taffy::prelude::*;
 
-/// Convertir ComputedStyle → taffy::Style
-/// Taffy gère automatiquement :
-/// - width:100% résolu par rapport au containing block (Fix 1)
-/// - padding soustrait une seule fois (Fix 2)
+/// Convert ComputedStyle → taffy::Style
+/// Taffy automatically handles:
+/// - width:100% resolved relative to containing block (Fix 1)
+/// - padding subtracted only once (Fix 2)
 /// - flex, grid, block layout
 pub fn convert(style: &ComputedStyle) -> taffy::Style {
     taffy::Style {

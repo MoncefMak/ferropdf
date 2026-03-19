@@ -1,7 +1,7 @@
 """
-Paramétrage minimal Django pour l'exemple ferropdf.
+Minimal Django settings for the ferropdf example.
 
-Lancer :
+Run:
     pip install django
     cd examples/django_app
     python manage.py runserver

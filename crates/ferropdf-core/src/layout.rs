@@ -1,4 +1,26 @@
-use crate::{ComputedStyle, Insets, NodeId, Rect};
+use crate::{Color, ComputedStyle, Insets, NodeId, Rect};
+
+/// A styled text span from inline element merging.
+/// When a block container has all-inline children (text, <strong>, <em>, etc.),
+/// their text is merged into a single paragraph with per-span styling.
+#[derive(Debug, Clone)]
+pub struct InlineSpan {
+    pub text: String,
+    pub font_size: f32,
+    pub line_height: f32,
+    pub font_family: String,
+    pub bold: bool,
+    pub italic: bool,
+    pub color: Color,
+}
+
+/// A styled segment within a shaped line (populated for rich/inline-merged text).
+#[derive(Debug, Clone)]
+pub struct ShapedSegment {
+    pub text: String,
+    pub x_offset: f32,
+    pub metadata: usize,
+}
 
 #[derive(Debug, Clone)]
 pub struct ShapedGlyph {
@@ -7,6 +29,7 @@ pub struct ShapedGlyph {
     pub y: f32,
     pub advance: f32,
     pub font_id: u64,
+    pub metadata: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -16,49 +39,51 @@ pub struct ShapedLine {
     pub y: f32,
     /// The text content of this line (for encoding in the PDF).
     pub text: String,
+    /// Per-segment styling info (non-empty only for inline-merged rich text).
+    pub segments: Vec<ShapedSegment>,
 }
 
 // =============================================================================
-// BreakUnit — Unité sécable pour la pagination intelligente
+// BreakUnit — Breakable unit for smart pagination
 // =============================================================================
-// Après le layout Taffy + shaping cosmic-text, on construit une liste PLATE
-// d'unités sécables. Chaque unité est la plus petite entité déplaçable sans
-// casser le sens du document.
+// After Taffy layout + cosmic-text shaping, we build a flat list of breakable
+// units. Each unit is the smallest entity that can be moved without breaking
+// the document's meaning.
 // =============================================================================
 
-/// Une unité sécable — la plus petite entité qui peut être déplacée
-/// sans casser le sens du document.
+/// A breakable unit — the smallest entity that can be moved
+/// without breaking the document's meaning.
 #[derive(Debug, Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum BreakUnit {
-    /// Une ligne individuelle issue des layout_runs() de cosmic-text.
+    /// A single line from cosmic-text layout_runs().
     TextLine {
-        /// Coordonnée Y du haut de la ligne (espace continu absolu, en pt).
+        /// Y coordinate of the line top (absolute continuous space, in pt).
         y_top: f32,
-        /// Coordonnée Y du bas de la ligne (espace continu absolu, en pt).
+        /// Y coordinate of the line bottom (absolute continuous space, in pt).
         y_bottom: f32,
-        /// Index de la ligne dans son paragraphe parent.
+        /// Line index within its parent paragraph.
         line_index: usize,
-        /// NodeId du nœud texte parent (pour regrouper les lignes d'un même paragraphe).
+        /// NodeId of the parent text node (to group lines from the same paragraph).
         parent_node: Option<NodeId>,
-        /// Contenu shapé de la ligne.
+        /// Shaped content of the line.
         content: ShapedLine,
     },
-    /// Bloc non sécable (image, conteneur avec break-inside: avoid).
+    /// Non-breakable block (image, container with break-inside: avoid).
     Atomic {
-        /// Coordonnée Y du haut du bloc (espace continu absolu, en pt).
+        /// Y coordinate of the block top (absolute continuous space, in pt).
         y_top: f32,
-        /// Coordonnée Y du bas du bloc (espace continu absolu, en pt).
+        /// Y coordinate of the block bottom (absolute continuous space, in pt).
         y_bottom: f32,
-        /// Le LayoutBox complet.
+        /// The complete LayoutBox.
         node: LayoutBox,
     },
-    /// Marqueur de saut de page forcé (break-before: page).
+    /// Forced page break marker (break-before: page).
     ForcedBreak,
 }
 
 impl BreakUnit {
-    /// Y du haut de l'unité dans l'espace continu (pt).
+    /// Y of the unit's top in continuous space (pt).
     pub fn y_top(&self) -> f32 {
         match self {
             BreakUnit::TextLine { y_top, .. } => *y_top,
@@ -67,7 +92,7 @@ impl BreakUnit {
         }
     }
 
-    /// Y du bas de l'unité dans l'espace continu (pt).
+    /// Y of the unit's bottom in continuous space (pt).
     pub fn y_bottom(&self) -> f32 {
         match self {
             BreakUnit::TextLine { y_bottom, .. } => *y_bottom,
@@ -89,6 +114,9 @@ pub struct LayoutBox {
     pub margin: Insets,
     pub children: Vec<LayoutBox>,
     pub shaped_lines: Vec<ShapedLine>,
+    /// Inline span styles for merged rich text.
+    /// When non-empty, shaped_lines contain per-segment metadata referencing these spans.
+    pub inline_spans: Vec<InlineSpan>,
     pub image_src: Option<String>,
     pub text_content: Option<String>,
     /// True if this box is absolutely positioned (out of normal flow).
@@ -110,6 +138,7 @@ impl Default for LayoutBox {
             margin: Insets::zero(),
             children: Vec::new(),
             shaped_lines: Vec::new(),
+            inline_spans: Vec::new(),
             image_src: None,
             text_content: None,
             out_of_flow: false,
@@ -163,7 +192,7 @@ impl LayoutTree {
     }
 }
 
-/// Une page paginée = un sous-ensemble du LayoutTree
+/// A paginated page = a subset of the LayoutTree
 #[derive(Debug, Clone)]
 pub struct Page {
     pub page_number: u32,

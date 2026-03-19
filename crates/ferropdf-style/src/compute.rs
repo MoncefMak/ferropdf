@@ -4,16 +4,25 @@ use ferropdf_core::*;
 pub fn apply_tag_defaults(style: &mut ComputedStyle, tag: Option<&str>) {
     match tag {
         Some("b") | Some("strong") => {
+            style.display = Display::Inline;
             style.font_weight = FontWeight::Bold;
         }
         Some("i") | Some("em") => {
+            style.display = Display::Inline;
             style.font_style = FontStyle::Italic;
         }
         Some("a") => {
+            style.display = Display::Inline;
             style.text_decoration = style::TextDecoration::Underline;
             if style.color == Color::black() {
                 style.color = Color::from_hex("#0000ee").unwrap_or(Color::black());
             }
+        }
+        Some("span") | Some("code") | Some("kbd") | Some("samp") | Some("var") | Some("abbr")
+        | Some("cite") | Some("dfn") | Some("q") | Some("small") | Some("sub") | Some("sup")
+        | Some("time") | Some("mark") | Some("s") | Some("u") | Some("del") | Some("ins")
+        | Some("label") => {
+            style.display = Display::Inline;
         }
         _ => {}
     }
