@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1773920787360,
+  "lastUpdate": 1774392542826,
   "repoUrl": "https://github.com/MoncefMak/ferropdf",
   "entries": {
     "FastPDF Criterion Benchmarks": [
@@ -1207,6 +1207,54 @@ window.BENCHMARK_DATA = {
             "name": "render_invoice_cached",
             "value": 919656,
             "range": "± 9328",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "moncefmak@users.noreply.github.com",
+            "name": "Makti Moncef",
+            "username": "MoncefMak"
+          },
+          "committer": {
+            "email": "moncefmak@users.noreply.github.com",
+            "name": "Makti Moncef",
+            "username": "MoncefMak"
+          },
+          "distinct": true,
+          "id": "3cafa380d1e5ffd983feb150d46672eda167878b",
+          "message": "Remove pagination and table layout modules\n\n- Deleted `pagination.rs`, which contained the algorithm for PDF pagination and fragmentation based on CSS Fragmentation Module Level 3.\n- Deleted `table_layout.rs`, which included the algorithm for CSS table layout, including column width and row height calculations based on CSS 2.1 specifications.",
+          "timestamp": "2026-03-23T08:32:36+01:00",
+          "tree_id": "cf81f511505678fec979b1a465fb3b2a3fec798c",
+          "url": "https://github.com/MoncefMak/ferropdf/commit/3cafa380d1e5ffd983feb150d46672eda167878b"
+        },
+        "date": 1774392542346,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "render_simple",
+            "value": 3837458,
+            "range": "± 28589",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice",
+            "value": 4549008,
+            "range": "± 88676",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_simple_cached",
+            "value": 238374,
+            "range": "± 2125",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice_cached",
+            "value": 912752,
+            "range": "± 8670",
             "unit": "ns/iter"
           }
         ]
