@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1774392542826,
+  "lastUpdate": 1774733853985,
   "repoUrl": "https://github.com/MoncefMak/ferropdf",
   "entries": {
     "FastPDF Criterion Benchmarks": [
@@ -1255,6 +1255,54 @@ window.BENCHMARK_DATA = {
             "name": "render_invoice_cached",
             "value": 912752,
             "range": "± 8670",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "moncefmak@users.noreply.github.com",
+            "name": "Makti Moncef",
+            "username": "MoncefMak"
+          },
+          "committer": {
+            "email": "moncefmak@users.noreply.github.com",
+            "name": "Makti Moncef",
+            "username": "MoncefMak"
+          },
+          "distinct": true,
+          "id": "382a4e1be15c17e32e1ad7f2527261b905b43f61",
+          "message": "chore: bump version to 0.2.5, add full benchmark suite\n\nBump all crate versions and pyproject.toml to 0.2.5.\nAdd comprehensive benchmark (bench/benchmark_full.py) covering raw speed,\nengine reuse, concurrent rendering, PDF size, FastAPI/Django simulation,\nand head-to-head comparison with WeasyPrint (15.4x avg speedup).\n\nCo-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>",
+          "timestamp": "2026-03-28T22:33:42+01:00",
+          "tree_id": "2fc98bea27ea208a0885f94074e82eba975004df",
+          "url": "https://github.com/MoncefMak/ferropdf/commit/382a4e1be15c17e32e1ad7f2527261b905b43f61"
+        },
+        "date": 1774733853590,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "render_simple",
+            "value": 3499599,
+            "range": "± 37650",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice",
+            "value": 4219558,
+            "range": "± 19296",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_simple_cached",
+            "value": 235910,
+            "range": "± 1968",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice_cached",
+            "value": 913011,
+            "range": "± 3006",
             "unit": "ns/iter"
           }
         ]
