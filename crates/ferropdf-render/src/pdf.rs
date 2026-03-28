@@ -1,7 +1,7 @@
 use crate::display_list::{DrawOp, PageDisplayList};
 use crate::font_subsetter::{
-    encode_for_cid_font, encode_winansi, load_font_data, subset_font, write_cid_font,
-    EmbeddedFont, FontKey,
+    encode_for_cid_font, encode_winansi, load_font_data, subset_font, write_cid_font, EmbeddedFont,
+    FontKey,
 };
 use crate::RenderOptions;
 use ferropdf_core::{FerroError, PageConfig};

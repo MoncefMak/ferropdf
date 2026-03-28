@@ -109,7 +109,17 @@ fn build_taffy_tree(
     font_system: &mut FontSystem,
     available_width: f32,
 ) -> ferropdf_core::Result<()> {
-    build_taffy_tree_inner(doc, node_id, styles, taffy, node_map, table_cell_parent, font_system, available_width, 0)
+    build_taffy_tree_inner(
+        doc,
+        node_id,
+        styles,
+        taffy,
+        node_map,
+        table_cell_parent,
+        font_system,
+        available_width,
+        0,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]

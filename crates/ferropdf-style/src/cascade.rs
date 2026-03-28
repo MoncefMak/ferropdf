@@ -111,7 +111,10 @@ fn apply_single(
             style.position = match raw {
                 "relative" => Position::Relative,
                 "absolute" | "fixed" | "sticky" => {
-                    log::warn!("ferropdf: position:{} is parsed but not rendered — treated as static", raw);
+                    log::warn!(
+                        "ferropdf: position:{} is parsed but not rendered — treated as static",
+                        raw
+                    );
                     // Stored as Static; the warning is emitted via log for now.
                     Position::Static
                 }
@@ -613,13 +616,21 @@ mod tests {
     #[test]
     fn parse_length_to_pt_px() {
         let result = parse_length_to_pt("16px").unwrap();
-        assert!((result - 12.0).abs() < 0.01, "16px should be 12pt, got {}", result);
+        assert!(
+            (result - 12.0).abs() < 0.01,
+            "16px should be 12pt, got {}",
+            result
+        );
     }
 
     #[test]
     fn parse_length_to_pt_mm() {
         let result = parse_length_to_pt("10mm").unwrap();
-        assert!((result - 28.346).abs() < 0.01, "10mm should be ~28.35pt, got {}", result);
+        assert!(
+            (result - 28.346).abs() < 0.01,
+            "10mm should be ~28.35pt, got {}",
+            result
+        );
     }
 
     #[test]
@@ -652,14 +663,24 @@ mod tests {
     #[test]
     fn apply_display_block() {
         let mut style = ComputedStyle::default();
-        apply_single(&mut style, &CssProperty::Display, &CssValue::String("flex".into()), 12.0);
+        apply_single(
+            &mut style,
+            &CssProperty::Display,
+            &CssValue::String("flex".into()),
+            12.0,
+        );
         assert_eq!(style.display, Display::Flex);
     }
 
     #[test]
     fn apply_font_weight() {
         let mut style = ComputedStyle::default();
-        apply_single(&mut style, &CssProperty::FontWeight, &CssValue::String("bold".into()), 12.0);
+        apply_single(
+            &mut style,
+            &CssProperty::FontWeight,
+            &CssValue::String("bold".into()),
+            12.0,
+        );
         assert_eq!(style.font_weight, FontWeight::Bold);
         assert!(style.font_weight.is_bold());
     }
@@ -667,7 +688,12 @@ mod tests {
     #[test]
     fn apply_margin_shorthand_two_values() {
         let mut style = ComputedStyle::default();
-        apply_single(&mut style, &CssProperty::Margin, &CssValue::String("10px 20px".into()), 12.0);
+        apply_single(
+            &mut style,
+            &CssProperty::Margin,
+            &CssValue::String("10px 20px".into()),
+            12.0,
+        );
         assert_eq!(style.margin[0], Length::Px(10.0)); // top
         assert_eq!(style.margin[1], Length::Px(20.0)); // right
         assert_eq!(style.margin[2], Length::Px(10.0)); // bottom
@@ -677,7 +703,12 @@ mod tests {
     #[test]
     fn apply_border_shorthand() {
         let mut style = ComputedStyle::default();
-        apply_single(&mut style, &CssProperty::Border, &CssValue::String("2px solid red".into()), 12.0);
+        apply_single(
+            &mut style,
+            &CssProperty::Border,
+            &CssValue::String("2px solid red".into()),
+            12.0,
+        );
         assert!((style.border_top.width - 1.5).abs() < 0.01); // 2px = 1.5pt
         assert_eq!(style.border_top.style, BorderStyle::Solid);
     }
@@ -685,20 +716,33 @@ mod tests {
     #[test]
     fn apply_opacity() {
         let mut style = ComputedStyle::default();
-        apply_single(&mut style, &CssProperty::Opacity, &CssValue::String("0.5".into()), 12.0);
+        apply_single(
+            &mut style,
+            &CssProperty::Opacity,
+            &CssValue::String("0.5".into()),
+            12.0,
+        );
         assert!((style.opacity - 0.5).abs() < 0.01);
     }
 
     #[test]
     fn resolve_font_size_em() {
         let result = resolve_font_size("2em", 12.0, 12.0);
-        assert!((result - 24.0).abs() < 0.01, "2em of 12pt = 24pt, got {}", result);
+        assert!(
+            (result - 24.0).abs() < 0.01,
+            "2em of 12pt = 24pt, got {}",
+            result
+        );
     }
 
     #[test]
     fn resolve_font_size_rem() {
         let result = resolve_font_size("1.5rem", 24.0, 12.0);
-        assert!((result - 18.0).abs() < 0.01, "1.5rem of 12pt root = 18pt, got {}", result);
+        assert!(
+            (result - 18.0).abs() < 0.01,
+            "1.5rem of 12pt root = 18pt, got {}",
+            result
+        );
     }
 
     #[test]
@@ -710,7 +754,11 @@ mod tests {
     #[test]
     fn resolve_font_size_percent() {
         let result = resolve_font_size("150%", 12.0, 12.0);
-        assert!((result - 18.0).abs() < 0.01, "150% of 12pt = 18pt, got {}", result);
+        assert!(
+            (result - 18.0).abs() < 0.01,
+            "150% of 12pt = 18pt, got {}",
+            result
+        );
     }
 }
 

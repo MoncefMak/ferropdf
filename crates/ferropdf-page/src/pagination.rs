@@ -597,7 +597,7 @@ pub fn create_empty_page(_config: &PageConfig) -> Page {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ferropdf_core::{ComputedStyle, PageMargins, PageSize, Orientation};
+    use ferropdf_core::{ComputedStyle, Orientation, PageMargins, PageSize};
 
     fn make_config(page_height: f32) -> PageConfig {
         PageConfig {
@@ -622,7 +622,10 @@ mod tests {
     }
 
     fn make_root(children: Vec<LayoutBox>) -> LayoutBox {
-        let total_height = children.iter().map(|c| c.rect.y + c.rect.height).fold(0.0f32, f32::max);
+        let total_height = children
+            .iter()
+            .map(|c| c.rect.y + c.rect.height)
+            .fold(0.0f32, f32::max);
         LayoutBox {
             rect: Rect::new(0.0, 0.0, 400.0, total_height),
             content: Rect::new(0.0, 0.0, 400.0, total_height),
@@ -643,10 +646,7 @@ mod tests {
     #[test]
     fn two_boxes_overflow_to_two_pages() {
         let config = make_config(200.0);
-        let root = make_root(vec![
-            make_box(0.0, 150.0),
-            make_box(150.0, 150.0),
-        ]);
+        let root = make_root(vec![make_box(0.0, 150.0), make_box(150.0, 150.0)]);
         let pages = paginate(&root, &config);
         assert_eq!(pages.len(), 2, "expected 2 pages, got {}", pages.len());
     }
@@ -708,4 +708,3 @@ mod tests {
         }
     }
 }
-

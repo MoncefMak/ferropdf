@@ -16,9 +16,7 @@ pub use color::Color;
 pub use dom::{Document, Node, NodeId, NodeType};
 pub use error::{FerroError, RenderWarning, Result};
 pub use geometry::{Insets, Point, Rect, Size};
-pub use layout::{
-    InlineSpan, LayoutBox, LayoutTree, ShapedGlyph, ShapedLine, ShapedSegment,
-};
+pub use layout::{InlineSpan, LayoutBox, LayoutTree, ShapedGlyph, ShapedLine, ShapedSegment};
 pub use length::Length;
 pub use page::{Orientation, PageConfig, PageMargins, PageSize};
 pub use style::{

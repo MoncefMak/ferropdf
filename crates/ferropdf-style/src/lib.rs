@@ -68,7 +68,10 @@ fn resolve_recursive(
     depth: usize,
 ) {
     if depth > ferropdf_core::MAX_DOM_DEPTH {
-        log::warn!("DOM depth limit ({}) exceeded, skipping subtree", ferropdf_core::MAX_DOM_DEPTH);
+        log::warn!(
+            "DOM depth limit ({}) exceeded, skipping subtree",
+            ferropdf_core::MAX_DOM_DEPTH
+        );
         return;
     }
 
@@ -104,6 +107,15 @@ fn resolve_recursive(
     tree.insert(node_id, style.clone());
 
     for &child in &node.children {
-        resolve_recursive(doc, child, rules, tree, Some(&style), root_font_size, nth_cache, depth + 1);
+        resolve_recursive(
+            doc,
+            child,
+            rules,
+            tree,
+            Some(&style),
+            root_font_size,
+            nth_cache,
+            depth + 1,
+        );
     }
 }

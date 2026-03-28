@@ -79,13 +79,21 @@ mod tests {
     #[test]
     fn em_resolves_to_font_size() {
         let result = Length::Em(2.0).to_pt(16.0, 12.0).unwrap();
-        assert!((result - 32.0).abs() < 0.01, "2em * 16pt = 32pt, got {}", result);
+        assert!(
+            (result - 32.0).abs() < 0.01,
+            "2em * 16pt = 32pt, got {}",
+            result
+        );
     }
 
     #[test]
     fn rem_resolves_to_root_font_size() {
         let result = Length::Rem(1.5).to_pt(24.0, 12.0).unwrap();
-        assert!((result - 18.0).abs() < 0.01, "1.5rem * 12pt = 18pt, got {}", result);
+        assert!(
+            (result - 18.0).abs() < 0.01,
+            "1.5rem * 12pt = 18pt, got {}",
+            result
+        );
     }
 
     #[test]
