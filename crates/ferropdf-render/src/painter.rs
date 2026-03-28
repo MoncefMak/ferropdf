@@ -271,7 +271,7 @@ fn paint_borders(layout_box: &LayoutBox, ops: &mut Vec<DrawOp>, rect: Rect) {
             rect: Rect::new(rect.x, rect.y, rect.width, 0.0),
             color: style.border_top.color,
             width: style.border_top.width,
-            style: style.border_top.style.clone(),
+            style: style.border_top.style,
         });
     }
 
@@ -281,7 +281,7 @@ fn paint_borders(layout_box: &LayoutBox, ops: &mut Vec<DrawOp>, rect: Rect) {
             rect: Rect::new(rect.right(), rect.y, 0.0, rect.height),
             color: style.border_right.color,
             width: style.border_right.width,
-            style: style.border_right.style.clone(),
+            style: style.border_right.style,
         });
     }
 
@@ -291,7 +291,7 @@ fn paint_borders(layout_box: &LayoutBox, ops: &mut Vec<DrawOp>, rect: Rect) {
             rect: Rect::new(rect.x, rect.bottom(), rect.width, 0.0),
             color: style.border_bottom.color,
             width: style.border_bottom.width,
-            style: style.border_bottom.style.clone(),
+            style: style.border_bottom.style,
         });
     }
 
@@ -301,7 +301,7 @@ fn paint_borders(layout_box: &LayoutBox, ops: &mut Vec<DrawOp>, rect: Rect) {
             rect: Rect::new(rect.x, rect.y, 0.0, rect.height),
             color: style.border_left.color,
             width: style.border_left.width,
-            style: style.border_left.style.clone(),
+            style: style.border_left.style,
         });
     }
 }

@@ -445,7 +445,7 @@ pub struct ScoredDeclaration {
 /// `ua_sheet_count` indicates how many of the leading sheets are UA stylesheets.
 /// UA rules get origin=0, author rules get origin=1. Per CSS Cascading Level 4,
 /// author rules always beat UA rules regardless of specificity.
-pub fn parse_rules(sheets: &[Stylesheet], ua_sheet_count: usize) -> Vec<MatchedRule> {
+pub fn parse_rules(sheets: &[&Stylesheet], ua_sheet_count: usize) -> Vec<MatchedRule> {
     let mut rules = Vec::new();
     let mut order = 0usize;
 
@@ -479,10 +479,14 @@ pub fn parse_rules(sheets: &[Stylesheet], ua_sheet_count: usize) -> Vec<MatchedR
 /// Match all rules against a node and return declarations scored with specificity.
 /// The `selectors` crate handles ALL matching logic: combinators, pseudo-classes,
 /// attribute selectors, :nth-child, etc.
+///
+/// `nth_cache` should be created once and reused across all nodes in the document
+/// to avoid O(n²) re-computation of :nth-child indices.
 pub fn match_node(
     doc: &Document,
     node_id: NodeId,
     rules: &[MatchedRule],
+    nth_cache: &mut NthIndexCache,
 ) -> Vec<ScoredDeclaration> {
     let node = doc.get(node_id);
     if node.node_type != NodeType::Element {
@@ -490,7 +494,6 @@ pub fn match_node(
     }
 
     let element = DomNode::new(doc, node_id);
-    let mut nth_cache = NthIndexCache::default();
     let mut result = Vec::new();
 
     for rule in rules {
@@ -498,7 +501,7 @@ pub fn match_node(
             let mut context = MatchingContext::new(
                 MatchingMode::Normal,
                 None, // no bloom filter
-                &mut nth_cache,
+                nth_cache,
                 QuirksMode::NoQuirks,
                 NeedsSelectorFlags::No,
                 IgnoreNthChildForInvalidation::No,

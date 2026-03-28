@@ -4,7 +4,8 @@ mod html;
 pub use html::parse_html;
 // Assure-toi d'avoir tes définitions CSS dans le module css/
 pub use css::{
-    parse_stylesheet, CssProperty, CssValue, Declaration, FontFaceRule, StyleRule, Stylesheet,
+    parse_inline_declarations, parse_stylesheet, CssProperty, CssValue, Declaration, FontFaceRule,
+    StyleRule, Stylesheet,
 };
 
 use ferropdf_core::{Document, Result};

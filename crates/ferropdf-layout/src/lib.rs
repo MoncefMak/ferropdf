@@ -75,12 +75,12 @@ fn populate_shaped_lines(lb: &mut LayoutBox, fs: &mut cosmic_text::FontSystem) {
     if let Some(ref txt) = lb.text_content {
         if !txt.trim().is_empty() && lb.shaped_lines.is_empty() {
             let style = &lb.style;
-            let font_family = style.font_family.first().cloned().unwrap_or_default();
+            let font_family = style.font_family.first().map(|s| s.as_str()).unwrap_or("");
             lb.shaped_lines = text::shape_text_lines(
                 txt,
                 style.font_size,
                 style.line_height,
-                &font_family,
+                font_family,
                 style.font_weight.is_bold(),
                 style.font_style == ferropdf_core::FontStyle::Italic,
                 lb.content.width,
@@ -128,8 +128,9 @@ fn is_mergeable_inline(lb: &LayoutBox, parent_fs: f32) -> bool {
 /// Merge inline children into a single rich-text buffer on the parent LayoutBox.
 fn merge_inline_children(lb: &mut LayoutBox, fs: &mut cosmic_text::FontSystem) {
     let mut spans = Vec::new();
-    for child in &lb.children {
-        collect_spans_from_layout_box(child, &mut spans);
+    // Single pass: collect spans and clear text content simultaneously
+    for child in &mut lb.children {
+        collect_and_clear(child, &mut spans);
     }
 
     if spans.is_empty() || spans.iter().all(|s| s.text.trim().is_empty()) {
@@ -143,20 +144,15 @@ fn merge_inline_children(lb: &mut LayoutBox, fs: &mut cosmic_text::FontSystem) {
     // Shape merged rich text at parent's content width
     lb.shaped_lines = text::shape_rich_text_lines(&spans, lb.content.width, fs);
     lb.inline_spans = spans;
-
-    // Clear children's text so painter doesn't double-draw
-    for child in &mut lb.children {
-        clear_text_recursive(child);
-    }
 }
 
-/// Recursively collect InlineSpans from a LayoutBox subtree.
-fn collect_spans_from_layout_box(lb: &LayoutBox, spans: &mut Vec<InlineSpan>) {
+/// Recursively collect InlineSpans and clear text content in a single pass.
+fn collect_and_clear(lb: &mut LayoutBox, spans: &mut Vec<InlineSpan>) {
     if lb.is_text_leaf() {
-        if let Some(ref text) = lb.text_content {
+        if let Some(text) = lb.text_content.take() {
             let style = &lb.style;
             spans.push(InlineSpan {
-                text: text.clone(),
+                text,
                 font_size: style.font_size,
                 line_height: style.line_height,
                 font_family: style.font_family.first().cloned().unwrap_or_default(),
@@ -167,17 +163,9 @@ fn collect_spans_from_layout_box(lb: &LayoutBox, spans: &mut Vec<InlineSpan>) {
             });
         }
     } else {
-        for child in &lb.children {
-            collect_spans_from_layout_box(child, spans);
+        for child in &mut lb.children {
+            collect_and_clear(child, spans);
         }
     }
-}
-
-/// Clear text content and shaped lines recursively so the painter skips these nodes.
-fn clear_text_recursive(lb: &mut LayoutBox) {
-    lb.text_content = None;
     lb.shaped_lines.clear();
-    for child in &mut lb.children {
-        clear_text_recursive(child);
-    }
 }

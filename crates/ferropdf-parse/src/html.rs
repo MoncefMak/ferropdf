@@ -89,7 +89,9 @@ impl TreeSink for DomSink {
 
         // Collecter les <link rel="stylesheet">
         if tag == "link"
-            && attr_map.get("rel").map(|s| s.to_lowercase()) == Some("stylesheet".to_string())
+            && attr_map
+                .get("rel")
+                .is_some_and(|s| s.eq_ignore_ascii_case("stylesheet"))
         {
             if let Some(href) = attr_map.get("href") {
                 self.external_sheets.push(href.clone());

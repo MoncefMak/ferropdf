@@ -99,43 +99,7 @@ pub fn write_pdf(
     let mut font_raw_data: HashMap<String, Vec<u8>> = HashMap::new(); // pdf_name → raw data
     let mut font_used_chars: HashMap<String, std::collections::HashSet<u16>> = HashMap::new(); // pdf_name → glyph IDs
 
-    // Phase 1: Discover which fonts are needed
-    for display_list in pages {
-        for op in &display_list.ops {
-            if let DrawOp::DrawText {
-                font_family,
-                bold,
-                italic,
-                ..
-            } = op
-            {
-                let family_name = font_family.first().cloned().unwrap_or_default();
-                let key = FontKey {
-                    family: family_name.clone(),
-                    bold: *bold,
-                    italic: *italic,
-                };
-                if font_cache.contains_key(&key) {
-                    continue;
-                }
-                // Try to resolve from system fonts
-                match load_font_data(font_db, &family_name, *bold, *italic) {
-                    Some(data) => {
-                        font_name_counter += 1;
-                        let pdf_name = format!("F{}", font_name_counter);
-                        font_raw_data.insert(pdf_name.clone(), data);
-                        font_used_chars.insert(pdf_name.clone(), std::collections::HashSet::new());
-                        font_cache.insert(key, Some(pdf_name));
-                    }
-                    None => {
-                        font_cache.insert(key, None);
-                    }
-                }
-            }
-        }
-    }
-
-    // Phase 2: Collect all glyph IDs used per font
+    // Single pass: discover fonts AND collect glyph IDs simultaneously
     for display_list in pages {
         for op in &display_list.ops {
             if let DrawOp::DrawText {
@@ -148,18 +112,35 @@ pub fn write_pdf(
             {
                 let family_name = font_family.first().cloned().unwrap_or_default();
                 let key = FontKey {
-                    family: family_name,
+                    family: family_name.clone(),
                     bold: *bold,
                     italic: *italic,
                 };
+                // Discover font on first encounter
+                if !font_cache.contains_key(&key) {
+                    match load_font_data(font_db, &family_name, *bold, *italic) {
+                        Some(data) => {
+                            font_name_counter += 1;
+                            let pdf_name = format!("F{}", font_name_counter);
+                            font_raw_data.insert(pdf_name.clone(), data);
+                            font_used_chars
+                                .insert(pdf_name.clone(), std::collections::HashSet::new());
+                            font_cache.insert(key.clone(), Some(pdf_name));
+                        }
+                        None => {
+                            font_cache.insert(key.clone(), None);
+                            continue;
+                        }
+                    }
+                }
+                // Collect glyph IDs for this text
                 if let Some(Some(pdf_name)) = font_cache.get(&key) {
                     if let (Some(raw_data), Some(used_gids)) = (
                         font_raw_data.get(pdf_name),
                         font_used_chars.get_mut(pdf_name),
                     ) {
                         if let Ok(face) = ttf_parser::Face::parse(raw_data, 0) {
-                            // Always include .notdef (GID 0)
-                            used_gids.insert(0);
+                            used_gids.insert(0); // .notdef
                             for ch in text.chars() {
                                 if let Some(gid) = face.glyph_index(ch) {
                                     used_gids.insert(gid.0);

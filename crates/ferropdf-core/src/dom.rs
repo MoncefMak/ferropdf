@@ -97,10 +97,9 @@ impl Document {
 
     /// Iterate over all nodes (pre-order depth-first)
     pub fn iter_preorder(&self, start: NodeId) -> PreorderIter<'_> {
-        PreorderIter {
-            doc: self,
-            stack: vec![start],
-        }
+        let mut stack = Vec::with_capacity(32);
+        stack.push(start);
+        PreorderIter { doc: self, stack }
     }
 }
 

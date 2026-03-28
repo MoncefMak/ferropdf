@@ -28,9 +28,10 @@ pub fn resolve(
     // Parse UA stylesheet
     let ua_sheet = ferropdf_parse::parse_stylesheet(ua_css)?;
 
-    // All sheets: UA first, then author sheets
-    let mut all_sheets = vec![ua_sheet];
-    all_sheets.extend(stylesheets.iter().cloned());
+    // All sheets: UA first, then author sheets (by reference — no cloning)
+    let mut all_sheets: Vec<&Stylesheet> = Vec::with_capacity(1 + stylesheets.len());
+    all_sheets.push(&ua_sheet);
+    all_sheets.extend(stylesheets.iter());
 
     // Parse all selector lists using the `selectors` crate.
     // UA sheet is the first one — author sheets follow.
@@ -39,6 +40,7 @@ pub fn resolve(
     let root = document.root();
     let mut style_tree = StyleTree::new();
     let root_font_size = 12.0_f32; // 16px × 0.75 = 12pt
+    let mut nth_cache = selectors::NthIndexCache::default();
 
     resolve_recursive(
         document,
@@ -47,6 +49,7 @@ pub fn resolve(
         &mut style_tree,
         None,
         root_font_size,
+        &mut nth_cache,
     );
 
     Ok(style_tree)
@@ -59,6 +62,7 @@ fn resolve_recursive(
     tree: &mut StyleTree,
     parent_style: Option<&ComputedStyle>,
     root_font_size: f32,
+    nth_cache: &mut selectors::NthIndexCache,
 ) {
     let node = doc.get(node_id);
 
@@ -69,23 +73,16 @@ fn resolve_recursive(
 
     if node.node_type == NodeType::Element {
         // Match stylesheet rules using the selectors crate
-        let mut scored = matching::match_node(doc, node_id, rules);
+        let mut scored = matching::match_node(doc, node_id, rules, nth_cache);
 
         // Apply matched declarations sorted by cascade (specificity + source order)
         cascade::apply_scored_declarations(&mut style, &mut scored, root_font_size);
 
         // Apply inline style attribute (highest specificity for non-!important)
         if let Some(inline) = node.attr("style") {
-            if let Ok(sheet) =
-                ferropdf_parse::parse_stylesheet(&format!("__inline__ {{ {} }}", inline))
-            {
-                for rule in &sheet.rules {
-                    cascade::apply_inline_declarations(
-                        &mut style,
-                        &rule.declarations,
-                        root_font_size,
-                    );
-                }
+            let declarations = ferropdf_parse::parse_inline_declarations(inline);
+            if !declarations.is_empty() {
+                cascade::apply_inline_declarations(&mut style, &declarations, root_font_size);
             }
         }
 
@@ -99,6 +96,6 @@ fn resolve_recursive(
     tree.insert(node_id, style.clone());
 
     for &child in &node.children {
-        resolve_recursive(doc, child, rules, tree, Some(&style), root_font_size);
+        resolve_recursive(doc, child, rules, tree, Some(&style), root_font_size, nth_cache);
     }
 }

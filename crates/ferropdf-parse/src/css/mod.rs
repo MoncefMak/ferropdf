@@ -1,7 +1,8 @@
 mod parser;
 
 pub use parser::{
-    parse_stylesheet, CssProperty, CssValue, Declaration, FontFaceRule, StyleRule, Stylesheet,
+    parse_inline_declarations, parse_stylesheet, CssProperty, CssValue, Declaration, FontFaceRule,
+    StyleRule, Stylesheet,
 };
 
 /// User-agent stylesheet embarqué

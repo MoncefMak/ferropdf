@@ -170,7 +170,7 @@ pub enum BoxDecorationBreak {
     Clone,
 }
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum BorderStyle {
     #[default]
     None,
@@ -202,7 +202,7 @@ pub enum ListStyleType {
     None,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct BorderSide {
     pub width: f32,
     pub color: Color,

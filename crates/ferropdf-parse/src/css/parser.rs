@@ -195,18 +195,25 @@ impl CssValue {
     }
 
     pub fn raw_string(&self) -> String {
+        self.to_cow().into_owned()
+    }
+
+    /// Return a Cow<str> to avoid allocation for simple string/keyword/color values.
+    pub fn to_cow(&self) -> std::borrow::Cow<'_, str> {
+        use std::borrow::Cow;
         match self {
-            CssValue::String(s) => s.clone(),
-            CssValue::Number(n) => n.to_string(),
-            CssValue::Length(v, u) => format!("{}{}", v, u),
-            CssValue::Percentage(v) => format!("{}%", v),
-            CssValue::Color(s) => s.clone(),
-            CssValue::Keyword(s) => s.clone(),
-            CssValue::Multiple(vals) => vals
-                .iter()
-                .map(|v| v.raw_string())
-                .collect::<Vec<_>>()
-                .join(" "),
+            CssValue::String(s) => Cow::Borrowed(s.as_str()),
+            CssValue::Keyword(s) => Cow::Borrowed(s.as_str()),
+            CssValue::Color(s) => Cow::Borrowed(s.as_str()),
+            CssValue::Number(n) => Cow::Owned(n.to_string()),
+            CssValue::Length(v, u) => Cow::Owned(format!("{}{}", v, u)),
+            CssValue::Percentage(v) => Cow::Owned(format!("{}%", v)),
+            CssValue::Multiple(vals) => Cow::Owned(
+                vals.iter()
+                    .map(|v| v.raw_string())
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            ),
         }
     }
 }
@@ -369,7 +376,7 @@ fn parse_font_face_rule(parser: &mut Parser<'_, '_>) -> Option<FontFaceRule> {
 
 fn parse_qualified_rule(parser: &mut Parser<'_, '_>) -> Option<StyleRule> {
     // Collect selector tokens until we hit '{'
-    let mut selector_text = String::new();
+    let mut selector_text = String::with_capacity(128);
     let start = parser.state();
 
     loop {
@@ -499,6 +506,22 @@ fn parse_css_value(raw: &str) -> CssValue {
 
     // Default: keyword or string
     CssValue::Keyword(raw.to_string())
+}
+
+/// Parse inline style declarations directly (e.g. from a `style=""` attribute).
+/// Avoids the overhead of wrapping in a fake CSS rule and parsing selectors.
+pub fn parse_inline_declarations(style_attr: &str) -> Vec<Declaration> {
+    let mut input = ParserInput::new(style_attr);
+    let mut parser = Parser::new(&mut input);
+    let mut decls = Vec::new();
+    while !parser.is_exhausted() {
+        if let Some(decl) = parse_declaration(&mut parser) {
+            decls.push(decl);
+        } else {
+            let _ = parser.next();
+        }
+    }
+    decls
 }
 
 trait ToCssString {

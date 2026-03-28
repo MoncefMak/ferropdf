@@ -85,8 +85,8 @@ fn apply_single(
     value: &CssValue,
     root_font_size: f32,
 ) {
-    let raw = value.raw_string();
-    let raw = raw.trim();
+    let cow = value.to_cow();
+    let raw = cow.trim();
 
     match property {
         CssProperty::Display => {
@@ -160,9 +160,9 @@ fn apply_single(
 
         CssProperty::Border => {
             let side = parse_border_shorthand(raw);
-            style.border_top = side.clone();
-            style.border_right = side.clone();
-            style.border_bottom = side.clone();
+            style.border_top = side;
+            style.border_right = side;
+            style.border_bottom = side;
             style.border_left = side;
         }
         CssProperty::BorderTop => style.border_top = parse_border_shorthand(raw),
@@ -187,9 +187,9 @@ fn apply_single(
         }
         CssProperty::BorderStyle => {
             let bs = parse_border_style(raw);
-            style.border_top.style = bs.clone();
-            style.border_right.style = bs.clone();
-            style.border_bottom.style = bs.clone();
+            style.border_top.style = bs;
+            style.border_right.style = bs;
+            style.border_bottom.style = bs;
             style.border_left.style = bs;
         }
         CssProperty::BorderRadius => {
