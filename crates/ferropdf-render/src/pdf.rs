@@ -415,54 +415,48 @@ pub fn write_pdf(
                     content.set_fill_rgb(color.r, color.g, color.b);
 
                     if !shaped_glyphs.is_empty() {
-                        // ── Shaped text path: position each glyph individually ──
-                        // cosmic-text provides x positions in visual order. For RTL text,
-                        // x values decrease. We use absolute positioning per glyph to
-                        // handle both LTR and RTL correctly without reordering.
-
-                        // Sort glyphs by x position (left-to-right) for correct visual rendering
+                        // ── Shaped text path: use font_id from glyphs ──
+                        // Sort glyphs by x position (left-to-right visual order).
+                        // This handles RTL text: cosmic-text gives glyphs in logical
+                        // order with decreasing x, sorting gives visual order with
+                        // increasing x, which is what PDF show() expects.
                         let mut sorted_glyphs = shaped_glyphs.clone();
                         sorted_glyphs.sort_by(|a, b| a.x.partial_cmp(&b.x).unwrap());
 
-                        // The base x comes from the DrawOp (already includes text-align offset)
                         let base_x = *x;
 
-                        // Group consecutive (by x) glyphs with same font_id for efficiency
-                        let mut runs: Vec<(fontdb::ID, Vec<&ferropdf_core::ShapedGlyph>)> =
-                            Vec::new();
+                        // Group consecutive glyphs by font_id for batch rendering
+                        let mut runs: Vec<(fontdb::ID, Vec<u16>)> = Vec::new();
                         for glyph in &sorted_glyphs {
                             if let Some(last) = runs.last_mut() {
                                 if last.0 == glyph.font_id {
-                                    last.1.push(glyph);
+                                    last.1.push(glyph.glyph_id);
                                     continue;
                                 }
                             }
-                            runs.push((glyph.font_id, vec![glyph]));
+                            runs.push((glyph.font_id, vec![glyph.glyph_id]));
                         }
 
-                        for (fid, run_glyphs) in &runs {
+                        // Use x position of the leftmost glyph as the text start
+                        let min_x = sorted_glyphs.first().map(|g| g.x).unwrap_or(0.0);
+                        let aligned_x = base_x + min_x;
+
+                        content.begin_text();
+                        content.next_line(aligned_x, pdf_y);
+
+                        for (fid, gids) in &runs {
                             if let Some(pdf_name) = fontdb_id_to_pdf_name.get(fid) {
                                 if let Some(ef) =
                                     embedded_fonts.iter().find(|f| &f.pdf_name == pdf_name)
                                 {
-                                    // Emit each glyph at its exact x position
-                                    for glyph in run_glyphs {
-                                        let glyph_x = base_x + glyph.x;
-                                        let glyph_pdf_y = pdf_y;
-                                        content.begin_text();
-                                        content
-                                            .set_font(Name(ef.pdf_name.as_bytes()), font_size_pt);
-                                        content.next_line(glyph_x, glyph_pdf_y);
-                                        let encoded = encode_shaped_glyphs(
-                                            &[glyph.glyph_id],
-                                            ef.gid_remapping.as_ref(),
-                                        );
-                                        content.show(Str(&encoded));
-                                        content.end_text();
-                                    }
+                                    content.set_font(Name(ef.pdf_name.as_bytes()), font_size_pt);
+                                    let encoded =
+                                        encode_shaped_glyphs(gids, ef.gid_remapping.as_ref());
+                                    content.show(Str(&encoded));
                                 }
                             }
                         }
+                        content.end_text();
                     } else {
                         // ── Unshaped text path: resolve font by family name ──
                         let family_name = font_family.first().cloned().unwrap_or_default();
