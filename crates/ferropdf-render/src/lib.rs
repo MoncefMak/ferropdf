@@ -170,8 +170,17 @@ fn load_font_face_data(src: &str, base_url: Option<&str>) -> Option<Vec<u8>> {
         return None;
     }
 
-    // File path
-    let path = if let Some(base) = base_url {
+    // Strip file:// protocol prefix
+    let src = src
+        .strip_prefix("file:///")
+        .map(|s| format!("/{}", s))
+        .unwrap_or_else(|| src.strip_prefix("file://").unwrap_or(src).to_string());
+    let src = src.trim();
+
+    // File path — absolute paths are used directly, relative paths resolved against base_url
+    let path = if std::path::Path::new(src).is_absolute() {
+        std::path::PathBuf::from(src)
+    } else if let Some(base) = base_url {
         let base_dir = std::path::Path::new(base);
         let base_dir = if base_dir.is_file() {
             base_dir.parent().unwrap_or(base_dir)

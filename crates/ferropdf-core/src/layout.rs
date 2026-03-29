@@ -27,6 +27,10 @@ pub struct ShapedSegment {
 #[derive(Debug, Clone)]
 pub struct ShapedGlyph {
     pub glyph_id: u16,
+    /// The fontdb face ID that was used during shaping.
+    /// This is the ONLY reliable way to find the exact font binary
+    /// whose glyph table these glyph_ids refer to.
+    pub font_id: fontdb::ID,
     pub x: f32,
     pub y: f32,
     pub advance: f32,

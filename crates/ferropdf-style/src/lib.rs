@@ -100,6 +100,15 @@ fn resolve_recursive(
         // Apply tag-specific defaults (only if stylesheet didn't override)
         compute::apply_tag_defaults(&mut style, node.tag());
 
+        // Apply HTML dir attribute (lower priority than CSS direction property)
+        if let Some(dir) = node.attr("dir") {
+            match dir.to_lowercase().as_str() {
+                "rtl" => style.direction = ferropdf_core::Direction::Rtl,
+                "ltr" => style.direction = ferropdf_core::Direction::Ltr,
+                _ => {}
+            }
+        }
+
         // Resolve relative units (em/rem/px/mm → pt)
         compute::resolve_units(&mut style, parent_style, root_font_size);
     }

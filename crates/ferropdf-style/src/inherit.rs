@@ -3,6 +3,7 @@ use ferropdf_core::*;
 /// Create a new style by inheriting inheritable properties from parent.
 pub fn inherit_from(parent: &ComputedStyle) -> ComputedStyle {
     ComputedStyle {
+        direction: parent.direction,
         color: parent.color,
         font_family: parent.font_family.clone(),
         font_size: parent.font_size,

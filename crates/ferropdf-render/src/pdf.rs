@@ -1,7 +1,7 @@
 use crate::display_list::{DrawOp, PageDisplayList};
 use crate::font_subsetter::{
-    encode_for_cid_font, encode_winansi, load_font_data, subset_font, write_cid_font, EmbeddedFont,
-    FontKey,
+    encode_for_cid_font, encode_shaped_glyphs, encode_winansi, load_font_data, subset_font,
+    write_cid_font, EmbeddedFont, FontKey,
 };
 use crate::RenderOptions;
 use ferropdf_core::{FerroError, PageConfig};
@@ -99,6 +99,9 @@ pub fn write_pdf(
     let mut font_raw_data: HashMap<String, Vec<u8>> = HashMap::new(); // pdf_name → raw data
     let mut font_used_chars: HashMap<String, std::collections::HashSet<u16>> = HashMap::new(); // pdf_name → glyph IDs
 
+    // fontdb::ID → pdf_name mapping for shaped glyphs (keyed by the exact font face)
+    let mut fontdb_id_to_pdf_name: HashMap<fontdb::ID, String> = HashMap::new();
+
     // Single pass: discover fonts AND collect glyph IDs simultaneously
     for display_list in pages {
         for op in &display_list.ops {
@@ -107,43 +110,72 @@ pub fn write_pdf(
                 font_family,
                 bold,
                 italic,
+                shaped_glyphs,
                 ..
             } = op
             {
-                let family_name = font_family.first().cloned().unwrap_or_default();
-                let key = FontKey {
-                    family: family_name.clone(),
-                    bold: *bold,
-                    italic: *italic,
-                };
-                // Discover font on first encounter
-                if !font_cache.contains_key(&key) {
-                    match load_font_data(font_db, &family_name, *bold, *italic) {
-                        Some(data) => {
-                            font_name_counter += 1;
-                            let pdf_name = format!("F{}", font_name_counter);
-                            font_raw_data.insert(pdf_name.clone(), data);
-                            font_used_chars
-                                .insert(pdf_name.clone(), std::collections::HashSet::new());
-                            font_cache.insert(key.clone(), Some(pdf_name));
+                if !shaped_glyphs.is_empty() {
+                    // ── Shaped text path: use font_id from cosmic-text glyphs ──
+                    // Group glyphs by font_id (a single line may use multiple fonts
+                    // due to cosmic-text's per-glyph font fallback).
+                    for glyph in shaped_glyphs {
+                        let fid = glyph.font_id;
+                        // Register font by fontdb::ID on first encounter
+                        if let std::collections::hash_map::Entry::Vacant(entry) =
+                            fontdb_id_to_pdf_name.entry(fid)
+                        {
+                            if let Some(data) = font_db.with_face_data(fid, |data, _| data.to_vec())
+                            {
+                                font_name_counter += 1;
+                                let pdf_name = format!("F{}", font_name_counter);
+                                font_raw_data.insert(pdf_name.clone(), data);
+                                font_used_chars
+                                    .insert(pdf_name.clone(), std::collections::HashSet::new());
+                                entry.insert(pdf_name);
+                            }
                         }
-                        None => {
-                            font_cache.insert(key.clone(), None);
-                            continue;
+                        // Collect glyph IDs
+                        if let Some(pdf_name) = fontdb_id_to_pdf_name.get(&fid) {
+                            if let Some(used_gids) = font_used_chars.get_mut(pdf_name) {
+                                used_gids.insert(0); // .notdef
+                                used_gids.insert(glyph.glyph_id);
+                            }
                         }
                     }
-                }
-                // Collect glyph IDs for this text
-                if let Some(Some(pdf_name)) = font_cache.get(&key) {
-                    if let (Some(raw_data), Some(used_gids)) = (
-                        font_raw_data.get(pdf_name),
-                        font_used_chars.get_mut(pdf_name),
-                    ) {
-                        if let Ok(face) = ttf_parser::Face::parse(raw_data, 0) {
+                } else {
+                    // ── Unshaped text path: resolve font by family name ──
+                    let family_name = font_family.first().cloned().unwrap_or_default();
+                    let key = FontKey {
+                        family: family_name.clone(),
+                        bold: *bold,
+                        italic: *italic,
+                    };
+                    if !font_cache.contains_key(&key) {
+                        match load_font_data(font_db, &family_name, *bold, *italic) {
+                            Some(data) => {
+                                font_name_counter += 1;
+                                let pdf_name = format!("F{}", font_name_counter);
+                                font_raw_data.insert(pdf_name.clone(), data);
+                                font_used_chars
+                                    .insert(pdf_name.clone(), std::collections::HashSet::new());
+                                font_cache.insert(key.clone(), Some(pdf_name));
+                            }
+                            None => {
+                                font_cache.insert(key.clone(), None);
+                                continue;
+                            }
+                        }
+                    }
+                    if let Some(Some(pdf_name)) = font_cache.get(&key) {
+                        if let Some(used_gids) = font_used_chars.get_mut(pdf_name) {
                             used_gids.insert(0); // .notdef
-                            for ch in text.chars() {
-                                if let Some(gid) = face.glyph_index(ch) {
-                                    used_gids.insert(gid.0);
+                            if let Some(raw_data) = font_raw_data.get(pdf_name) {
+                                if let Ok(face) = ttf_parser::Face::parse(raw_data, 0) {
+                                    for ch in text.chars() {
+                                        if let Some(gid) = face.glyph_index(ch) {
+                                            used_gids.insert(gid.0);
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -182,17 +214,48 @@ pub fn write_pdf(
     }
 
     // ── Collect opacity ExtGState objects ──
-    // Scan display lists for SetOpacity ops and create one ExtGState per unique alpha.
+    // Scan display lists for SetOpacity and DrawBoxShadow ops and create one ExtGState per unique alpha.
     let mut opacity_states: HashMap<u32, (Ref, String)> = HashMap::new(); // key = (alpha * 1000) as u32
     let mut gs_counter = 0u32;
+    let register_alpha = |alpha: f32,
+                          opacity_states: &mut HashMap<u32, (Ref, String)>,
+                          next_ref: &mut dyn FnMut() -> Ref,
+                          gs_counter: &mut u32| {
+        let key = (alpha * 1000.0) as u32;
+        opacity_states.entry(key).or_insert_with(|| {
+            *gs_counter += 1;
+            (next_ref(), format!("GS{}", *gs_counter))
+        });
+    };
     for display_list in pages {
         for op in &display_list.ops {
-            if let DrawOp::SetOpacity(alpha) = op {
-                let key = (*alpha * 1000.0) as u32;
-                opacity_states.entry(key).or_insert_with(|| {
-                    gs_counter += 1;
-                    (next_ref(), format!("GS{}", gs_counter))
-                });
+            match op {
+                DrawOp::SetOpacity(alpha) => {
+                    register_alpha(*alpha, &mut opacity_states, &mut next_ref, &mut gs_counter);
+                }
+                DrawOp::DrawBoxShadow { shadow, .. } => {
+                    // Register alpha for shadow color
+                    if shadow.color.a < 1.0 - f32::EPSILON {
+                        if shadow.blur_radius < 0.5 {
+                            register_alpha(
+                                shadow.color.a,
+                                &mut opacity_states,
+                                &mut next_ref,
+                                &mut gs_counter,
+                            );
+                        } else {
+                            let steps = ((shadow.blur_radius / 2.0) as usize).clamp(3, 8);
+                            let step_alpha = shadow.color.a / steps as f32;
+                            register_alpha(
+                                step_alpha,
+                                &mut opacity_states,
+                                &mut next_ref,
+                                &mut gs_counter,
+                            );
+                        }
+                    }
+                }
+                _ => {}
             }
         }
     }
@@ -339,79 +402,170 @@ pub fn write_pdf(
                     italic,
                     text_align,
                     container_width,
-                    ..
+                    shaped_glyphs,
                 } => {
-                    let family_name = font_family.first().cloned().unwrap_or_default();
-                    let key = FontKey {
-                        family: family_name,
-                        bold: *bold,
-                        italic: *italic,
-                    };
-
-                    // Look up embedded font data for this key
-                    let ef_option =
-                        font_cache
-                            .get(&key)
-                            .and_then(|v| v.as_ref())
-                            .and_then(|pdf_name| {
-                                embedded_fonts.iter().find(|f| &f.pdf_name == pdf_name)
-                            });
-                    let font_data = ef_option.map(|ef| ef.original_data.as_slice());
-
-                    // Font size is already in pt — no conversion needed
                     let font_size_pt = *font_size;
-
                     let line_text = text.trim();
                     if line_text.is_empty() {
                         continue;
                     }
 
-                    // Measure line width for text-align
-                    let line_width_pt = measure_text_width(line_text, *font_size, font_data);
-
-                    // Compute aligned X in pt
-                    let aligned_x = match text_align {
-                        ferropdf_core::TextAlign::Left => *x,
-                        ferropdf_core::TextAlign::Right => *x + container_width - line_width_pt,
-                        ferropdf_core::TextAlign::Center => {
-                            *x + (container_width - line_width_pt) / 2.0
-                        }
-                        ferropdf_core::TextAlign::Justify => *x,
-                    };
-
-                    // Convert to PDF coordinates (Y-axis flip only, no unit conversion)
-                    let pdf_x = aligned_x;
+                    // Convert to PDF coordinates (Y-axis flip only)
                     let pdf_y = y_to_pdf(*y, page_h);
-
                     content.set_fill_rgb(color.r, color.g, color.b);
-                    content.begin_text();
 
-                    match ef_option {
-                        Some(ef) => {
-                            content.set_font(Name(ef.pdf_name.as_bytes()), font_size_pt);
-                            content.next_line(pdf_x, pdf_y);
-                            let encoded = encode_for_cid_font(
-                                line_text,
-                                &ef.original_data,
-                                ef.gid_remapping.as_ref(),
-                            );
-                            content.show(Str(&encoded));
+                    if !shaped_glyphs.is_empty() {
+                        // ── Shaped text path: position each glyph individually ──
+                        // cosmic-text provides x positions in visual order. For RTL text,
+                        // x values decrease. We use absolute positioning per glyph to
+                        // handle both LTR and RTL correctly without reordering.
+
+                        // Sort glyphs by x position (left-to-right) for correct visual rendering
+                        let mut sorted_glyphs = shaped_glyphs.clone();
+                        sorted_glyphs.sort_by(|a, b| a.x.partial_cmp(&b.x).unwrap());
+
+                        // The base x comes from the DrawOp (already includes text-align offset)
+                        let base_x = *x;
+
+                        // Group consecutive (by x) glyphs with same font_id for efficiency
+                        let mut runs: Vec<(fontdb::ID, Vec<&ferropdf_core::ShapedGlyph>)> =
+                            Vec::new();
+                        for glyph in &sorted_glyphs {
+                            if let Some(last) = runs.last_mut() {
+                                if last.0 == glyph.font_id {
+                                    last.1.push(glyph);
+                                    continue;
+                                }
+                            }
+                            runs.push((glyph.font_id, vec![glyph]));
                         }
-                        None => {
-                            let font_name = if *bold {
-                                "F2"
-                            } else if *italic {
-                                "F3"
-                            } else {
-                                "F1"
-                            };
-                            content.set_font(Name(font_name.as_bytes()), font_size_pt);
-                            content.next_line(pdf_x, pdf_y);
-                            content.show(Str(&encode_winansi(line_text)));
+
+                        for (fid, run_glyphs) in &runs {
+                            if let Some(pdf_name) = fontdb_id_to_pdf_name.get(fid) {
+                                if let Some(ef) =
+                                    embedded_fonts.iter().find(|f| &f.pdf_name == pdf_name)
+                                {
+                                    // Emit each glyph at its exact x position
+                                    for glyph in run_glyphs {
+                                        let glyph_x = base_x + glyph.x;
+                                        let glyph_pdf_y = pdf_y;
+                                        content.begin_text();
+                                        content
+                                            .set_font(Name(ef.pdf_name.as_bytes()), font_size_pt);
+                                        content.next_line(glyph_x, glyph_pdf_y);
+                                        let encoded = encode_shaped_glyphs(
+                                            &[glyph.glyph_id],
+                                            ef.gid_remapping.as_ref(),
+                                        );
+                                        content.show(Str(&encoded));
+                                        content.end_text();
+                                    }
+                                }
+                            }
                         }
+                    } else {
+                        // ── Unshaped text path: resolve font by family name ──
+                        let family_name = font_family.first().cloned().unwrap_or_default();
+                        let key = FontKey {
+                            family: family_name,
+                            bold: *bold,
+                            italic: *italic,
+                        };
+                        let ef_option =
+                            font_cache
+                                .get(&key)
+                                .and_then(|v| v.as_ref())
+                                .and_then(|pdf_name| {
+                                    embedded_fonts.iter().find(|f| &f.pdf_name == pdf_name)
+                                });
+                        let font_data = ef_option.map(|ef| ef.original_data.as_slice());
+
+                        let line_width_pt = measure_text_width(line_text, *font_size, font_data);
+                        let aligned_x = match text_align {
+                            ferropdf_core::TextAlign::Right => *x + container_width - line_width_pt,
+                            ferropdf_core::TextAlign::Center => {
+                                *x + (container_width - line_width_pt) / 2.0
+                            }
+                            _ => *x,
+                        };
+
+                        content.begin_text();
+                        match ef_option {
+                            Some(ef) => {
+                                content.set_font(Name(ef.pdf_name.as_bytes()), font_size_pt);
+                                content.next_line(aligned_x, pdf_y);
+                                let encoded = encode_for_cid_font(
+                                    line_text,
+                                    &ef.original_data,
+                                    ef.gid_remapping.as_ref(),
+                                );
+                                content.show(Str(&encoded));
+                            }
+                            None => {
+                                let font_name = if *bold {
+                                    "F2"
+                                } else if *italic {
+                                    "F3"
+                                } else {
+                                    "F1"
+                                };
+                                content.set_font(Name(font_name.as_bytes()), font_size_pt);
+                                content.next_line(aligned_x, pdf_y);
+                                content.show(Str(&encode_winansi(line_text)));
+                            }
+                        }
+                        content.end_text();
                     }
+                }
+                DrawOp::DrawBoxShadow { rect, shadow, .. } => {
+                    // Approximate box-shadow using multiple semi-transparent filled rects.
+                    // For blur, we draw several layers with decreasing opacity.
+                    let spread = shadow.spread;
+                    let blur = shadow.blur_radius;
+                    let sx = rect.x + shadow.offset_x - spread;
+                    let sy = rect.y + shadow.offset_y - spread;
+                    let sw = rect.width + spread * 2.0;
+                    let sh = rect.height + spread * 2.0;
 
-                    content.end_text();
+                    if blur < 0.5 {
+                        // No blur: single solid rect
+                        let pr = to_pdf_rect(sx, sy, sw, sh, page_h);
+                        content.save_state();
+                        content.set_fill_rgb(shadow.color.r, shadow.color.g, shadow.color.b);
+                        // Apply alpha via inline graphics state
+                        if shadow.color.a < 1.0 - f32::EPSILON {
+                            let key = (shadow.color.a * 1000.0) as u32;
+                            if let Some((_ref, gs_name)) = opacity_states.get(&key) {
+                                content.set_parameters(Name(gs_name.as_bytes()));
+                            }
+                        }
+                        content.rect(pr.x, pr.y, pr.width, pr.height);
+                        content.fill_nonzero();
+                        content.restore_state();
+                    } else {
+                        // Approximate gaussian blur with layered rects
+                        let steps = ((blur / 2.0) as usize).clamp(3, 8);
+                        let step_alpha = shadow.color.a / steps as f32;
+                        content.save_state();
+                        for i in 0..steps {
+                            let expand = blur * (i as f32 + 1.0) / steps as f32;
+                            let lx = sx - expand;
+                            let ly = sy - expand;
+                            let lw = sw + expand * 2.0;
+                            let lh = sh + expand * 2.0;
+                            let pr = to_pdf_rect(lx, ly, lw, lh, page_h);
+
+                            let layer_alpha = step_alpha;
+                            let key = (layer_alpha * 1000.0) as u32;
+                            if let Some((_ref, gs_name)) = opacity_states.get(&key) {
+                                content.set_parameters(Name(gs_name.as_bytes()));
+                            }
+                            content.set_fill_rgb(shadow.color.r, shadow.color.g, shadow.color.b);
+                            content.rect(pr.x, pr.y, pr.width, pr.height);
+                            content.fill_nonzero();
+                        }
+                        content.restore_state();
+                    }
                 }
                 DrawOp::SetOpacity(alpha) => {
                     let key = (*alpha * 1000.0) as u32;

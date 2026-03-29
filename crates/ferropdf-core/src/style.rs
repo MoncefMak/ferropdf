@@ -250,12 +250,32 @@ impl BorderRadius {
     }
 }
 
+/// CSS `direction` property for text/bidi.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum Direction {
+    #[default]
+    Ltr,
+    Rtl,
+}
+
+/// A parsed CSS box-shadow value.
+#[derive(Debug, Clone)]
+pub struct BoxShadow {
+    pub offset_x: f32,    // pt
+    pub offset_y: f32,    // pt
+    pub blur_radius: f32, // pt
+    pub spread: f32,      // pt
+    pub color: Color,
+    pub inset: bool,
+}
+
 /// All properties resolved to absolute values.
 /// No em/rem here. Percentages are kept for Taffy (layout).
 #[derive(Debug, Clone)]
 pub struct ComputedStyle {
     pub display: Display,
     pub position: Position,
+    pub direction: Direction,
     pub visibility: bool,
 
     // Dimensions (Percent passed to Taffy, Auto passed to Taffy)
@@ -281,6 +301,7 @@ pub struct ComputedStyle {
     pub color: Color,
     pub background_color: Color,
     pub opacity: f32,
+    pub box_shadow: Vec<BoxShadow>,
 
     // Text (all values in px)
     pub font_family: Vec<String>,
@@ -309,6 +330,7 @@ pub struct ComputedStyle {
     pub right: Length,
     pub top: Length,
     pub bottom: Length,
+    pub z_index: i32,
 
     // Table
     pub border_collapse: BorderCollapse,
@@ -330,6 +352,7 @@ impl Default for ComputedStyle {
         Self {
             display: Display::Block,
             position: Position::Static,
+            direction: Direction::Ltr,
             visibility: true,
             width: Length::Auto,
             height: Length::Auto,
@@ -347,6 +370,7 @@ impl Default for ComputedStyle {
             color: Color::black(),
             background_color: Color::transparent(),
             opacity: 1.0,
+            box_shadow: Vec::new(),
             font_family: vec!["sans-serif".to_string()],
             font_size: 12.0, // 16px × 0.75 = 12pt
             font_weight: FontWeight::Normal,
@@ -369,6 +393,7 @@ impl Default for ComputedStyle {
             right: Length::Auto,
             top: Length::Auto,
             bottom: Length::Auto,
+            z_index: 0,
             border_collapse: BorderCollapse::Separate,
             list_style_type: ListStyleType::Disc,
             page_break_before: PageBreak::Auto,

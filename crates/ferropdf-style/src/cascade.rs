@@ -110,14 +110,9 @@ fn apply_single(
         CssProperty::Position => {
             style.position = match raw {
                 "relative" => Position::Relative,
-                "absolute" | "fixed" | "sticky" => {
-                    log::warn!(
-                        "ferropdf: position:{} is parsed but not rendered — treated as static",
-                        raw
-                    );
-                    // Stored as Static; the warning is emitted via log for now.
-                    Position::Static
-                }
+                "absolute" => Position::Absolute,
+                "fixed" => Position::Fixed,
+                "sticky" => Position::Sticky,
                 _ => Position::Static,
             };
         }
@@ -215,6 +210,32 @@ fn apply_single(
         CssProperty::Opacity => {
             if let Ok(v) = raw.parse::<f32>() {
                 style.opacity = v.clamp(0.0, 1.0);
+            }
+        }
+
+        CssProperty::Direction => {
+            style.direction = match raw {
+                "rtl" => Direction::Rtl,
+                _ => Direction::Ltr,
+            };
+        }
+        CssProperty::UnicodeBidi => {} // handled implicitly by cosmic-text's bidi algorithm
+
+        CssProperty::Top => style.top = parse_length(raw),
+        CssProperty::Right => style.right = parse_length(raw),
+        CssProperty::Bottom => style.bottom = parse_length(raw),
+        CssProperty::Left => style.left = parse_length(raw),
+        CssProperty::ZIndex => {
+            if let Ok(v) = raw.parse::<i32>() {
+                style.z_index = v;
+            }
+        }
+
+        CssProperty::BoxShadow => {
+            if raw == "none" {
+                style.box_shadow.clear();
+            } else {
+                style.box_shadow = parse_box_shadows(raw);
             }
         }
 
@@ -759,6 +780,62 @@ mod tests {
             "150% of 12pt = 18pt, got {}",
             result
         );
+    }
+}
+
+/// Parse CSS box-shadow value(s).
+/// Supports: `<offset-x> <offset-y> [blur] [spread] [color] [inset]`
+/// Multiple shadows separated by commas.
+fn parse_box_shadows(raw: &str) -> Vec<BoxShadow> {
+    raw.split(',')
+        .filter_map(|shadow_str| parse_single_box_shadow(shadow_str.trim()))
+        .collect()
+}
+
+fn parse_single_box_shadow(raw: &str) -> Option<BoxShadow> {
+    if raw.is_empty() || raw == "none" {
+        return None;
+    }
+
+    let mut lengths: Vec<f32> = Vec::new();
+    let mut color = Color::new(0.0, 0.0, 0.0, 0.3); // default semi-transparent black
+    let mut inset = false;
+
+    // Handle rgba(...) or rgb(...) by collecting them first
+    let mut s = raw.to_string();
+    // Extract color functions (rgb/rgba/hsl) before splitting by whitespace
+    if let Some(start) = s.find("rgb") {
+        if let Some(end) = s[start..].find(')') {
+            let color_str = &s[start..start + end + 1];
+            if let Some(c) = parse_color(color_str) {
+                color = c;
+            }
+            s = format!("{} {}", &s[..start], &s[start + end + 1..]);
+        }
+    }
+
+    let parts: Vec<&str> = s.split_whitespace().collect();
+    for part in &parts {
+        if part.eq_ignore_ascii_case("inset") {
+            inset = true;
+        } else if let Some(pt) = parse_length_to_pt(part) {
+            lengths.push(pt);
+        } else if let Some(c) = parse_color(part) {
+            color = c;
+        }
+    }
+
+    if lengths.len() >= 2 {
+        Some(BoxShadow {
+            offset_x: lengths[0],
+            offset_y: lengths[1],
+            blur_radius: lengths.get(2).copied().unwrap_or(0.0),
+            spread: lengths.get(3).copied().unwrap_or(0.0),
+            color,
+            inset,
+        })
+    } else {
+        None
     }
 }
 

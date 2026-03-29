@@ -205,6 +205,7 @@ fn build_taffy_tree_inner(
 
     // If this is a block container whose children are all inline/text,
     // switch to flex-row + wrap so that inline elements flow horizontally.
+    // Map text-align to justify-content for inline-block centering (CSS spec).
     if matches!(style.display, FDisplay::Block) && !node.children.is_empty() {
         let all_inline = node.children.iter().all(|&cid| {
             let child_node = doc.get(cid);
@@ -218,6 +219,12 @@ fn build_taffy_tree_inner(
             taffy_style.display = taffy::Display::Flex;
             taffy_style.flex_direction = taffy::FlexDirection::Row;
             taffy_style.flex_wrap = taffy::FlexWrap::Wrap;
+            // text-align on parent maps to justify-content for inline-block children
+            taffy_style.justify_content = Some(match style.text_align {
+                ferropdf_core::TextAlign::Center => taffy::JustifyContent::Center,
+                ferropdf_core::TextAlign::Right => taffy::JustifyContent::FlexEnd,
+                _ => taffy::JustifyContent::FlexStart,
+            });
         }
     }
 
@@ -460,6 +467,12 @@ fn read_layout(
         0
     };
 
+    // Mark out-of-flow for absolute/fixed positioned elements
+    let out_of_flow = matches!(
+        style.position,
+        ferropdf_core::Position::Absolute | ferropdf_core::Position::Fixed
+    );
+
     Ok(LayoutBox {
         node_id: Some(node_id),
         style,
@@ -473,7 +486,7 @@ fn read_layout(
         inline_spans: Vec::new(),
         image_src,
         text_content,
-        out_of_flow: false,
+        out_of_flow,
         visual_offset_x: 0.0,
         visual_offset_y: 0.0,
         table_cell_pos: None,

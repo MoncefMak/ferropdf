@@ -238,6 +238,24 @@ pub(crate) fn encode_for_cid_font(
     bytes
 }
 
+/// Encode pre-shaped glyph IDs as big-endian u16 bytes for CIDFont embedding.
+/// Used when cosmic-text has already shaped the text (essential for Arabic ligatures).
+pub(crate) fn encode_shaped_glyphs(
+    glyph_ids: &[u16],
+    gid_remapping: Option<&HashMap<u16, u16>>,
+) -> Vec<u8> {
+    let mut bytes = Vec::with_capacity(glyph_ids.len() * 2);
+    for &gid in glyph_ids {
+        let mapped_gid = match gid_remapping {
+            Some(map) => *map.get(&gid).unwrap_or(&0),
+            None => gid,
+        };
+        bytes.push((mapped_gid >> 8) as u8);
+        bytes.push((mapped_gid & 0xFF) as u8);
+    }
+    bytes
+}
+
 // ── ToUnicode CMap builder ──
 
 fn build_tounicode_cmap(

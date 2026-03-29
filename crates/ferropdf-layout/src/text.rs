@@ -251,6 +251,7 @@ pub fn shape_text_lines(
         for glyph in run.glyphs.iter() {
             glyphs.push(ShapedGlyph {
                 glyph_id: glyph.glyph_id,
+                font_id: glyph.font_id,
                 x: glyph.x,
                 y: glyph.y,
                 advance: glyph.w,
@@ -356,6 +357,7 @@ pub fn shape_rich_text_lines(
 
             glyphs.push(ShapedGlyph {
                 glyph_id: glyph.glyph_id,
+                font_id: glyph.font_id,
                 x: glyph.x,
                 y: glyph.y,
                 advance: glyph.w,

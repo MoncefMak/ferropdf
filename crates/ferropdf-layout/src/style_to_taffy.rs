@@ -1,4 +1,4 @@
-use ferropdf_core::{ComputedStyle, Length};
+use ferropdf_core::{ComputedStyle, Length, Position as FPosition};
 use taffy::prelude::*;
 
 /// Convert ComputedStyle → taffy::Style
@@ -8,6 +8,16 @@ use taffy::prelude::*;
 /// - flex, grid, block layout
 pub fn convert(style: &ComputedStyle) -> taffy::Style {
     taffy::Style {
+        position: match style.position {
+            FPosition::Absolute | FPosition::Fixed => Position::Absolute,
+            _ => Position::Relative,
+        },
+        inset: taffy::Rect {
+            top: lpa(&style.top),
+            right: lpa(&style.right),
+            bottom: lpa(&style.bottom),
+            left: lpa(&style.left),
+        },
         display: match style.display {
             ferropdf_core::Display::Block => Display::Block,
             ferropdf_core::Display::Flex => Display::Flex,

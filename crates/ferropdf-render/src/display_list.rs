@@ -1,4 +1,4 @@
-use ferropdf_core::{BorderStyle, Color, Rect};
+use ferropdf_core::{BorderStyle, BoxShadow, Color, Rect, ShapedGlyph};
 
 /// A drawing operation for rendering.
 #[derive(Debug, Clone)]
@@ -29,9 +29,20 @@ pub enum DrawOp {
         italic: bool,
         text_align: ferropdf_core::TextAlign,
         container_width: f32,
+        /// Pre-shaped glyphs from cosmic-text. When non-empty, these carry both
+        /// glyph_id and font_id, so the PDF writer can embed the exact font binary
+        /// that was used for shaping. Essential for Arabic/Hebrew ligatures and
+        /// font fallback scenarios.
+        shaped_glyphs: Vec<ShapedGlyph>,
     },
     /// Draw an image
     DrawImage { src: String, rect: Rect },
+    /// Draw a box shadow (approximated as offset semi-transparent filled rects)
+    DrawBoxShadow {
+        rect: Rect,
+        shadow: BoxShadow,
+        border_radius: [f32; 4],
+    },
     /// Save graphics state
     Save,
     /// Restore graphics state

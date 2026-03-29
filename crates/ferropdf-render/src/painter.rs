@@ -60,6 +60,17 @@ fn paint_box(
     let y = border_box.y + eff_y;
     let rect = Rect::new(x, y, border_box.width, border_box.height);
 
+    // Box shadows (rendered before background, behind the element)
+    for shadow in &style.box_shadow {
+        if !shadow.inset {
+            ops.push(DrawOp::DrawBoxShadow {
+                rect,
+                shadow: shadow.clone(),
+                border_radius: style.border_radius.to_array(),
+            });
+        }
+    }
+
     // Background
     if !style.background_color.is_transparent() {
         ops.push(DrawOp::FillRect {
@@ -96,10 +107,24 @@ fn paint_box(
                     continue;
                 }
                 let span = &layout_box.inline_spans[seg.metadata];
-                let seg_x = text_x + seg.x_offset + align_offset;
+                // Collect shaped glyphs for this segment (with font_id for correct PDF embedding)
+                let seg_glyphs: Vec<ferropdf_core::ShapedGlyph> = line
+                    .glyphs
+                    .iter()
+                    .filter(|g| g.metadata == seg.metadata)
+                    .cloned()
+                    .collect();
+                // For shaped glyphs, use text_x only — glyph.x already contains
+                // the absolute position within the buffer (no need to add seg.x_offset).
+                // For unshaped fallback, use seg_x with offset.
+                let draw_x = if !seg_glyphs.is_empty() {
+                    text_x
+                } else {
+                    text_x + seg.x_offset + align_offset
+                };
                 ops.push(DrawOp::DrawText {
                     text: seg.text.clone(),
-                    x: seg_x,
+                    x: draw_x,
                     y: line_y,
                     font_size: span.font_size,
                     color: span.color,
@@ -108,11 +133,12 @@ fn paint_box(
                     italic: span.italic,
                     text_align: ferropdf_core::TextAlign::Left,
                     container_width: 0.0,
+                    shaped_glyphs: seg_glyphs,
                 });
                 emit_text_decoration(
                     ops,
                     &span.text_decoration,
-                    seg_x,
+                    text_x + seg.x_offset,
                     line_y,
                     seg.width,
                     span.font_size,
@@ -130,24 +156,19 @@ fn paint_box(
 
             if !layout_box.shaped_lines.is_empty() {
                 // Emit one DrawText per shaped line — no re-wrap needed in pdf.rs.
-                // Compute text-align offset here (not in pdf.rs) so we use the
-                // correct container width — this box's own content.width.
-                let align_container = layout_box.content.width;
                 for line in &layout_box.shaped_lines {
                     let line_text = line.text.trim();
                     if line_text.is_empty() {
                         continue;
                     }
-                    let align_offset = match style.text_align {
-                        ferropdf_core::TextAlign::Right => align_container - line.width,
-                        ferropdf_core::TextAlign::Center => (align_container - line.width) / 2.0,
-                        _ => 0.0,
-                    };
                     // y = content origin + line's baseline Y (from cosmic-text)
                     let line_y = layout_box.content.y + eff_y + line.y;
+                    // For shaped glyphs, pass text_x only — cosmic-text already
+                    // positions glyphs within the buffer (glyph.x accounts for
+                    // RTL layout within the content width).
                     ops.push(DrawOp::DrawText {
                         text: line_text.to_string(),
-                        x: text_x + align_offset,
+                        x: text_x,
                         y: line_y,
                         font_size: style.font_size,
                         color: style.color,
@@ -156,6 +177,7 @@ fn paint_box(
                         italic: style.font_style == ferropdf_core::FontStyle::Italic,
                         text_align: ferropdf_core::TextAlign::Left,
                         container_width: 0.0,
+                        shaped_glyphs: line.glyphs.clone(),
                     });
                     emit_text_decoration(
                         ops,
@@ -181,6 +203,7 @@ fn paint_box(
                     italic: style.font_style == ferropdf_core::FontStyle::Italic,
                     text_align: style.text_align,
                     container_width: layout_box.content.width,
+                    shaped_glyphs: Vec::new(),
                 });
                 emit_text_decoration(
                     ops,
@@ -225,6 +248,7 @@ fn paint_box(
                 italic: false,
                 text_align: ferropdf_core::TextAlign::Left,
                 container_width: 0.0,
+                shaped_glyphs: Vec::new(),
             });
         }
     }

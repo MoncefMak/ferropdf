@@ -94,6 +94,14 @@ pub enum CssProperty {
     Orphans,
     Widows,
     Visibility,
+    Top,
+    Right,
+    Bottom,
+    Left,
+    ZIndex,
+    BoxShadow,
+    Direction,
+    UnicodeBidi,
     BoxSizing,
     ListStyleType,
     WhiteSpace,
@@ -163,6 +171,14 @@ impl CssProperty {
             "orphans" => CssProperty::Orphans,
             "widows" => CssProperty::Widows,
             "visibility" => CssProperty::Visibility,
+            "top" => CssProperty::Top,
+            "right" => CssProperty::Right,
+            "bottom" => CssProperty::Bottom,
+            "left" => CssProperty::Left,
+            "z-index" => CssProperty::ZIndex,
+            "box-shadow" => CssProperty::BoxShadow,
+            "direction" => CssProperty::Direction,
+            "unicode-bidi" => CssProperty::UnicodeBidi,
             "box-sizing" => CssProperty::BoxSizing,
             "list-style-type" => CssProperty::ListStyleType,
             "list-style" => CssProperty::ListStyleType,
@@ -318,7 +334,10 @@ fn parse_font_face_rule(parser: &mut Parser<'_, '_>) -> Option<FontFaceRule> {
                 continue;
             }
 
-            // Collect value tokens until semicolon or end
+            // Collect value tokens until semicolon or end.
+            // For `src`, capture only the first url() value (skip format(), later url()s).
+            let is_src = prop_name == "src";
+            let mut first_url: Option<String> = None;
             let mut value_parts: Vec<String> = Vec::new();
             loop {
                 match p.next_including_whitespace() {
@@ -333,7 +352,17 @@ fn parse_font_face_rule(parser: &mut Parser<'_, '_>) -> Option<FontFaceRule> {
                                 }
                             })
                             .unwrap_or_default();
+                        if is_src && first_url.is_none() {
+                            first_url = Some(url.clone());
+                        }
                         value_parts.push(url);
+                    }
+                    Ok(Token::Function(ref _name)) => {
+                        // Skip format() and other functions
+                        let _ = p.parse_nested_block(|pp| -> Result<(), ParseError<'_, ()>> {
+                            while pp.next().is_ok() {}
+                            Ok(())
+                        });
                     }
                     Ok(Token::QuotedString(ref s)) => {
                         value_parts.push(s.to_string());
@@ -351,7 +380,11 @@ fn parse_font_face_rule(parser: &mut Parser<'_, '_>) -> Option<FontFaceRule> {
                 }
             }
 
-            let value = value_parts.join(" ").trim().to_string();
+            let value = if is_src {
+                first_url.unwrap_or_else(|| value_parts.join(" ").trim().to_string())
+            } else {
+                value_parts.join(" ").trim().to_string()
+            };
             match prop_name.as_str() {
                 "font-family" => font_family = Some(value),
                 "src" => src = Some(value),
