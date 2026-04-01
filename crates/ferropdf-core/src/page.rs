@@ -5,6 +5,7 @@ pub enum PageSize {
     A3,
     A4,
     A5,
+    A6,
     Letter,
     Legal,
     Custom(f32, f32),
@@ -16,6 +17,7 @@ impl PageSize {
             PageSize::A3 => (841.89, 1190.55),
             PageSize::A4 => (595.28, 841.89),
             PageSize::A5 => (419.53, 595.28),
+            PageSize::A6 => (297.64, 419.53),
             PageSize::Letter => (612.0, 792.0),
             PageSize::Legal => (612.0, 1008.0),
             PageSize::Custom(w, h) => (*w, *h),
@@ -25,10 +27,19 @@ impl PageSize {
     pub fn from_str(s: &str) -> Self {
         match s.to_uppercase().as_str() {
             "A3" => PageSize::A3,
+            "A4" => PageSize::A4,
             "A5" => PageSize::A5,
+            "A6" => PageSize::A6,
             "LETTER" => PageSize::Letter,
             "LEGAL" => PageSize::Legal,
-            _ => PageSize::A4,
+            _ => {
+                // Try parsing as custom dimensions: "90mm 76mm", "8.5in 11in", etc.
+                if let Some(size) = parse_custom_page_size(s) {
+                    size
+                } else {
+                    PageSize::A4
+                }
+            }
         }
     }
     pub fn name(&self) -> &'static str {
@@ -36,11 +47,27 @@ impl PageSize {
             PageSize::A3 => "A3",
             PageSize::A4 => "A4",
             PageSize::A5 => "A5",
+            PageSize::A6 => "A6",
             PageSize::Letter => "Letter",
             PageSize::Legal => "Legal",
             PageSize::Custom(_, _) => "Custom",
         }
     }
+}
+
+/// Parse a custom page size string like "90mm 76mm" into a PageSize::Custom.
+/// Accepts two whitespace-separated CSS lengths (mm, cm, in, pt, px).
+fn parse_custom_page_size(s: &str) -> Option<PageSize> {
+    // Split on whitespace to find exactly two tokens with units
+    let parts: Vec<&str> = s.split_whitespace().collect();
+    if parts.len() == 2 {
+        let w = parse_css_length_to_pt(parts[0])?;
+        let h = parse_css_length_to_pt(parts[1])?;
+        if w > 0.0 && h > 0.0 {
+            return Some(PageSize::Custom(w, h));
+        }
+    }
+    None
 }
 
 #[derive(Debug, Clone)]

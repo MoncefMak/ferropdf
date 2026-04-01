@@ -55,6 +55,20 @@ class TestModule:
             assert pdf_is_valid(ferropdf.from_html(html)), f"Crash sur: {html!r}"
 
 
+def extract_media_box_mm(pdf_bytes):
+    """Extract (width_mm, height_mm) from the first /MediaBox in the PDF."""
+    import re
+    content = pdf_bytes.decode('latin-1', errors='replace')
+    match = re.search(r'/MediaBox\s*\[([^\]]+)\]', content)
+    assert match, "No /MediaBox found in PDF"
+    coords = match.group(1).split()
+    w_pt, h_pt = float(coords[2]), float(coords[3])
+    return (w_pt / 72 * 25.4, h_pt / 72 * 25.4)
+
+
+SIMPLE_HTML = "<html><body><p>Test</p></body></html>"
+
+
 class TestOptions:
     def test_default(self):
         opts = ferropdf.Options()
@@ -72,6 +86,95 @@ class TestOptions:
     def test_a3(self):
         opts = ferropdf.Options(page_size="A3")
         assert pdf_is_valid(ferropdf.from_html("<p>A3</p>", options=opts))
+
+
+class TestPageSize:
+    """Test that page_size option produces correct MediaBox dimensions."""
+
+    @pytest.mark.parametrize("name,expected_w,expected_h", [
+        ("A3",     841.89, 1190.55),
+        ("A4",     595.28,  841.89),
+        ("A5",     419.53,  595.28),
+        ("A6",     297.64,  419.53),
+        ("Letter", 612.0,   792.0),
+        ("Legal",  612.0,  1008.0),
+    ])
+    def test_named_sizes(self, name, expected_w, expected_h):
+        opts = ferropdf.Options(page_size=name, margin="0mm")
+        pdf = ferropdf.from_html(SIMPLE_HTML, options=opts)
+        assert pdf_is_valid(pdf)
+        w_mm, h_mm = extract_media_box_mm(pdf)
+        exp_w_mm = expected_w / 72 * 25.4
+        exp_h_mm = expected_h / 72 * 25.4
+        assert abs(w_mm - exp_w_mm) < 0.5, f"{name}: width {w_mm:.1f} != {exp_w_mm:.1f}"
+        assert abs(h_mm - exp_h_mm) < 0.5, f"{name}: height {h_mm:.1f} != {exp_h_mm:.1f}"
+
+    @pytest.mark.parametrize("name", ["a4", "a3", "A4", "letter", "LETTER"])
+    def test_case_insensitive(self, name):
+        opts = ferropdf.Options(page_size=name, margin="0mm")
+        pdf = ferropdf.from_html(SIMPLE_HTML, options=opts)
+        assert pdf_is_valid(pdf)
+
+    @pytest.mark.parametrize("size_str,expected_w_mm,expected_h_mm", [
+        ("90mm 76mm",   90,  76),
+        ("90mm 130mm",  90, 130),
+        ("105mm 80mm", 105,  80),
+        ("210mm 297mm", 210, 297),
+        ("100mm 100mm", 100, 100),
+    ])
+    def test_custom_mm(self, size_str, expected_w_mm, expected_h_mm):
+        opts = ferropdf.Options(page_size=size_str, margin="0mm")
+        pdf = ferropdf.from_html(SIMPLE_HTML, options=opts)
+        assert pdf_is_valid(pdf)
+        w_mm, h_mm = extract_media_box_mm(pdf)
+        assert abs(w_mm - expected_w_mm) < 0.5, f"width {w_mm:.1f} != {expected_w_mm}"
+        assert abs(h_mm - expected_h_mm) < 0.5, f"height {h_mm:.1f} != {expected_h_mm}"
+
+    @pytest.mark.parametrize("size_str,expected_w_mm,expected_h_mm", [
+        ("8.5in 11in",   215.9, 279.4),
+        ("5.5in 8.5in",  139.7, 215.9),
+    ])
+    def test_custom_inches(self, size_str, expected_w_mm, expected_h_mm):
+        opts = ferropdf.Options(page_size=size_str, margin="0mm")
+        pdf = ferropdf.from_html(SIMPLE_HTML, options=opts)
+        assert pdf_is_valid(pdf)
+        w_mm, h_mm = extract_media_box_mm(pdf)
+        assert abs(w_mm - expected_w_mm) < 0.5, f"width {w_mm:.1f} != {expected_w_mm}"
+        assert abs(h_mm - expected_h_mm) < 0.5, f"height {h_mm:.1f} != {expected_h_mm}"
+
+    @pytest.mark.parametrize("size_str,expected_w_mm,expected_h_mm", [
+        ("10cm 15cm",  100, 150),
+        ("21cm 29.7cm", 210, 297),
+    ])
+    def test_custom_cm(self, size_str, expected_w_mm, expected_h_mm):
+        opts = ferropdf.Options(page_size=size_str, margin="0mm")
+        pdf = ferropdf.from_html(SIMPLE_HTML, options=opts)
+        assert pdf_is_valid(pdf)
+        w_mm, h_mm = extract_media_box_mm(pdf)
+        assert abs(w_mm - expected_w_mm) < 0.5, f"width {w_mm:.1f} != {expected_w_mm}"
+        assert abs(h_mm - expected_h_mm) < 0.5, f"height {h_mm:.1f} != {expected_h_mm}"
+
+    @pytest.mark.parametrize("size_str,expected_w_pt,expected_h_pt", [
+        ("595pt 842pt",  595, 842),
+        ("300pt 400pt",  300, 400),
+    ])
+    def test_custom_pt(self, size_str, expected_w_pt, expected_h_pt):
+        opts = ferropdf.Options(page_size=size_str, margin="0mm")
+        pdf = ferropdf.from_html(SIMPLE_HTML, options=opts)
+        assert pdf_is_valid(pdf)
+        w_mm, h_mm = extract_media_box_mm(pdf)
+        exp_w_mm = expected_w_pt / 72 * 25.4
+        exp_h_mm = expected_h_pt / 72 * 25.4
+        assert abs(w_mm - exp_w_mm) < 0.5, f"width {w_mm:.1f} != {exp_w_mm:.1f}"
+        assert abs(h_mm - exp_h_mm) < 0.5, f"height {h_mm:.1f} != {exp_h_mm:.1f}"
+
+    def test_invalid_falls_back_to_a4(self):
+        opts = ferropdf.Options(page_size="garbage", margin="0mm")
+        pdf = ferropdf.from_html(SIMPLE_HTML, options=opts)
+        assert pdf_is_valid(pdf)
+        w_mm, h_mm = extract_media_box_mm(pdf)
+        assert abs(w_mm - 210.0) < 0.5
+        assert abs(h_mm - 297.0) < 0.5
 
 
 class TestLayout:
