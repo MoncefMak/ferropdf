@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1774783773826,
+  "lastUpdate": 1775202607666,
   "repoUrl": "https://github.com/MoncefMak/ferropdf",
   "entries": {
     "FastPDF Criterion Benchmarks": [
@@ -1543,6 +1543,54 @@ window.BENCHMARK_DATA = {
             "name": "render_invoice_cached",
             "value": 3852636,
             "range": "± 29335",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "moncefmak@users.noreply.github.com",
+            "name": "Makti Moncef",
+            "username": "MoncefMak"
+          },
+          "committer": {
+            "email": "moncefmak@users.noreply.github.com",
+            "name": "Makti Moncef",
+            "username": "MoncefMak"
+          },
+          "distinct": true,
+          "id": "b389d79a15cad79946d2b2ae660757f318c38807",
+          "message": "fix: support page_size option — A6 and custom dimensions (closes #11)\n\nPageSize::from_str() only matched A3/A5/Letter/Legal and defaulted\neverything else to A4. Now parses custom \"WW UU HH UU\" strings\n(mm, cm, in, pt, px) and adds A6 support.",
+          "timestamp": "2026-04-01T23:41:47+01:00",
+          "tree_id": "b0b158c9fd223c35c586aa9a30a87dd50b17ff7a",
+          "url": "https://github.com/MoncefMak/ferropdf/commit/b389d79a15cad79946d2b2ae660757f318c38807"
+        },
+        "date": 1775202607364,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "render_simple",
+            "value": 6662461,
+            "range": "± 36816",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice",
+            "value": 7510628,
+            "range": "± 59478",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_simple_cached",
+            "value": 3261154,
+            "range": "± 16852",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice_cached",
+            "value": 4099810,
+            "range": "± 25486",
             "unit": "ns/iter"
           }
         ]
