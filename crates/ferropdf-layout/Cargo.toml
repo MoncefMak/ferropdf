@@ -2,6 +2,7 @@
 name    = "ferropdf-layout"
 version = "0.2.9"
 edition = "2021"
+rust-version.workspace = true
 
 [dependencies]
 ferropdf-core  = { path = "../ferropdf-core" }

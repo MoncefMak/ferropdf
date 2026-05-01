@@ -2,6 +2,7 @@
 name    = "ferropdf-python"
 version = "0.2.9"
 edition = "2021"
+rust-version.workspace = true
 
 [lib]
 name       = "_ferropdf"
@@ -10,7 +11,7 @@ crate-type = ["cdylib"]
 [dependencies]
 ferropdf-render = { path = "../../crates/ferropdf-render" }
 ferropdf-core   = { path = "../../crates/ferropdf-core" }
-pyo3 = { workspace = true }
+pyo3            = { workspace = true }
 
 [features]
 default = ["pyo3/extension-module"]

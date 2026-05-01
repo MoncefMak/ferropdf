@@ -2,6 +2,7 @@
 name    = "ferropdf-render"
 version = "0.2.9"
 edition = "2021"
+rust-version.workspace = true
 
 [dependencies]
 ferropdf-core   = { path = "../ferropdf-core" }
@@ -24,6 +25,7 @@ log             = { workspace = true }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
+tempfile  = "3.10"
 
 [[bench]]
 name    = "render_bench"

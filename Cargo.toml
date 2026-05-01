@@ -10,6 +10,9 @@ members = [
 ]
 resolver = "2"
 
+[workspace.package]
+rust-version = "1.85"
+
 [workspace.dependencies]
 # HTML — NE PAS écrire de parser HTML maison
 html5ever    = "0.27"
@@ -41,12 +44,10 @@ subsetter    = "0.2"
 thiserror    = "1.0"
 url          = "2.5"
 id-arena     = "2.2"
-rayon        = "1.8"
 hashbrown    = "0.14"
 log          = "0.4"
 base64       = "0.22"
 flate2       = "1.0"
-ureq         = { version = "2.9", features = ["tls"] }
 
 # Python bindings
 pyo3         = { version = "0.24", features = ["extension-module"] }

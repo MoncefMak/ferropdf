@@ -2,7 +2,7 @@
 
 # ferropdf
 
-**Fast HTML-to-PDF for Python — Rust-powered, up to 13x faster than WeasyPrint.**
+**Fast HTML-to-PDF for Python — Rust-powered. Single-digit-millisecond renders for typical invoices and reports.**
 
 [![CI](https://github.com/MoncefMak/ferropdf/actions/workflows/ci.yml/badge.svg)](https://github.com/MoncefMak/ferropdf/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/ferropdf)](https://pypi.org/project/ferropdf/)
@@ -15,17 +15,16 @@
 
 ## Why ferropdf?
 
-Most Python HTML-to-PDF libraries are slow. **ferropdf** is a native Rust engine exposed as a Python package via PyO3 — it renders complex invoices, reports, and dashboards in milliseconds, not seconds.
+A native Rust HTML-to-PDF engine exposed as a Python package via PyO3. Releases the GIL during render so it composes cleanly with FastAPI, Django async views, and threadpools. The font cache lives on the `Engine` instance — the first render bootstraps system fonts, subsequent ones are fast.
 
 | Feature | ferropdf | WeasyPrint |
 |---|---|---|
-| **Speed** (invoice) | ~25ms | ~330ms |
 | **GIL** | Released during render | Held |
 | **Async-safe** | Yes (FastAPI, Django) | No |
 | **Font subsetting** | Automatic | Manual |
 | **Install** | `pip install ferropdf` | System deps required |
 
-> Benchmarks on Linux x86_64, median of 20 runs, reusable engine with font cache.
+ferropdf intentionally targets **document rendering**, not full-fidelity browser layout. For honest performance comparisons, run [`bench/compare.py`](bench/compare.py) against your own workload — see [Performance](#performance) below.
 
 ---
 
@@ -120,6 +119,17 @@ All exceptions inherit from `ferropdf.FerroError` (itself a `RuntimeError`):
 
 ---
 
+## Security model
+
+ferropdf is intended for both **trusted server-side templates** and **partially-trusted user HTML**. To stay safe with the latter, opt in to local-resource access explicitly via `base_url`:
+
+- **`base_url=None`** *(default for v0.3+)*: `<img>`, `<link rel="stylesheet">`, and `@font-face url(...)` only resolve `data:` URIs. Local file paths and `http(s)://` URLs are ignored and produce a warning.
+- **`base_url="/path/to/assets/"`**: relative paths resolve under that directory; the canonicalized result is verified to live inside it (path traversal blocked). HTTP(S) URLs are still skipped — ferropdf never makes outbound network requests.
+
+When migrating from earlier versions, set `base_url` to your template directory to keep local images and stylesheets working.
+
+---
+
 ## Framework integration
 
 ### Django
@@ -161,12 +171,15 @@ ferropdf uses industry-standard libraries for parsing and layout — not a hand-
 |---|---|
 | Block layout | Supported |
 | Flexbox (`flex-direction`, `flex-wrap`, `gap`, `justify-content`, `align-items`) | Supported |
-| Tables (`<table>`, `<thead>`, `<tbody>`, `<tr>`, `<td>`) | Supported |
+| Tables (`<table>`, `<thead>`, `<tbody>`, `<tr>`, `<td>`, `colspan`, `rowspan`, `border-collapse`) | Supported |
+| `position: relative`, `position: absolute` | Supported |
 | `width`, `height` (px, %, em) | Supported |
 | `margin`, `padding` (px, mm, em, auto) | Supported |
 | `box-sizing: border-box` | Supported |
-| CSS Grid | Not yet |
+| CSS Grid | Experimental (taffy) |
+| `position: fixed`, `sticky` | Not yet |
 | `float` | Not yet |
+| `overflow` | Not yet |
 
 ### Typography
 
@@ -178,17 +191,42 @@ ferropdf uses industry-standard libraries for parsing and layout — not a hand-
 | `font-style` (normal, italic) | Supported |
 | `line-height` | Supported |
 | `text-align` (left, center, right) | Supported |
-| `@font-face` | Not yet |
+| `@font-face` (data: URI + base_url paths) | Supported |
+| Arabic shaping + `direction: rtl` | Supported (via cosmic-text/rustybuzz) |
+| `text-align: justify` | Not yet |
+| `letter-spacing`, `word-spacing` | Not yet |
 
 ### Visual
 
 | Feature | Status |
 |---|---|
-| `color`, `background-color` (hex, rgb, rgba) | Supported |
+| `color`, `background-color` (hex, rgb, rgba, named) | Supported |
 | `border` (width, style, color) | Supported |
 | `border-radius` | Supported |
-| `opacity` | Not yet |
-| `box-shadow` | Not yet |
+| `box-shadow` (offset + blur + color) | Supported |
+| `opacity` | Supported |
+| `linear-gradient`, `radial-gradient` | Not yet |
+| `transform`, `filter`, `clip-path` | Not yet |
+
+### Selectors
+
+| Feature | Status |
+|---|---|
+| Type, class, id, descendant, child, attribute | Supported |
+| `:first-child`, `:last-child`, `:only-child` | Supported |
+| `:nth-child(n)`, `:nth-of-type(n)` | Supported |
+| `:hover`, `:focus`, `:checked` (interactive states) | Skipped silently — no DOM events in PDF |
+| `::before`, `::after` (with `content:`) | Planned (v0.4) |
+
+### At-rules
+
+| Feature | Status |
+|---|---|
+| `@font-face` | Supported |
+| `@page { margin / size }` | Planned (v0.4) |
+| `@media print`, `@media screen` | Planned (v0.4) |
+| `@import` | Not yet |
+| CSS custom properties (`var(--x)`) | Planned (v0.4) |
 
 ### Page
 
@@ -196,9 +234,12 @@ ferropdf uses industry-standard libraries for parsing and layout — not a hand-
 |---|---|
 | Multi-page documents | Supported |
 | Page sizes (A0–A10, Letter, Legal, Tabloid, B-series) | Supported |
+| Custom page sizes (e.g. `"210mm 297mm"`) | Supported |
 | Configurable margins | Supported |
 | PDF metadata (title, author) | Supported |
-| `@page` rules | Planned |
+| `@page` rules | Planned (v0.4) |
+
+> Until `@page` and `@media print` land, page size and margins are configured via `Options(page_size=…, margin=…)`.
 
 ---
 
@@ -235,13 +276,16 @@ Python bindings are via [PyO3](https://pyo3.rs) + [maturin](https://www.maturin.
 
 ## Performance
 
-Font subsetting + caching means:
+The `Engine` class amortizes font scan cost across renders — first render bootstraps the system font cache (~100 ms), subsequent renders complete in single-digit to low-double-digit milliseconds for typical invoice/report-sized documents. PDFs stay small because only used glyphs are embedded.
 
-- **First render**: loads system fonts + builds cache (~100ms)
-- **Subsequent renders**: 15–30ms for typical documents
-- **PDF sizes**: small, because only used glyphs are embedded
+The repo includes [`bench/compare.py`](bench/compare.py) which times ferropdf vs WeasyPrint on a few fixtures. Re-run yourself rather than trusting numbers from a README:
 
-The `Engine` class keeps the font cache alive — ideal for web servers handling many requests.
+```bash
+pip install ferropdf weasyprint
+python bench/compare.py
+```
+
+ferropdf is significantly faster on simple-layout documents because its CSS surface is much smaller than WeasyPrint's. The gap narrows as you exercise CSS features ferropdf doesn't yet implement (gradients, transforms, advanced selectors). For honest comparisons, time **your** workload on **your** hardware.
 
 ---
 
@@ -284,7 +328,10 @@ pytest tests/ -v                   # Python tests
 cargo fmt --all --check
 cargo clippy --workspace -- -D warnings
 cargo audit
+cargo machete   # checks for unused workspace dependencies
 ```
+
+**MSRV**: Rust 1.85+ (set in `[workspace.package]`).
 
 ---
 
