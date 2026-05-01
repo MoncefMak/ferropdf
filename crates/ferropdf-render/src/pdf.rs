@@ -10,7 +10,6 @@ use flate2::Compression;
 use pdf_writer::{Content, Filter, Finish, Name, Pdf, Rect as PdfWriterRect, Ref, Str, TextStr};
 use std::collections::HashMap;
 use std::io::Write;
-use std::path::Path;
 
 // =============================================================================
 // HTML/CSS → PDF COORDINATE CONVERSION
@@ -58,6 +57,7 @@ pub fn write_pdf(
     config: &PageConfig,
     opts: &RenderOptions,
     ext_font_db: Option<&fontdb::Database>,
+    warnings: &mut Vec<ferropdf_core::RenderWarning>,
 ) -> ferropdf_core::Result<Vec<u8>> {
     let mut pdf = Pdf::new();
     let mut ref_id = 1u32;
@@ -275,7 +275,7 @@ pub fn write_pdf(
         for op in &display_list.ops {
             if let DrawOp::DrawImage { src, .. } = op {
                 if !image_map.contains_key(src) {
-                    match load_image(src) {
+                    match load_image(src, opts.base_url.as_deref()) {
                         Ok((rgb_data, width, height)) => {
                             let pdf_ref = next_ref();
                             let pdf_name = format!("Im{img_counter}");
@@ -291,8 +291,12 @@ pub fn write_pdf(
                                 },
                             );
                         }
-                        Err(e) => {
-                            log::warn!("Failed to load image {}: {}", src, e);
+                        Err(reason) => {
+                            log::warn!("Failed to load image {}: {}", src, reason);
+                            warnings.push(ferropdf_core::RenderWarning::ImageLoadFailed {
+                                src: src.clone(),
+                                reason,
+                            });
                         }
                     }
                 }
@@ -687,24 +691,24 @@ struct LoadedImage {
     pdf_name: String,
 }
 
-/// Load image from a source string (file path or data URI).
-fn load_image(src: &str) -> Result<(Vec<u8>, u32, u32), FerroError> {
+/// Load image from a source string (data URI or sandboxed file path).
+///
+/// Returns `Err(reason)` rather than `FerroError` because image failures are
+/// non-fatal — the caller turns the reason into a `RenderWarning::ImageLoadFailed`
+/// and the render continues without the image.
+fn load_image(src: &str, base_url: Option<&str>) -> Result<(Vec<u8>, u32, u32), String> {
     let data = if src.starts_with("data:") {
-        // data URI — extract base64 payload
         let comma = src
             .find(',')
-            .ok_or_else(|| FerroError::Image("Invalid data URI: no comma".into()))?;
+            .ok_or_else(|| "invalid data URI: no comma".to_string())?;
         let encoded = &src[comma + 1..];
         base64::Engine::decode(&base64::engine::general_purpose::STANDARD, encoded)
-            .map_err(|e| FerroError::Image(format!("Base64 decode error: {e}")))?
+            .map_err(|e| format!("base64 decode error: {}", e))?
     } else {
-        // File path
-        std::fs::read(Path::new(src))
-            .map_err(|e| FerroError::Image(format!("Cannot read image {src}: {e}")))?
+        crate::sandbox::read_sandboxed(src, base_url)?
     };
 
-    let img = image::load_from_memory(&data)
-        .map_err(|e| FerroError::Image(format!("Cannot decode image {src}: {e}")))?;
+    let img = image::load_from_memory(&data).map_err(|e| format!("cannot decode image: {}", e))?;
     let rgb = img.to_rgb8();
     let (w, h) = rgb.dimensions();
     Ok((rgb.into_raw(), w, h))

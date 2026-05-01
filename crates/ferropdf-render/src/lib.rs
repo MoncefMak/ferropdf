@@ -2,17 +2,26 @@ mod display_list;
 mod font_subsetter;
 mod painter;
 mod pdf;
+mod sandbox;
 
 use ferropdf_core::{PageConfig, PageMargins, PageSize, RenderWarning};
 pub use ferropdf_layout::FontDatabase;
+
+/// Default upper bound on HTML input size (10 MiB). Renders larger than this
+/// are rejected early to limit memory amplification under adversarial input.
+pub const DEFAULT_MAX_HTML_BYTES: usize = 10 * 1024 * 1024;
 
 /// Rendering options passed from Python bindings.
 pub struct RenderOptions {
     pub page_size: String,
     pub margin: String,
+    /// Directory under which `<img src>`, `<link href>`, and `@font-face url()` resolve.
+    /// When `None`, all local-filesystem reads are refused (only `data:` URIs work).
     pub base_url: Option<String>,
     pub title: Option<String>,
     pub author: Option<String>,
+    /// Reject input HTML longer than this. Defaults to [`DEFAULT_MAX_HTML_BYTES`].
+    pub max_html_bytes: Option<usize>,
 }
 
 /// Result of a render operation: PDF bytes + any non-fatal warnings.
@@ -35,6 +44,16 @@ pub fn render_with_warnings(
 ) -> ferropdf_core::Result<RenderResult> {
     let mut warnings: Vec<RenderWarning> = Vec::new();
 
+    // 0. Reject oversize input early so adversarial HTML can't amplify memory.
+    let max_html = opts.max_html_bytes.unwrap_or(DEFAULT_MAX_HTML_BYTES);
+    if html.len() > max_html {
+        return Err(ferropdf_core::FerroError::Layout(format!(
+            "HTML input ({} bytes) exceeds max_html_bytes ({})",
+            html.len(),
+            max_html
+        )));
+    }
+
     // 1. Parse HTML
     let parse_result = ferropdf_parse::parse(html)?;
 
@@ -47,52 +66,39 @@ pub fn render_with_warnings(
         }
     }
 
-    // Load external stylesheets (local files only for v1)
+    // Load external stylesheets, sandboxed to base_url.
     for stylesheet_url in &parse_result.external_stylesheets {
-        if stylesheet_url.starts_with("http://") || stylesheet_url.starts_with("https://") {
-            warnings.push(RenderWarning::StylesheetFailed {
-                path: stylesheet_url.clone(),
-                reason: "external HTTP stylesheets not supported".into(),
-            });
-            continue;
-        }
-
-        let path = if let Some(ref base) = opts.base_url {
-            let base_dir = std::path::Path::new(base);
-            let base_dir = if base_dir.is_file() {
-                base_dir.parent().unwrap_or(base_dir)
-            } else {
-                base_dir
-            };
-            base_dir.join(stylesheet_url)
-        } else {
-            std::path::PathBuf::from(stylesheet_url)
-        };
-
-        match std::fs::read_to_string(&path) {
-            Ok(css_content) => match ferropdf_parse::parse_stylesheet(&css_content) {
-                Ok(sheet) => stylesheets.push(sheet),
-                Err(e) => {
-                    warnings.push(RenderWarning::StylesheetFailed {
-                        path: path.display().to_string(),
+        match sandbox::read_sandboxed(stylesheet_url, opts.base_url.as_deref()) {
+            Ok(bytes) => match std::str::from_utf8(&bytes) {
+                Ok(css_content) => match ferropdf_parse::parse_stylesheet(css_content) {
+                    Ok(sheet) => stylesheets.push(sheet),
+                    Err(e) => warnings.push(RenderWarning::StylesheetFailed {
+                        path: stylesheet_url.clone(),
                         reason: e.to_string(),
-                    });
-                }
+                    }),
+                },
+                Err(e) => warnings.push(RenderWarning::StylesheetFailed {
+                    path: stylesheet_url.clone(),
+                    reason: format!("invalid UTF-8: {}", e),
+                }),
             },
-            Err(e) => {
-                warnings.push(RenderWarning::StylesheetFailed {
-                    path: path.display().to_string(),
-                    reason: e.to_string(),
-                });
-            }
+            Err(reason) => warnings.push(RenderWarning::StylesheetFailed {
+                path: stylesheet_url.clone(),
+                reason,
+            }),
         }
     }
 
     // 3. Load @font-face custom fonts
     for sheet in &stylesheets {
         for ff in &sheet.font_faces {
-            if let Some(data) = load_font_face_data(&ff.src, opts.base_url.as_deref()) {
-                font_db.load_font_data(data);
+            match load_font_face_data(&ff.src, opts.base_url.as_deref()) {
+                Ok(Some(data)) => font_db.load_font_data(data),
+                Ok(None) => {}
+                Err(reason) => warnings.push(RenderWarning::StylesheetFailed {
+                    path: ff.src.clone(),
+                    reason: format!("@font-face: {}", reason),
+                }),
             }
         }
     }
@@ -132,7 +138,13 @@ pub fn render_with_warnings(
 
     // 9. Write PDF (reuse fontdb from cosmic-text — no second load_system_fonts)
     let db_guard = font_db.fontdb();
-    let pdf_bytes = pdf::write_pdf(&display_lists, &page_config, opts, Some(db_guard.db()))?;
+    let pdf_bytes = pdf::write_pdf(
+        &display_lists,
+        &page_config,
+        opts,
+        Some(db_guard.db()),
+        &mut warnings,
+    )?;
 
     Ok(RenderResult {
         pdf_bytes,
@@ -150,47 +162,25 @@ pub fn render_with_cache(
     Ok(result.pdf_bytes)
 }
 
-/// Load font data from a @font-face src value.
-/// Supports:
-///   - File paths: url("path/to/font.ttf") → resolved against base_url
-///   - Data URIs: data:font/ttf;base64,... or data:application/x-font-ttf;base64,...
-fn load_font_face_data(src: &str, base_url: Option<&str>) -> Option<Vec<u8>> {
+/// Load font data from a `@font-face src` value.
+/// Returns:
+///   - `Ok(Some(bytes))` — font loaded successfully (data URI, or sandboxed file).
+///   - `Ok(None)` — `data:` URI with no parsable base64 payload.
+///   - `Err(reason)` — sandboxed file path was refused (no base_url, traversal,
+///     missing, or oversize). Caller turns this into a `RenderWarning`.
+fn load_font_face_data(src: &str, base_url: Option<&str>) -> Result<Option<Vec<u8>>, String> {
     let src = src.trim();
 
-    // Data URI
     if let Some(after_data) = src.strip_prefix("data:") {
-        // data:[<mediatype>][;base64],<data>
         if let Some(base64_idx) = after_data.find(";base64,") {
             let encoded = &after_data[base64_idx + 8..];
             use base64::Engine as B64Engine;
-            return base64::engine::general_purpose::STANDARD
+            return Ok(base64::engine::general_purpose::STANDARD
                 .decode(encoded.trim())
-                .ok();
+                .ok());
         }
-        return None;
+        return Ok(None);
     }
 
-    // Strip file:// protocol prefix
-    let src = src
-        .strip_prefix("file:///")
-        .map(|s| format!("/{}", s))
-        .unwrap_or_else(|| src.strip_prefix("file://").unwrap_or(src).to_string());
-    let src = src.trim();
-
-    // File path — absolute paths are used directly, relative paths resolved against base_url
-    let path = if std::path::Path::new(src).is_absolute() {
-        std::path::PathBuf::from(src)
-    } else if let Some(base) = base_url {
-        let base_dir = std::path::Path::new(base);
-        let base_dir = if base_dir.is_file() {
-            base_dir.parent().unwrap_or(base_dir)
-        } else {
-            base_dir
-        };
-        base_dir.join(src)
-    } else {
-        std::path::PathBuf::from(src)
-    };
-
-    std::fs::read(&path).ok()
+    sandbox::read_sandboxed(src, base_url).map(Some)
 }

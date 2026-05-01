@@ -55,6 +55,7 @@ fn default_opts() -> RenderOptions {
         base_url: None,
         title: None,
         author: None,
+        max_html_bytes: None,
     }
 }
 

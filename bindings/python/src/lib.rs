@@ -1,5 +1,5 @@
 use pyo3::prelude::*;
-use pyo3::types::PyBytes;
+use pyo3::types::{PyBytes, PyList, PyTuple};
 use std::sync::OnceLock;
 
 pyo3::create_exception!(ferropdf, FerroError, pyo3::exceptions::PyRuntimeError);
@@ -16,6 +16,7 @@ pub struct PyOptions {
     pub base_url: Option<String>,
     pub title: Option<String>,
     pub author: Option<String>,
+    pub max_html_bytes: Option<usize>,
 }
 
 #[pymethods]
@@ -27,6 +28,7 @@ impl PyOptions {
         base_url  = None,
         title     = None,
         author    = None,
+        max_html_bytes = None,
     ))]
     fn new(
         page_size: &str,
@@ -34,6 +36,7 @@ impl PyOptions {
         base_url: Option<String>,
         title: Option<String>,
         author: Option<String>,
+        max_html_bytes: Option<usize>,
     ) -> Self {
         Self {
             page_size: page_size.to_string(),
@@ -41,6 +44,7 @@ impl PyOptions {
             base_url,
             title,
             author,
+            max_html_bytes,
         }
     }
 
@@ -60,8 +64,24 @@ impl From<PyOptions> for ferropdf_render::RenderOptions {
             base_url: opts.base_url,
             title: opts.title,
             author: opts.author,
+            max_html_bytes: opts.max_html_bytes,
         }
     }
+}
+
+fn default_options() -> PyOptions {
+    PyOptions {
+        page_size: "A4".to_string(),
+        margin: "20mm".to_string(),
+        base_url: None,
+        title: None,
+        author: None,
+        max_html_bytes: None,
+    }
+}
+
+fn warnings_to_strings(ws: &[ferropdf_core::RenderWarning]) -> Vec<String> {
+    ws.iter().map(|w| w.to_string()).collect()
 }
 
 #[pyclass(name = "Engine")]
@@ -76,39 +96,75 @@ impl PyEngine {
     #[pyo3(signature = (options = None))]
     fn new(options: Option<PyOptions>) -> Self {
         Self {
-            options: options.unwrap_or_else(|| PyOptions {
-                page_size: "A4".to_string(),
-                margin: "20mm".to_string(),
-                base_url: None,
-                title: None,
-                author: None,
-            }),
+            options: options.unwrap_or_else(default_options),
             font_db: OnceLock::new(),
         }
     }
 
-    /// Rendre du HTML en PDF.
-    /// py.allow_threads() libère le GIL → compatible asyncio/FastAPI/Django.
+    /// Render HTML to PDF bytes. Recoverable issues (missing image, failed
+    /// stylesheet) are emitted via Python's `warnings` module and otherwise
+    /// silently swallowed — call `render_with_warnings` to inspect them.
     fn render<'py>(&self, py: Python<'py>, html: &str) -> PyResult<Bound<'py, PyBytes>> {
-        let html = html.to_string();
-        let opts = self.options.clone();
-
-        let font_db = self.font_db.get_or_init(ferropdf_render::FontDatabase::new);
-
-        let result = py.allow_threads(move || {
-            ferropdf_render::render_with_cache(&html, &opts.into(), font_db)
-        });
-
-        match result {
-            Ok(bytes) => Ok(PyBytes::new(py, &bytes)),
-            Err(e) => Err(to_py_err(e)),
-        }
+        let (bytes, warnings) = self.render_inner(py, html)?;
+        emit_warnings(py, &warnings);
+        Ok(PyBytes::new(py, &bytes))
     }
 
     fn render_file<'py>(&self, py: Python<'py>, path: &str) -> PyResult<Bound<'py, PyBytes>> {
         let html = std::fs::read_to_string(path)
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyIOError, _>(e.to_string()))?;
         self.render(py, &html)
+    }
+
+    /// Render and return a `(bytes, warnings)` tuple where `warnings` is a list
+    /// of human-readable strings describing recoverable issues.
+    fn render_with_warnings<'py>(
+        &self,
+        py: Python<'py>,
+        html: &str,
+    ) -> PyResult<Bound<'py, PyTuple>> {
+        let (bytes, warnings) = self.render_inner(py, html)?;
+        let py_bytes = PyBytes::new(py, &bytes);
+        let py_warnings = PyList::new(py, &warnings)?;
+        PyTuple::new(py, [py_bytes.into_any(), py_warnings.into_any()])
+    }
+}
+
+impl PyEngine {
+    /// Shared rendering core. Releases the GIL during the actual work and
+    /// returns the PDF bytes plus stringified warnings.
+    fn render_inner(&self, py: Python<'_>, html: &str) -> PyResult<(Vec<u8>, Vec<String>)> {
+        let html = html.to_string();
+        let opts = self.options.clone();
+
+        let font_db = self.font_db.get_or_init(ferropdf_render::FontDatabase::new);
+
+        let result = py.allow_threads(move || {
+            ferropdf_render::render_with_warnings(&html, &opts.into(), font_db)
+        });
+
+        match result {
+            Ok(r) => Ok((r.pdf_bytes, warnings_to_strings(&r.warnings))),
+            Err(e) => Err(to_py_err(e)),
+        }
+    }
+}
+
+fn emit_warnings(py: Python<'_>, warnings: &[String]) {
+    if warnings.is_empty() {
+        return;
+    }
+    let warnings_module = match py.import("warnings") {
+        Ok(m) => m,
+        Err(_) => return,
+    };
+    let warn_fn = match warnings_module.getattr("warn") {
+        Ok(f) => f,
+        Err(_) => return,
+    };
+    for w in warnings {
+        // Best-effort — never fail the render because of a warning emission.
+        let _ = warn_fn.call1((w.as_str(),));
     }
 }
 
@@ -120,13 +176,7 @@ fn from_html<'py>(
     base_url: Option<&str>,
     options: Option<PyOptions>,
 ) -> PyResult<Bound<'py, PyBytes>> {
-    let mut opts = options.unwrap_or_else(|| PyOptions {
-        page_size: "A4".to_string(),
-        margin: "20mm".to_string(),
-        base_url: None,
-        title: None,
-        author: None,
-    });
+    let mut opts = options.unwrap_or_else(default_options);
     if let Some(u) = base_url {
         opts.base_url = Some(u.to_string());
     }
