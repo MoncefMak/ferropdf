@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1775202607666,
+  "lastUpdate": 1777616161654,
   "repoUrl": "https://github.com/MoncefMak/ferropdf",
   "entries": {
     "FastPDF Criterion Benchmarks": [
@@ -1591,6 +1591,54 @@ window.BENCHMARK_DATA = {
             "name": "render_invoice_cached",
             "value": 4099810,
             "range": "± 25486",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "maktimoncef@gmail.com",
+            "name": "moncef",
+            "username": "MoncefMak"
+          },
+          "committer": {
+            "email": "maktimoncef@gmail.com",
+            "name": "moncef",
+            "username": "MoncefMak"
+          },
+          "distinct": true,
+          "id": "79b3fc6e82f086e647221e733de44cf346c6278e",
+          "message": "security: sandbox local resources, surface render warnings, cap input size\n\nCloses a local-file-inclusion vulnerability where <img src=\"/etc/passwd\">\nwas read via std::fs::read(Path::new(src)) with no base_url resolution\nand no path-traversal check. Stylesheets and @font-face used Path::join\non absolute paths, which silently replaced base_url and bypassed any\nimplied sandbox.\n\n- New crate-internal module ferropdf-render/src/sandbox.rs:\n  resolve_local_path() refuses http(s):// URLs, refuses local paths when\n  base_url is None, refuses absolute paths, canonicalizes the resolved\n  path, and verifies it stays under the canonical base_url. Wrapped by\n  read_sandboxed() which also enforces a 50 MiB per-resource cap.\n- pdf.rs::load_image now takes base_url and goes through read_sandboxed;\n  failures push RenderWarning::ImageLoadFailed instead of being lost in\n  log::warn!.\n- lib.rs::render_with_warnings drives external stylesheets and\n  @font-face url() through read_sandboxed too, and flows warnings from\n  pdf::write_pdf back into the result.\n- RenderOptions gains max_html_bytes (default 10 MiB) so adversarial\n  HTML can't amplify memory before parsing even starts.\n\nPython binding:\n- Engine.render_with_warnings(html) -> (bytes, list[str]) returns\n  recoverable issues alongside the PDF.\n- Engine.render(html) keeps its existing signature for back-compat but\n  now emits warnings via Python's warnings module so callers see them\n  on stderr by default.\n- Options gains max_html_bytes.\n\nTests: 9 Rust unit tests in sandbox.rs (http reject, traversal, oversize,\ncanonicalize) + 12 end-to-end Python tests in tests/test_security.py\n(LFI, traversal, http skip, data-URI happy path, oversize HTML,\nback-compat).\n\nEmpirically verified: <img src=\"/tmp/SECRET\"> rendered through\nferropdf no longer leaks the secret bytes into the PDF.",
+          "timestamp": "2026-05-01T07:11:21+01:00",
+          "tree_id": "2afb2a0c0b983c9c4b48f8e5d8b7a8fff73acf98",
+          "url": "https://github.com/MoncefMak/ferropdf/commit/79b3fc6e82f086e647221e733de44cf346c6278e"
+        },
+        "date": 1777616160386,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "render_simple",
+            "value": 6823824,
+            "range": "± 175276",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice",
+            "value": 7558058,
+            "range": "± 75548",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_simple_cached",
+            "value": 3175708,
+            "range": "± 48302",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice_cached",
+            "value": 3999114,
+            "range": "± 18414",
             "unit": "ns/iter"
           }
         ]
