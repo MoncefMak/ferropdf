@@ -202,7 +202,7 @@ impl TreeSink for DomSink {
     }
 
     fn reparent_children(&mut self, node: &Self::Handle, new_parent: &Self::Handle) {
-        let children: Vec<_> = self.doc.nodes[*node].children.drain(..).collect();
+        let children = std::mem::take(&mut self.doc.nodes[*node].children);
         for child in children {
             self.doc.nodes[child].parent = Some(*new_parent);
             self.doc.nodes[*new_parent].children.push(child);
