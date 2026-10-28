@@ -23,5 +23,5 @@ pub use style::{
     AlignItems, AlignSelf, BorderCollapse, BorderRadius, BorderSide, BorderStyle,
     BoxDecorationBreak, BoxShadow, ComputedStyle, Direction, Display, FlexDirection, FlexWrap,
     FontStyle, FontWeight, JustifyContent, ListStyleType, PageBreak, PageBreakInside, Position,
-    TextAlign, TextDecoration,
+    TextAlign, TextDecoration, WhiteSpace,
 };

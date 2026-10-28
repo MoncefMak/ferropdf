@@ -86,21 +86,14 @@ fn paint_box(
     // Merged inline text — render with per-segment styling
     if !layout_box.inline_spans.is_empty() && !layout_box.shaped_lines.is_empty() {
         let text_x = layout_box.content.x + eff_x;
-        // Use this box's own content width for alignment (not parent's),
-        // because merge_inline_children shaped text at this box's width.
-        let align_container = layout_box.content.width;
+        // text-align is applied by cosmic-text at shaping time (see
+        // `text::css_align`): glyph.x and seg.x_offset already include the
+        // alignment offset, so no extra offset is added here.
         for line in &layout_box.shaped_lines {
             if line.segments.is_empty() {
                 continue;
             }
             let line_y = layout_box.content.y + eff_y + line.y;
-
-            // Compute text-align offset for the whole line
-            let align_offset = match style.text_align {
-                ferropdf_core::TextAlign::Right => align_container - line.width,
-                ferropdf_core::TextAlign::Center => (align_container - line.width) / 2.0,
-                _ => 0.0,
-            };
 
             for seg in &line.segments {
                 if seg.text.trim().is_empty() {
@@ -120,7 +113,7 @@ fn paint_box(
                 let draw_x = if !seg_glyphs.is_empty() {
                     text_x
                 } else {
-                    text_x + seg.x_offset + align_offset
+                    text_x + seg.x_offset
                 };
                 ops.push(DrawOp::DrawText {
                     text: seg.text.clone(),
@@ -179,10 +172,18 @@ fn paint_box(
                         container_width: 0.0,
                         shaped_glyphs: line.glyphs.clone(),
                     });
+                    // Glyph positions include the text-align offset: start
+                    // decorations at the first glyph, not the content edge.
+                    let line_x0 = line
+                        .glyphs
+                        .iter()
+                        .map(|g| g.x)
+                        .fold(f32::INFINITY, f32::min);
+                    let line_x0 = if line_x0.is_finite() { line_x0 } else { 0.0 };
                     emit_text_decoration(
                         ops,
                         &style.text_decoration,
-                        text_x,
+                        text_x + line_x0,
                         line_y,
                         line.width,
                         style.font_size,

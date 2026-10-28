@@ -416,6 +416,15 @@ fn apply_single(
                 _ => ferropdf_core::style::TextDecoration::None,
             };
         }
+        CssProperty::WhiteSpace => {
+            style.white_space = match raw {
+                "nowrap" => WhiteSpace::Nowrap,
+                "pre" => WhiteSpace::Pre,
+                "pre-wrap" | "break-spaces" => WhiteSpace::PreWrap,
+                "pre-line" => WhiteSpace::PreLine,
+                _ => WhiteSpace::Normal,
+            };
+        }
         CssProperty::LetterSpacing => {
             if let Some(pt) = parse_length_to_pt(raw) {
                 style.letter_spacing = pt;
@@ -500,26 +509,26 @@ fn apply_single(
         CssProperty::PageBreakBefore => {
             style.page_break_before = match raw {
                 "always" => PageBreak::Always,
-                "page" => PageBreak::Page,
+                "page" | "recto" | "verso" => PageBreak::Page,
                 "left" => PageBreak::Left,
                 "right" => PageBreak::Right,
-                "avoid" => PageBreak::Avoid,
+                "avoid" | "avoid-page" => PageBreak::Avoid,
                 _ => PageBreak::Auto,
             };
         }
         CssProperty::PageBreakAfter => {
             style.page_break_after = match raw {
                 "always" => PageBreak::Always,
-                "page" => PageBreak::Page,
+                "page" | "recto" | "verso" => PageBreak::Page,
                 "left" => PageBreak::Left,
                 "right" => PageBreak::Right,
-                "avoid" => PageBreak::Avoid,
+                "avoid" | "avoid-page" => PageBreak::Avoid,
                 _ => PageBreak::Auto,
             };
         }
         CssProperty::PageBreakInside => {
             style.page_break_inside = match raw {
-                "avoid" => PageBreakInside::Avoid,
+                "avoid" | "avoid-page" => PageBreakInside::Avoid,
                 _ => PageBreakInside::Auto,
             };
         }

@@ -76,6 +76,13 @@ fn populate_shaped_lines(lb: &mut LayoutBox, fs: &mut cosmic_text::FontSystem) {
         if !txt.trim().is_empty() && lb.shaped_lines.is_empty() {
             let style = &lb.style;
             let font_family = style.font_family.first().map(|s| s.as_str()).unwrap_or("");
+            // A lone text leaf is its own line box: collapsible spaces at
+            // its edges are removed (CSS Text 3 §4.1.2).
+            let txt = if collapses(style.white_space) {
+                txt.trim_matches(' ')
+            } else {
+                txt.as_str()
+            };
             lb.shaped_lines = text::shape_text_lines(
                 txt,
                 style.font_size,
@@ -84,6 +91,8 @@ fn populate_shaped_lines(lb: &mut LayoutBox, fs: &mut cosmic_text::FontSystem) {
                 style.font_weight.is_bold(),
                 style.font_style == ferropdf_core::FontStyle::Italic,
                 lb.content.width,
+                text::css_align(style.text_align),
+                style.white_space.wraps(),
                 fs,
             );
         }
@@ -133,6 +142,10 @@ fn merge_inline_children(lb: &mut LayoutBox, fs: &mut cosmic_text::FontSystem) {
         collect_and_clear(child, &mut spans);
     }
 
+    if collapses(lb.style.white_space) {
+        trim_collapsible_edges(&mut spans);
+    }
+
     if spans.is_empty() || spans.iter().all(|s| s.text.trim().is_empty()) {
         // Nothing to merge — recurse normally
         for child in &mut lb.children {
@@ -142,7 +155,13 @@ fn merge_inline_children(lb: &mut LayoutBox, fs: &mut cosmic_text::FontSystem) {
     }
 
     // Shape merged rich text at parent's content width
-    lb.shaped_lines = text::shape_rich_text_lines(&spans, lb.content.width, fs);
+    lb.shaped_lines = text::shape_rich_text_lines(
+        &spans,
+        lb.content.width,
+        text::css_align(lb.style.text_align),
+        lb.style.white_space.wraps(),
+        fs,
+    );
     lb.inline_spans = spans;
 }
 
@@ -168,4 +187,79 @@ fn collect_and_clear(lb: &mut LayoutBox, spans: &mut Vec<InlineSpan>) {
         }
     }
     lb.shaped_lines.clear();
+}
+
+fn collapses(ws: ferropdf_core::WhiteSpace) -> bool {
+    !matches!(
+        ws,
+        ferropdf_core::WhiteSpace::Pre | ferropdf_core::WhiteSpace::PreWrap
+    )
+}
+
+/// Remove collapsible spaces at the start and end of a block's inline
+/// content and between adjacent spans (`"a "` + `" b"` → `"a "` + `"b"`).
+/// Span texts were already collapsed per node by `process_text`.
+fn trim_collapsible_edges(spans: &mut Vec<InlineSpan>) {
+    let mut prev_ends_with_space = true; // block start behaves like a space
+    for span in spans.iter_mut() {
+        if prev_ends_with_space {
+            let trimmed = span.text.trim_start_matches(' ');
+            if trimmed.len() != span.text.len() {
+                span.text = trimmed.to_string();
+            }
+        }
+        if !span.text.is_empty() {
+            prev_ends_with_space = span.text.ends_with(' ');
+        }
+    }
+    if let Some(last) = spans.iter_mut().rev().find(|s| !s.text.is_empty()) {
+        let trimmed = last.text.trim_end_matches(' ');
+        if trimmed.len() != last.text.len() {
+            last.text = trimmed.to_string();
+        }
+    }
+    spans.retain(|s| !s.text.is_empty());
+}
+
+#[cfg(test)]
+mod white_space_tests {
+    use super::*;
+
+    fn span(t: &str) -> InlineSpan {
+        InlineSpan {
+            text: t.to_string(),
+            font_size: 12.0,
+            line_height: 14.4,
+            font_family: String::new(),
+            bold: false,
+            italic: false,
+            color: ferropdf_core::Color::black(),
+            text_decoration: ferropdf_core::TextDecoration::None,
+        }
+    }
+
+    fn texts(spans: &[InlineSpan]) -> Vec<&str> {
+        spans.iter().map(|s| s.text.as_str()).collect()
+    }
+
+    #[test]
+    fn trims_block_edges_and_duplicate_spaces() {
+        let mut s = vec![span(" Hi "), span(" bold "), span(" there ")];
+        trim_collapsible_edges(&mut s);
+        assert_eq!(texts(&s), ["Hi ", "bold ", "there"]);
+    }
+
+    #[test]
+    fn drops_whitespace_only_spans() {
+        let mut s = vec![
+            span(" "),
+            span("a"),
+            span(" "),
+            span(" "),
+            span("b"),
+            span(" "),
+        ];
+        trim_collapsible_edges(&mut s);
+        assert_eq!(texts(&s), ["a", " ", "b"]);
+    }
 }

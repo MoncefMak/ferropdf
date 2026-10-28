@@ -425,37 +425,79 @@ pub fn write_pdf(
                         sorted_glyphs.sort_by(|a, b| a.x.partial_cmp(&b.x).unwrap());
 
                         let base_x = *x;
+                        let min_x = sorted_glyphs.first().map(|g| g.x).unwrap_or(0.0);
 
-                        // Group consecutive glyphs by font_id for batch rendering
-                        let mut runs: Vec<(fontdb::ID, Vec<u16>)> = Vec::new();
-                        for glyph in &sorted_glyphs {
-                            if let Some(last) = runs.last_mut() {
-                                if last.0 == glyph.font_id {
-                                    last.1.push(glyph.glyph_id);
-                                    continue;
-                                }
+                        // Natural advances come from the embedded font's hmtx; the
+                        // PDF viewer advances by these. Any difference with the
+                        // shaped positions (kerning, justification) is emitted as a
+                        // TJ adjustment so glyphs land exactly where cosmic-text
+                        // placed them.
+                        let mut faces: HashMap<fontdb::ID, (ttf_parser::Face, &EmbeddedFont)> =
+                            HashMap::new();
+                        for g in &sorted_glyphs {
+                            if faces.contains_key(&g.font_id) {
+                                continue;
                             }
-                            runs.push((glyph.font_id, vec![glyph.glyph_id]));
+                            let Some(pdf_name) = fontdb_id_to_pdf_name.get(&g.font_id) else {
+                                continue;
+                            };
+                            let Some(ef) = embedded_fonts.iter().find(|f| &f.pdf_name == pdf_name)
+                            else {
+                                continue;
+                            };
+                            if let Ok(face) = ttf_parser::Face::parse(&ef.original_data, 0) {
+                                faces.insert(g.font_id, (face, ef));
+                            }
                         }
 
-                        // Use x position of the leftmost glyph as the text start
-                        let min_x = sorted_glyphs.first().map(|g| g.x).unwrap_or(0.0);
-                        let aligned_x = base_x + min_x;
-
                         content.begin_text();
-                        content.next_line(aligned_x, pdf_y);
+                        content.next_line(base_x + min_x, pdf_y);
 
-                        for (fid, gids) in &runs {
-                            if let Some(pdf_name) = fontdb_id_to_pdf_name.get(fid) {
-                                if let Some(ef) =
-                                    embedded_fonts.iter().find(|f| &f.pdf_name == pdf_name)
-                                {
-                                    content.set_font(Name(ef.pdf_name.as_bytes()), font_size_pt);
+                        let mut i = 0;
+                        while i < sorted_glyphs.len() {
+                            let fid = sorted_glyphs[i].font_id;
+                            let mut j = i;
+                            while j < sorted_glyphs.len() && sorted_glyphs[j].font_id == fid {
+                                j += 1;
+                            }
+                            let Some((face, ef)) = faces.get(&fid) else {
+                                i = j;
+                                continue;
+                            };
+                            let scale = font_size_pt / face.units_per_em() as f32;
+                            content.set_font(Name(ef.pdf_name.as_bytes()), font_size_pt);
+                            let mut tj = content.show_positioned();
+                            let mut items = tj.items();
+                            let mut pending: Vec<u16> = Vec::new();
+                            for k in i..j {
+                                let g = &sorted_glyphs[k];
+                                pending.push(g.glyph_id);
+                                let Some(next) = sorted_glyphs.get(k + 1) else {
+                                    continue;
+                                };
+                                let natural = face
+                                    .glyph_hor_advance(ttf_parser::GlyphId(g.glyph_id))
+                                    .map(|a| a as f32 * scale)
+                                    .unwrap_or(g.advance);
+                                // TJ amounts are in thousandths of text space,
+                                // subtracted from the pen position.
+                                let adjust = -(next.x - g.x - natural) * 1000.0 / font_size_pt;
+                                if adjust.abs() > 0.5 {
                                     let encoded =
-                                        encode_shaped_glyphs(gids, ef.gid_remapping.as_ref());
-                                    content.show(Str(&encoded));
+                                        encode_shaped_glyphs(&pending, ef.gid_remapping.as_ref());
+                                    items.show(Str(&encoded));
+                                    items.adjust(adjust);
+                                    pending.clear();
                                 }
                             }
+                            if !pending.is_empty() {
+                                let encoded =
+                                    encode_shaped_glyphs(&pending, ef.gid_remapping.as_ref());
+                                items.show(Str(&encoded));
+                            }
+                            drop(items);
+                            drop(tj);
+                            i = j;
                         }
                         content.end_text();
                     } else {

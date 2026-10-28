@@ -23,9 +23,48 @@ impl PageSize {
             PageSize::Custom(w, h) => (*w, *h),
         }
     }
+    /// Parse a CSS `size` value / `Options.page_size` string.
+    ///
+    /// Accepts `<page-size> || [portrait | landscape]` in any order
+    /// (CSS Paged Media §7.1): `"A4"`, `"A4 landscape"`, `"landscape"`,
+    /// `"210mm 297mm"`, `"5in"` (square). Unknown values fall back to A4.
     #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Self {
-        match s.to_uppercase().as_str() {
+        let mut orientation = None;
+        let rest: Vec<&str> = s
+            .split_whitespace()
+            .filter(|tok| match tok.to_ascii_lowercase().as_str() {
+                "landscape" => {
+                    orientation = Some(true);
+                    false
+                }
+                "portrait" => {
+                    orientation = Some(false);
+                    false
+                }
+                _ => true,
+            })
+            .collect();
+        let base = Self::from_size_keyword(&rest.join(" "));
+        match orientation {
+            None => base,
+            Some(landscape) => {
+                let (w, h) = base.dimensions_pt();
+                let (short, long) = if w <= h { (w, h) } else { (h, w) };
+                if landscape {
+                    PageSize::Custom(long, short)
+                } else if w <= h {
+                    base
+                } else {
+                    PageSize::Custom(short, long)
+                }
+            }
+        }
+    }
+
+    fn from_size_keyword(s: &str) -> Self {
+        match s.trim().to_uppercase().as_str() {
+            "" | "AUTO" => PageSize::A4,
             "A3" => PageSize::A3,
             "A4" => PageSize::A4,
             "A5" => PageSize::A5,
@@ -60,6 +99,11 @@ impl PageSize {
 fn parse_custom_page_size(s: &str) -> Option<PageSize> {
     // Split on whitespace to find exactly two tokens with units
     let parts: Vec<&str> = s.split_whitespace().collect();
+    if parts.len() == 1 {
+        // A single length gives a square page (`size: 10cm`).
+        let side = parse_css_length_to_pt(parts[0])?;
+        return (side > 0.0).then_some(PageSize::Custom(side, side));
+    }
     if parts.len() == 2 {
         let w = parse_css_length_to_pt(parts[0])?;
         let h = parse_css_length_to_pt(parts[1])?;
@@ -168,5 +212,39 @@ impl PageConfig {
     /// Page height in points (pt).
     pub fn page_height_pt(&self) -> f32 {
         self.size.dimensions_pt().1
+    }
+}
+
+#[cfg(test)]
+mod orientation_tests {
+    use super::*;
+
+    fn dims(s: &str) -> (i32, i32) {
+        let (w, h) = PageSize::from_str(s).dimensions_pt();
+        (w.round() as i32, h.round() as i32)
+    }
+
+    #[test]
+    fn named_sizes_with_orientation() {
+        assert_eq!(dims("A4"), (595, 842));
+        assert_eq!(dims("A4 landscape"), (842, 595));
+        assert_eq!(dims("landscape A4"), (842, 595));
+        assert_eq!(dims("a5 Landscape"), (595, 420));
+        assert_eq!(dims("letter portrait"), (612, 792));
+    }
+
+    #[test]
+    fn orientation_only_applies_to_a4() {
+        assert_eq!(dims("landscape"), (842, 595));
+        assert_eq!(dims("portrait"), (595, 842));
+    }
+
+    #[test]
+    fn explicit_lengths() {
+        assert_eq!(dims("297mm 210mm"), (842, 595));
+        assert_eq!(dims("210mm 297mm landscape"), (842, 595));
+        assert_eq!(dims("297mm 210mm portrait"), (595, 842));
+        assert_eq!(dims("10cm"), (283, 283));
+        assert_eq!(dims("auto"), (595, 842));
     }
 }
