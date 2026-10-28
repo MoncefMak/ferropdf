@@ -8,7 +8,7 @@ pyo3::create_exception!(ferropdf, LayoutError, FerroError);
 pyo3::create_exception!(ferropdf, FontError, FerroError);
 pyo3::create_exception!(ferropdf, RenderError, FerroError);
 
-#[pyclass(name = "Options")]
+#[pyclass(name = "Options", from_py_object)]
 #[derive(Clone, Debug)]
 pub struct PyOptions {
     pub page_size: String,
@@ -139,9 +139,8 @@ impl PyEngine {
 
         let font_db = self.font_db.get_or_init(ferropdf_render::FontDatabase::new);
 
-        let result = py.allow_threads(move || {
-            ferropdf_render::render_with_warnings(&html, &opts.into(), font_db)
-        });
+        let result =
+            py.detach(move || ferropdf_render::render_with_warnings(&html, &opts.into(), font_db));
 
         match result {
             Ok(r) => Ok((r.pdf_bytes, warnings_to_strings(&r.warnings))),

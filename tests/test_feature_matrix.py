@@ -32,6 +32,22 @@ import ferropdf  # noqa: E402
 ISSUES = "https://github.com/MoncefMak/ferropdf/issues/"
 
 
+def _has_dejavu() -> bool:
+    """The matrix (and the README table) is defined on the reference platform:
+    DejaVu fonts installed, as in the Linux CI job. Font-dependent checks are
+    skipped elsewhere."""
+    import glob
+    import os
+
+    dirs = ["/usr/share/fonts", "/usr/local/share/fonts", os.path.expanduser("~/.fonts"),
+            os.path.expanduser("~/.local/share/fonts"), "/Library/Fonts",
+            os.path.expanduser("~/Library/Fonts"), r"C:\Windows\Fonts"]
+    return any(glob.glob(os.path.join(d, "**", "DejaVuSans.ttf"), recursive=True) for d in dirs if os.path.isdir(d))
+
+
+HAS_DEJAVU = _has_dejavu()
+
+
 # --------------------------------------------------------------------------- helpers
 
 
@@ -390,6 +406,7 @@ class Feature:
     name: str
     check: Callable[[], None]
     issue: int | None = None  # open issue => expected to fail (strict xfail)
+    needs_fonts: bool = False  # result depends on installed fonts (see HAS_DEJAVU)
 
 
 FEATURES = [
@@ -422,7 +439,7 @@ FEATURES = [
     Feature("Text", "`letter-spacing`", chk_letter_spacing, 34),
     Feature("Text", "`text-transform`", chk_text_transform, 34),
     Feature("Text", "`text-indent`", chk_text_indent, 34),
-    Feature("Text", "Arabic shaping + RTL alignment", chk_rtl_arabic),
+    Feature("Text", "Arabic shaping + RTL alignment", chk_rtl_arabic, needs_fonts=True),
     Feature("Text", "Lists (disc, decimal, roman)", chk_lists),
     Feature("Layout", "Flexbox row", chk_flex_row),
     Feature("Layout", "`justify-content: space-between`", chk_flex_justify_between),
@@ -454,7 +471,8 @@ FEATURES = [
         pytest.param(
             f,
             id=f.check.__name__.removeprefix("chk_") if hasattr(str, "removeprefix") else f.check.__name__[4:],
-            marks=[pytest.mark.xfail(strict=True, reason=f"not supported yet — {ISSUES}{f.issue}")] if f.issue else [],
+            marks=([pytest.mark.xfail(strict=True, reason=f"not supported yet — {ISSUES}{f.issue}")] if f.issue else [])
+            + ([pytest.mark.skipif(not HAS_DEJAVU, reason="font-dependent: needs DejaVu fonts")] if f.needs_fonts else []),
         )
         for f in FEATURES
     ],
@@ -481,6 +499,7 @@ def markdown_table() -> str:
     return "\n".join(lines)
 
 
+@pytest.mark.skipif(not HAS_DEJAVU, reason="README table is generated on the reference platform (DejaVu fonts)")
 def test_readme_table_in_sync():
     """The README "CSS support" table must match the matrix above."""
     from pathlib import Path
