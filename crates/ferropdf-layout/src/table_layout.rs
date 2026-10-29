@@ -159,62 +159,57 @@ fn compute_column_widths_with_colspan(
         })
         .collect();
 
-    // Step 2: Min-content width per column (only from cells with colspan=1)
-    let min_content_widths: Vec<f32> = (0..num_cols)
-        .map(|col_idx| {
-            cell_rows
-                .iter()
-                .filter_map(|row| {
-                    let mut effective_col = 0;
-                    for cell in row {
-                        if effective_col == col_idx && cell.colspan == 1 {
-                            return Some(cell.node_id);
-                        }
-                        effective_col += cell.colspan;
-                        if effective_col > col_idx {
-                            break;
-                        }
-                    }
-                    None
-                })
-                .map(|cell_id| {
-                    let text = collect_text_content(doc, cell_id);
-                    if text.is_empty() {
-                        return 0.0;
-                    }
-                    let style = styles.get(&cell_id).cloned().unwrap_or_default();
-                    let font_size = style.font_size;
-                    let font_family = style
-                        .font_family
-                        .first()
-                        .cloned()
-                        .unwrap_or_else(|| "sans-serif".to_string());
-                    let pad_h = resolve_px(&style.padding[1]) + resolve_px(&style.padding[3]);
-                    measure_min_content_width(&text, font_size, &font_family, font_system) + pad_h
-                })
-                .fold(0.0_f32, f32::max)
-        })
-        .collect();
+    // Step 2: min-content (longest word / widest fixed-width descendant) and
+    // max-content (no wrapping) widths per column, from cells with colspan=1.
+    let mut min_content_widths = vec![0.0_f32; num_cols];
+    let mut max_content_widths = vec![0.0_f32; num_cols];
+    for row in cell_rows {
+        let mut effective_col = 0;
+        for cell in row {
+            if cell.colspan == 1 && effective_col < num_cols {
+                let (min_w, max_w) = cell_content_widths(cell.node_id, doc, styles, font_system);
+                min_content_widths[effective_col] = min_content_widths[effective_col].max(min_w);
+                max_content_widths[effective_col] = max_content_widths[effective_col].max(max_w);
+            }
+            effective_col += cell.colspan;
+        }
+    }
 
-    // Step 3: Distribution
+    // Step 3: Distribution (CSS 2.1 §17.5.2.2 auto table layout, simplified):
+    //   * everything fits at max-content → max-content + proportional extra;
+    //   * otherwise interpolate between min-content and max-content so the
+    //     columns exactly fill the table;
+    //   * if even min-content does not fit, use min-content (table overflows).
     let fixed_total: f32 = fixed_widths.iter().filter_map(|w| *w).sum();
     let available_for_flexible = (table_width - fixed_total).max(0.0);
 
     log::debug!("[TABLE] fixed_widths={:?}", fixed_widths);
     log::debug!("[TABLE] min_content_widths={:?}", min_content_widths);
+    log::debug!("[TABLE] max_content_widths={:?}", max_content_widths);
 
-    let total_min: f32 = min_content_widths.iter().sum();
+    let flexible = |i: usize| fixed_widths[i].is_none();
+    let total_min: f32 = (0..num_cols)
+        .filter(|&i| flexible(i))
+        .map(|i| min_content_widths[i])
+        .sum();
+    let total_max: f32 = (0..num_cols)
+        .filter(|&i| flexible(i))
+        .map(|i| max_content_widths[i])
+        .sum();
+    let flexible_count = (0..num_cols).filter(|&i| flexible(i)).count().max(1);
 
     let mut widths: Vec<f32> = (0..num_cols)
         .map(|i| {
             if let Some(fixed) = fixed_widths[i] {
                 fixed
-            } else if total_min <= 0.0 {
-                available_for_flexible / (num_cols as f32)
-            } else if total_min <= available_for_flexible {
-                let remaining = available_for_flexible - total_min;
-                let ratio = min_content_widths[i] / total_min;
-                min_content_widths[i] + remaining * ratio
+            } else if total_max <= 0.0 {
+                available_for_flexible / flexible_count as f32
+            } else if total_max <= available_for_flexible {
+                let remaining = available_for_flexible - total_max;
+                max_content_widths[i] + remaining * (max_content_widths[i] / total_max)
+            } else if total_min < available_for_flexible && total_max > total_min {
+                let t = (available_for_flexible - total_min) / (total_max - total_min);
+                min_content_widths[i] + (max_content_widths[i] - min_content_widths[i]) * t
             } else {
                 min_content_widths[i]
             }
@@ -236,10 +231,12 @@ fn compute_column_widths_with_colspan(
                     .cloned()
                     .unwrap_or_else(|| "sans-serif".to_string());
                 let pad_h = resolve_px(&style.padding[1]) + resolve_px(&style.padding[3]);
+                // Never widen spanned columns past the table itself.
                 let needed = if text.is_empty() {
                     0.0
                 } else {
-                    measure_min_content_width(&text, font_size, &font_family, font_system) + pad_h
+                    (measure_min_content_width(&text, font_size, &font_family, font_system) + pad_h)
+                        .min(table_width)
                 };
 
                 let end_col = (effective_col + cell.colspan).min(num_cols);
@@ -328,6 +325,52 @@ pub fn build_taffy_row_tracks(row_heights: &[f32]) -> Vec<TrackSizingFunction> {
 // TEXT MEASUREMENT VIA COSMIC-TEXT
 // =============================================================================
 
+/// (min-content, max-content) border-box width of a cell's content, in pt.
+///
+/// min-content is the longest word, or the widest descendant with an explicit
+/// length width (a nested `<table style="width:520px">`, an image...).
+fn cell_content_widths(
+    cell_id: NodeId,
+    doc: &Document,
+    styles: &StyleTree,
+    font_system: &mut FontSystem,
+) -> (f32, f32) {
+    let style = styles.get(&cell_id).cloned().unwrap_or_default();
+    let pad_h = resolve_px(&style.padding[1]) + resolve_px(&style.padding[3]);
+    let fixed = widest_fixed_descendant(doc, cell_id, styles);
+    let text = collect_text_content(doc, cell_id);
+    if text.is_empty() {
+        return (fixed + pad_h, fixed + pad_h);
+    }
+    let font_family = style
+        .font_family
+        .first()
+        .cloned()
+        .unwrap_or_else(|| "sans-serif".to_string());
+    let max_w = measure_min_content_width(&text, style.font_size, &font_family, font_system);
+    let min_w = text
+        .split_whitespace()
+        .max_by_key(|w| w.chars().count())
+        .map(|w| measure_min_content_width(w, style.font_size, &font_family, font_system))
+        .unwrap_or(0.0);
+    (min_w.max(fixed) + pad_h, max_w.max(fixed) + pad_h)
+}
+
+fn widest_fixed_descendant(doc: &Document, node_id: NodeId, styles: &StyleTree) -> f32 {
+    let mut widest = 0.0_f32;
+    for &child in &doc.get(node_id).children {
+        if let Some(style) = styles.get(&child) {
+            if let Length::Pt(v) | Length::Px(v) = style.width {
+                widest = widest.max(v);
+            }
+        }
+        widest = widest.max(widest_fixed_descendant(doc, child, styles));
+    }
+    widest
+}
+
+/// Width of `text` laid out on a single line (no wrapping) — i.e. its
+/// max-content width.
 fn measure_min_content_width(
     text: &str,
     font_size: f32,

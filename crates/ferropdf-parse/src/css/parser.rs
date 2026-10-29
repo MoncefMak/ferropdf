@@ -180,9 +180,11 @@ impl CssProperty {
             "gap" => CssProperty::Gap,
             "column-gap" => CssProperty::ColumnGap,
             "row-gap" => CssProperty::RowGap,
-            "page-break-before" => CssProperty::PageBreakBefore,
-            "page-break-after" => CssProperty::PageBreakAfter,
-            "page-break-inside" => CssProperty::PageBreakInside,
+            // CSS Fragmentation L3 `break-*` and the legacy CSS 2.1 `page-break-*`
+            // aliases share one set of computed fields.
+            "page-break-before" | "break-before" => CssProperty::PageBreakBefore,
+            "page-break-after" | "break-after" => CssProperty::PageBreakAfter,
+            "page-break-inside" | "break-inside" => CssProperty::PageBreakInside,
             "orphans" => CssProperty::Orphans,
             "widows" => CssProperty::Widows,
             "visibility" => CssProperty::Visibility,

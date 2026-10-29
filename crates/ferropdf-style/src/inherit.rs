@@ -13,6 +13,7 @@ pub fn inherit_from(parent: &ComputedStyle) -> ComputedStyle {
         text_align: parent.text_align,
         text_decoration: parent.text_decoration.clone(),
         letter_spacing: parent.letter_spacing,
+        white_space: parent.white_space,
         visibility: parent.visibility,
         orphans: parent.orphans,
         widows: parent.widows,

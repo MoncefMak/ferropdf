@@ -211,6 +211,17 @@ fn fragment_box(layout_box: &LayoutBox, ctx: &mut PaginationContext) {
         return;
     }
 
+    // ─── Rule 3c: Text blocks split between lines ─────────────────────────
+    // A paragraph (text leaf or block with merged inline text) that does not
+    // fit continues on the next page(s), honouring orphans/widows.
+    if !layout_box.shaped_lines.is_empty() {
+        fragment_text_box(layout_box, ctx);
+        if should_break_after(style) && !ctx.is_current_page_empty() {
+            ctx.flush_page(layout_box.rect.y + layout_box.rect.height);
+        }
+        return;
+    }
+
     // ─── Rule 4: The block doesn't fit → fragmentation ─────────────────────
     if !layout_box.children.is_empty() {
         if layout_box.style.display == Display::Table {
@@ -267,7 +278,10 @@ fn fragment_container(layout_box: &LayoutBox, ctx: &mut PaginationContext) {
             offset_y_recursive(&mut placed_child, -ctx.page_y_offset);
             current_page_children.push(placed_child);
             ctx.used_height = ctx.used_height.max(child_bottom_on_page);
-        } else if !child.children.is_empty() && child_height > ctx.page_height {
+        } else if (!child.shaped_lines.is_empty()
+            && child.style.page_break_inside != PageBreakInside::Avoid)
+            || (!child.children.is_empty() && child_height > ctx.page_height)
+        {
             // Child is a large container that doesn't fit on any single page
             // Flush current wrapper first, then recurse into this child
             if !current_page_children.is_empty() {
@@ -316,6 +330,112 @@ fn fragment_container(layout_box: &LayoutBox, ctx: &mut PaginationContext) {
         let wrapper =
             make_container_fragment(layout_box, &current_page_children, ctx, is_first_page, true);
         ctx.current_page_boxes.push(wrapper);
+    }
+}
+
+// =============================================================================
+// TEXT FRAGMENTATION
+// A box carrying shaped lines is sliced between lines (CSS Fragmentation 3
+// §4.4 class A break points). Each slice is a clone of the box holding a
+// subset of the lines, re-based so its first line sits at the slice top.
+// =============================================================================
+
+fn fragment_text_box(layout_box: &LayoutBox, ctx: &mut PaginationContext) {
+    let lines = &layout_box.shaped_lines;
+    let n = lines.len();
+    let first_baseline = lines[0].y;
+    let line_height = if n > 1 {
+        (lines[1].y - lines[0].y).max(0.1)
+    } else {
+        layout_box.content.height.max(0.1)
+    };
+    // Top of line `k` relative to the content box top.
+    let top_of = |k: usize| lines[k].y - first_baseline;
+    let content_inset_top = layout_box.content.y - layout_box.rect.y;
+    let content_inset_bottom = (layout_box.rect.y + layout_box.rect.height)
+        - (layout_box.content.y + layout_box.content.height);
+    let orphans = (layout_box.style.orphans as usize).max(1);
+    let widows = (layout_box.style.widows as usize).max(1);
+
+    let mut start = 0usize;
+    let mut guard = 0usize;
+    while start < n {
+        guard += 1;
+        if guard > n * 2 + 4 {
+            break; // defensive: never loop forever on degenerate geometry
+        }
+        let page_bottom_abs = ctx.page_y_offset + ctx.page_height;
+        let content_top_abs = layout_box.content.y + top_of(start);
+        // How many lines from `start` fit above the page bottom?
+        let mut fit = 0usize;
+        while start + fit < n
+            && layout_box.content.y + top_of(start + fit) + line_height <= page_bottom_abs + 0.01
+        {
+            fit += 1;
+        }
+        let remaining_after = n - start - fit;
+
+        // Orphans: too few lines would be left at the bottom of this page.
+        if fit > 0
+            && fit < orphans.min(n - start)
+            && remaining_after > 0
+            && !ctx.is_current_page_empty()
+        {
+            fit = 0;
+        }
+        // Widows: keep at least `widows` lines for the next page.
+        if fit > 0 && remaining_after > 0 && remaining_after < widows {
+            let needed = widows - remaining_after;
+            fit = if fit > needed { fit - needed } else { fit };
+            if fit < orphans.min(fit + needed) && !ctx.is_current_page_empty() {
+                fit = 0;
+            }
+        }
+        if fit == 0 {
+            if ctx.is_current_page_empty() {
+                fit = 1; // a line taller than the page: place it anyway
+            } else {
+                ctx.flush_page(content_top_abs);
+                continue;
+            }
+        }
+
+        let end = start + fit;
+        let is_first = start == 0;
+        let is_last = end == n;
+        let shift = top_of(start);
+
+        let mut fragment = layout_box.clone();
+        fragment.children.clear();
+        fragment.shaped_lines = lines[start..end]
+            .iter()
+            .cloned()
+            .map(|mut l| {
+                l.y -= shift;
+                l
+            })
+            .collect();
+        let content_height = if is_last {
+            (layout_box.content.height - shift).max(0.0)
+        } else {
+            top_of(end) - shift
+        };
+        fragment.content.y = content_top_abs;
+        fragment.content.height = content_height;
+        fragment.rect.y = if is_first {
+            layout_box.rect.y
+        } else {
+            content_top_abs
+        };
+        fragment.rect.height = (if is_first { content_inset_top } else { 0.0 })
+            + content_height
+            + if is_last { content_inset_bottom } else { 0.0 };
+        place_box_on_current_page(&fragment, ctx);
+
+        start = end;
+        if start < n {
+            ctx.flush_page(layout_box.content.y + top_of(start));
+        }
     }
 }
 
@@ -632,6 +752,57 @@ mod tests {
             children,
             ..Default::default()
         }
+    }
+
+    fn make_text_box(y: f32, lines: usize, line_height: f32) -> LayoutBox {
+        let mut b = make_box(y, lines as f32 * line_height);
+        b.shaped_lines = (0..lines)
+            .map(|i| ferropdf_core::ShapedLine {
+                glyphs: Vec::new(),
+                width: 100.0,
+                y: i as f32 * line_height + line_height * 0.8,
+                text: format!("line {i}"),
+                segments: Vec::new(),
+            })
+            .collect();
+        b
+    }
+
+    #[test]
+    fn tall_paragraph_is_split_between_lines() {
+        // 100 lines of 20pt in a 300pt page → 15 lines per page, 7 pages.
+        let config = make_config(300.0);
+        let root = make_root(vec![make_text_box(0.0, 100, 20.0)]);
+        let pages = paginate(&root, &config);
+        assert_eq!(pages.len(), 7);
+        let total: usize = pages
+            .iter()
+            .flat_map(|p| p.content.iter())
+            .map(|b| b.shaped_lines.len())
+            .sum();
+        assert_eq!(total, 100, "no line may be lost or duplicated");
+        // Every fragment's lines are re-based to its own content box.
+        for page in &pages {
+            for b in &page.content {
+                if let Some(first) = b.shaped_lines.first() {
+                    assert!((first.y - 16.0).abs() < 0.01);
+                    assert!(b.content.y >= -0.01 && b.content.y + b.content.height <= 300.01);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn paragraph_split_respects_widows() {
+        // 16 lines, 15 fit: a single widow would be left → move 1 more line.
+        let config = make_config(300.0);
+        let root = make_root(vec![make_text_box(0.0, 16, 20.0)]);
+        let pages = paginate(&root, &config);
+        let per_page: Vec<usize> = pages
+            .iter()
+            .map(|p| p.content.iter().map(|b| b.shaped_lines.len()).sum())
+            .collect();
+        assert_eq!(per_page, vec![14, 2]);
     }
 
     #[test]

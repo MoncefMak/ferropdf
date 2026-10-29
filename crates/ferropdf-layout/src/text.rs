@@ -1,4 +1,4 @@
-use cosmic_text::{Attrs, Buffer, Family, FontSystem, Metrics, Shaping};
+use cosmic_text::{Align, Attrs, Buffer, Family, FontSystem, Metrics, Shaping, Wrap};
 use ferropdf_core::layout::{InlineSpan, ShapedGlyph, ShapedLine, ShapedSegment};
 use std::sync::Mutex;
 use taffy::prelude::*;
@@ -9,6 +9,8 @@ use taffy::prelude::*;
 #[derive(Debug, Clone)]
 pub struct TextContext {
     pub text: String,
+    /// `false` for `white-space: nowrap | pre` — never break lines.
+    pub wrap: bool,
     pub font_size: f32,   // in pt
     pub line_height: f32, // in pt
     pub font_family: String,
@@ -149,6 +151,9 @@ pub fn measure_text(
     });
 
     buffer.set_size(font_system, width_limit, None);
+    if !ctx.wrap {
+        buffer.set_wrap(font_system, Wrap::None);
+    }
 
     let family = if ctx.font_family.is_empty() {
         Family::SansSerif
@@ -195,6 +200,29 @@ pub fn measure_text(
 // re-wrap the text.
 // =============================================================================
 
+/// Map CSS `text-align` to cosmic-text alignment.
+///
+/// `left` maps to `None` (cosmic-text's paragraph default) so that RTL
+/// paragraphs keep their natural right alignment, matching `text-align: start`.
+/// With an explicit alignment, cosmic-text bakes the offset into every
+/// `glyph.x`, so painters must not add their own offset.
+pub fn css_align(align: ferropdf_core::TextAlign) -> Option<Align> {
+    match align {
+        ferropdf_core::TextAlign::Left => None,
+        ferropdf_core::TextAlign::Right => Some(Align::Right),
+        ferropdf_core::TextAlign::Center => Some(Align::Center),
+        ferropdf_core::TextAlign::Justify => Some(Align::Justified),
+    }
+}
+
+fn apply_align(buffer: &mut Buffer, align: Option<Align>) {
+    if align.is_some() {
+        for line in buffer.lines.iter_mut() {
+            line.set_align(align);
+        }
+    }
+}
+
 /// Shape a text node at its final content width and return shaped lines.
 /// Each ShapedLine contains the line's text, width, y-offset, and glyph data.
 #[allow(clippy::too_many_arguments)]
@@ -206,6 +234,8 @@ pub fn shape_text_lines(
     bold: bool,
     italic: bool,
     content_width: f32,
+    align: Option<Align>,
+    wrap: bool,
     font_system: &mut FontSystem,
 ) -> Vec<ShapedLine> {
     if text.trim().is_empty() {
@@ -215,6 +245,9 @@ pub fn shape_text_lines(
     let metrics = Metrics::new(font_size, line_height);
     let mut buffer = Buffer::new(font_system, metrics);
     buffer.set_size(font_system, Some(content_width), None);
+    if !wrap {
+        buffer.set_wrap(font_system, Wrap::None);
+    }
 
     let family = if font_family.is_empty() {
         Family::SansSerif
@@ -231,6 +264,7 @@ pub fn shape_text_lines(
     }
 
     buffer.set_text(font_system, text, attrs, Shaping::Advanced);
+    apply_align(&mut buffer, align);
     buffer.shape_until_scroll(font_system, false);
 
     let mut lines = Vec::new();
@@ -277,6 +311,8 @@ pub fn shape_text_lines(
 pub fn shape_rich_text_lines(
     spans: &[InlineSpan],
     content_width: f32,
+    align: Option<Align>,
+    wrap: bool,
     font_system: &mut FontSystem,
 ) -> Vec<ShapedLine> {
     if spans.is_empty() {
@@ -288,6 +324,9 @@ pub fn shape_rich_text_lines(
     let metrics = Metrics::new(font_size, line_height);
     let mut buffer = Buffer::new(font_system, metrics);
     buffer.set_size(font_system, Some(content_width), None);
+    if !wrap {
+        buffer.set_wrap(font_system, Wrap::None);
+    }
 
     // Build per-span Attrs with metadata = span index
     let rich_spans: Vec<(&str, Attrs)> = spans
@@ -318,6 +357,7 @@ pub fn shape_rich_text_lines(
     let default_attrs = Attrs::new().family(default_family);
 
     buffer.set_rich_text(font_system, rich_spans, default_attrs, Shaping::Advanced);
+    apply_align(&mut buffer, align);
     buffer.shape_until_scroll(font_system, false);
 
     let mut lines = Vec::new();
