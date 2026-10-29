@@ -208,6 +208,8 @@ every row is a test that renders a snippet and checks the PDF, and every ❌ row
 | Fragmentation | `break-after: page` | ✅ Supported |
 | Fragmentation | Paragraph taller than a page splits across pages | ✅ Supported |
 | Fragmentation | `<thead>` repeated on each page | ✅ Supported |
+| Fragmentation | Multi-row `<thead>` repeated without overlap | ✅ Supported |
+| Fragmentation | `<tfoot>` repeated at the bottom of each page | ✅ Supported |
 | Cascade | Custom properties `var()` | ✅ Supported |
 | Cascade | `calc()` | ❌ Not yet ([#52](https://github.com/MoncefMak/ferropdf/issues/52)) |
 | Cascade | `::before` / `::after` with literal `content` | ✅ Supported |

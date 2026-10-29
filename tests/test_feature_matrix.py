@@ -171,6 +171,32 @@ def chk_thead_repeat():
     assert d.pages >= 2 and d.text(1).startswith("HEADER")
 
 
+def _long_table(extra: str = "") -> Doc:
+    rows = "".join(f"<tr><td>row{i}</td></tr>" for i in range(100))
+    return Doc(wrap(
+        "<table><tfoot><tr><td>FOOTER</td></tr></tfoot>"
+        "<thead><tr><th>HEAD1</th></tr><tr><th>HEAD2</th></tr></thead>"
+        f"<tbody>{rows}</tbody></table><p>AFTER</p>"
+    ))
+
+
+def chk_tfoot_repeat():
+    d = _long_table()
+    assert d.pages >= 2
+    for i in range(d.pages):
+        assert "FOOTER" in d.text(i), f"footer missing on page {i + 1}"
+    last = d.pages - 1
+    assert d.word("AFTER", last)[1] > d.word("FOOTER", last)[1]
+
+
+def chk_multi_row_thead():
+    d = _long_table()
+    for i in range(d.pages):
+        assert d.word("HEAD2", i)[1] > d.word("HEAD1", i)[1] + 5, f"header rows overlap on page {i + 1}"
+    rows = [w for i in range(d.pages) for w in d.text(i).split() if w.startswith("row")]
+    assert len(rows) == len(set(rows)) == 100
+
+
 def chk_margin_boxes():
     d = Doc(wrap("<p>body</p>", '@page{@bottom-center{content:"FOOTERTEXT"}}'))
     assert "FOOTERTEXT" in d.text(0)
@@ -468,6 +494,8 @@ FEATURES = [
     Feature("Fragmentation", "`break-after: page`", chk_break_after),
     Feature("Fragmentation", "Paragraph taller than a page splits across pages", chk_long_text_splits),
     Feature("Fragmentation", "`<thead>` repeated on each page", chk_thead_repeat),
+    Feature("Fragmentation", "Multi-row `<thead>` repeated without overlap", chk_multi_row_thead),
+    Feature("Fragmentation", "`<tfoot>` repeated at the bottom of each page", chk_tfoot_repeat),
     Feature("Cascade", "Custom properties `var()`", chk_custom_properties),
     Feature("Cascade", "`calc()`", chk_calc, 52),
     Feature("Cascade", "`::before` / `::after` with literal `content`", chk_before_after_literal),

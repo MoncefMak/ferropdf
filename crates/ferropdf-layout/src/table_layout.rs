@@ -435,28 +435,62 @@ pub fn collect_table_cell_infos(
     table_id: NodeId,
     styles: &StyleTree,
 ) -> Vec<Vec<CellInfo>> {
-    let mut rows = Vec::new();
+    // Header groups render first and footer groups last, wherever they
+    // appear in the source (CSS 2.1 §17.2: `<tfoot>` may precede `<tbody>`).
+    let mut head = Vec::new();
+    let mut body = Vec::new();
+    let mut foot = Vec::new();
     let table_node = doc.get(table_id);
 
     for &child_id in &table_node.children {
         let child_style = styles.get(&child_id).cloned().unwrap_or_default();
-        match child_style.display {
+        let target = match child_style.display {
             FDisplay::TableRow => {
-                rows.push(collect_cell_infos(doc, child_id, styles));
+                body.push(collect_cell_infos(doc, child_id, styles));
+                continue;
             }
-            FDisplay::TableHeaderGroup | FDisplay::TableRowGroup | FDisplay::TableFooterGroup => {
-                let group_node = doc.get(child_id);
-                for &row_id in &group_node.children {
-                    let row_style = styles.get(&row_id).cloned().unwrap_or_default();
-                    if row_style.display == FDisplay::TableRow {
-                        rows.push(collect_cell_infos(doc, row_id, styles));
-                    }
-                }
+            FDisplay::TableHeaderGroup => &mut head,
+            FDisplay::TableRowGroup => &mut body,
+            FDisplay::TableFooterGroup => &mut foot,
+            _ => continue,
+        };
+        let group_node = doc.get(child_id);
+        for &row_id in &group_node.children {
+            let row_style = styles.get(&row_id).cloned().unwrap_or_default();
+            if row_style.display == FDisplay::TableRow {
+                target.push(collect_cell_infos(doc, row_id, styles));
             }
-            _ => {}
         }
     }
-    rows
+    head.extend(body);
+    head.extend(foot);
+    head
+}
+
+/// Count the number of rows that come from <tfoot> elements.
+pub fn count_tfoot_rows(doc: &Document, table_id: NodeId, styles: &StyleTree) -> usize {
+    count_group_rows(doc, table_id, styles, FDisplay::TableFooterGroup)
+}
+
+fn count_group_rows(
+    doc: &Document,
+    table_id: NodeId,
+    styles: &StyleTree,
+    group: FDisplay,
+) -> usize {
+    let mut count = 0;
+    for &child_id in &doc.get(table_id).children {
+        let child_style = styles.get(&child_id).cloned().unwrap_or_default();
+        if child_style.display == group {
+            for &row_id in &doc.get(child_id).children {
+                let row_style = styles.get(&row_id).cloned().unwrap_or_default();
+                if row_style.display == FDisplay::TableRow {
+                    count += 1;
+                }
+            }
+        }
+    }
+    count
 }
 
 /// Count the number of rows that come from <thead> elements.
