@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793257040555,
+  "lastUpdate": 1793261751622,
   "repoUrl": "https://github.com/MoncefMak/ferropdf",
   "entries": {
     "FastPDF Criterion Benchmarks": [
@@ -1927,6 +1927,54 @@ window.BENCHMARK_DATA = {
             "name": "render_invoice_cached",
             "value": 3348316,
             "range": "± 32371",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "72460183+MoncefMak@users.noreply.github.com",
+            "name": "MoncefMak",
+            "username": "MoncefMak"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "5781cc5f992b97c0d48aaf6c79f32c82b2843eb7",
+          "message": "Merge pull request #62 from MoncefMak/fix/inline-block\n\nFix inline-block layout and let author CSS override tag defaults",
+          "timestamp": "2026-10-29T09:13:57+01:00",
+          "tree_id": "629d8538c51830684dd3c178a1ec97b964447481",
+          "url": "https://github.com/MoncefMak/ferropdf/commit/5781cc5f992b97c0d48aaf6c79f32c82b2843eb7"
+        },
+        "date": 1793261750885,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "render_simple",
+            "value": 4960175,
+            "range": "± 117495",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice",
+            "value": 5511771,
+            "range": "± 475557",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_simple_cached",
+            "value": 1821859,
+            "range": "± 71081",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice_cached",
+            "value": 2462074,
+            "range": "± 87176",
             "unit": "ns/iter"
           }
         ]
