@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793265225861,
+  "lastUpdate": 1793268281390,
   "repoUrl": "https://github.com/MoncefMak/ferropdf",
   "entries": {
     "FastPDF Criterion Benchmarks": [
@@ -2119,6 +2119,54 @@ window.BENCHMARK_DATA = {
             "name": "render_invoice_cached",
             "value": 4280582,
             "range": "± 17450",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "72460183+MoncefMak@users.noreply.github.com",
+            "name": "MoncefMak",
+            "username": "MoncefMak"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "7041872023d4c44f837a7ebd2e5d7d8b54445057",
+          "message": "Merge pull request #67 from MoncefMak/feat/running-elements\n\nHTML running headers/footers; fix @page margins, <img> sizing, flex spans",
+          "timestamp": "2026-10-29T11:02:32+01:00",
+          "tree_id": "7fa3024c2881702d3517c98b98d129607fb3c1c6",
+          "url": "https://github.com/MoncefMak/ferropdf/commit/7041872023d4c44f837a7ebd2e5d7d8b54445057"
+        },
+        "date": 1793268281007,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "render_simple",
+            "value": 5542223,
+            "range": "± 260326",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice",
+            "value": 6293592,
+            "range": "± 70031",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_simple_cached",
+            "value": 2585798,
+            "range": "± 10111",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice_cached",
+            "value": 3327596,
+            "range": "± 10403",
             "unit": "ns/iter"
           }
         ]
