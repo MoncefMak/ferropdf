@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793257036254,
+  "lastUpdate": 1793257040555,
   "repoUrl": "https://github.com/MoncefMak/ferropdf",
   "entries": {
     "FastPDF Criterion Benchmarks": [
@@ -1879,6 +1879,54 @@ window.BENCHMARK_DATA = {
             "name": "render_invoice_cached",
             "value": 4323063,
             "range": "± 13271",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "72460183+MoncefMak@users.noreply.github.com",
+            "name": "MoncefMak",
+            "username": "MoncefMak"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b4a74784012dfb10acbe5b6eb6997b72d7ac1404",
+          "message": "Merge pull request #61 from MoncefMak/perf/engine-concurrency\n\nParallel renders: pooled font systems, fonts loaded once per process",
+          "timestamp": "2026-10-29T07:55:28+01:00",
+          "tree_id": "8c16dac630bf29e7b31c7b6357f4d4c2d7d48466",
+          "url": "https://github.com/MoncefMak/ferropdf/commit/b4a74784012dfb10acbe5b6eb6997b72d7ac1404"
+        },
+        "date": 1793257039840,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "render_simple",
+            "value": 5704452,
+            "range": "± 63069",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice",
+            "value": 6407698,
+            "range": "± 51147",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_simple_cached",
+            "value": 2612592,
+            "range": "± 12618",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice_cached",
+            "value": 3348316,
+            "range": "± 32371",
             "unit": "ns/iter"
           }
         ]
