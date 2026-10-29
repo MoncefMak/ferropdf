@@ -162,7 +162,8 @@ fn build_taffy_tree_inner(
     if node.is_text() {
         if let Some(ref text_content) = node.text {
             let ctx = TextContext {
-                text: text_content.clone(),
+                text: process_text(text_content, style.white_space),
+                wrap: style.white_space.wraps(),
                 font_size: style.font_size,
                 line_height: style.line_height,
                 font_family: style.font_family.first().cloned().unwrap_or_default(),
@@ -251,9 +252,13 @@ fn build_table_as_grid(
 ) -> ferropdf_core::Result<()> {
     let table_style = styles.get(&table_id).cloned().unwrap_or_default();
 
+    // Columns are distributed over the table's own width (`width: 45%`,
+    // `width: 520px`), not over the whole containing block.
+    let table_width = resolve_table_width(&table_style.width, available_width);
+
     // Use the full 4-phase table layout algorithm
     let table_result =
-        table_layout::compute_table_layout(table_id, available_width, doc, styles, font_system);
+        table_layout::compute_table_layout(table_id, table_width, doc, styles, font_system);
 
     // Collect rows/cells with colspan info for building Taffy child nodes
     let cell_rows = table_layout::collect_table_cell_infos(doc, table_id, styles);
@@ -261,7 +266,20 @@ fn build_table_as_grid(
     // Build child Taffy nodes for each cell, applying grid-column span for colspan
     let mut cell_taffy_ids = Vec::new();
     for row in &cell_rows {
+        let mut col = 0usize;
         for cell in row {
+            // Content inside a cell (nested tables in particular) is laid out
+            // against the width of the columns the cell spans.
+            let span_end = (col + cell.colspan).min(table_result.column_widths.len());
+            let cell_width: f32 = table_result.column_widths[col.min(span_end)..span_end]
+                .iter()
+                .sum();
+            let cell_available = if cell_width > 0.0 {
+                cell_width
+            } else {
+                table_width
+            };
+            col += cell.colspan;
             build_taffy_tree_inner(
                 doc,
                 cell.node_id,
@@ -270,7 +288,7 @@ fn build_table_as_grid(
                 node_map,
                 table_cell_parent,
                 font_system,
-                available_width,
+                cell_available,
                 1, // table cells are at depth 1 relative to the table
             )?;
             if let Some(&tid) = node_map.get(&cell.node_id) {
@@ -440,7 +458,9 @@ fn read_layout(
     }
 
     let text_content = if node.is_text() {
-        node.text.clone()
+        node.text
+            .as_deref()
+            .map(|t| process_text(t, style.white_space))
     } else {
         None
     };
@@ -510,5 +530,37 @@ fn length_to_px(l: &Length) -> f32 {
         Length::Px(v) => *v,
         Length::Zero => 0.0,
         _ => 0.0,
+    }
+}
+
+/// White-space processing for a text node (CSS Text 3 §4.1.1).
+///
+/// Collapsible white space is reduced to single spaces here; spaces at the
+/// start/end of a line box are removed later, when inline content is merged
+/// (`merge_inline_children`) or a lone text leaf is shaped.
+pub(crate) fn process_text(text: &str, white_space: ferropdf_core::WhiteSpace) -> String {
+    white_space.collapse(text)
+}
+
+/// Width over which a table distributes its columns, in pt.
+fn resolve_table_width(width: &ferropdf_core::Length, available_width: f32) -> f32 {
+    use ferropdf_core::Length;
+    match *width {
+        Length::Pt(v) | Length::Px(v) if v > 0.0 => v,
+        Length::Percent(p) if p > 0.0 => available_width * p / 100.0,
+        _ => available_width,
+    }
+}
+
+#[cfg(test)]
+mod table_width_tests {
+    use super::resolve_table_width;
+    use ferropdf_core::Length;
+
+    #[test]
+    fn resolves_against_containing_block() {
+        assert_eq!(resolve_table_width(&Length::Percent(50.0), 400.0), 200.0);
+        assert_eq!(resolve_table_width(&Length::Pt(390.0), 400.0), 390.0);
+        assert_eq!(resolve_table_width(&Length::Auto, 400.0), 400.0);
     }
 }

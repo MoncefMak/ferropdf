@@ -83,6 +83,62 @@ pub enum TextAlign {
     Justify,
 }
 
+/// CSS `white-space` (CSS Text 3 §3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum WhiteSpace {
+    #[default]
+    Normal,
+    Nowrap,
+    Pre,
+    PreWrap,
+    PreLine,
+}
+
+impl WhiteSpace {
+    /// Whether lines may wrap at soft wrap opportunities.
+    pub fn wraps(self) -> bool {
+        !matches!(self, WhiteSpace::Nowrap | WhiteSpace::Pre)
+    }
+
+    /// Apply white-space processing (CSS Text 3 §4.1.1) to a text node.
+    ///
+    /// * `normal` / `nowrap`: every run of spaces, tabs and segment breaks
+    ///   becomes a single space.
+    /// * `pre-line`: runs of spaces/tabs collapse, newlines are kept, and
+    ///   spaces around a newline are removed.
+    /// * `pre` / `pre-wrap`: text is returned unchanged.
+    ///
+    /// Leading/trailing spaces at line or block boundaries are handled by the
+    /// layout code, which knows about neighbouring inline content.
+    pub fn collapse(self, text: &str) -> String {
+        match self {
+            WhiteSpace::Pre | WhiteSpace::PreWrap => text.to_string(),
+            WhiteSpace::Normal | WhiteSpace::Nowrap => {
+                let mut out = String::with_capacity(text.len());
+                let mut in_space = false;
+                for ch in text.chars() {
+                    if matches!(ch, ' ' | '\t' | '\n' | '\r' | '\x0C') {
+                        if !in_space {
+                            out.push(' ');
+                            in_space = true;
+                        }
+                    } else {
+                        out.push(ch);
+                        in_space = false;
+                    }
+                }
+                out
+            }
+            WhiteSpace::PreLine => text
+                .replace("\r\n", "\n")
+                .split('\n')
+                .map(|line| WhiteSpace::Normal.collapse(line).trim().to_string())
+                .collect::<Vec<_>>()
+                .join("\n"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Default)]
 pub enum TextDecoration {
     #[default]
@@ -312,6 +368,7 @@ pub struct ComputedStyle {
     pub text_align: TextAlign,
     pub text_decoration: TextDecoration,
     pub letter_spacing: f32,
+    pub white_space: WhiteSpace,
 
     // Flexbox
     pub flex_direction: FlexDirection,
@@ -384,6 +441,7 @@ impl Default for ComputedStyle {
             text_align: TextAlign::Left,
             text_decoration: TextDecoration::None,
             letter_spacing: 0.0,
+            white_space: WhiteSpace::Normal,
             flex_direction: FlexDirection::Row,
             flex_wrap: FlexWrap::NoWrap,
             justify_content: JustifyContent::FlexStart,
@@ -409,5 +467,38 @@ impl Default for ComputedStyle {
             widows: 2,
             custom_properties: std::collections::HashMap::new(),
         }
+    }
+}
+
+#[cfg(test)]
+mod white_space_tests {
+    use super::WhiteSpace;
+
+    #[test]
+    fn normal_collapses_runs_and_newlines() {
+        assert_eq!(
+            WhiteSpace::Normal.collapse("alpha\n        beta   gamma\n\tdelta"),
+            "alpha beta gamma delta"
+        );
+        assert_eq!(WhiteSpace::Normal.collapse("  a  "), " a ");
+    }
+
+    #[test]
+    fn pre_is_untouched() {
+        assert_eq!(WhiteSpace::Pre.collapse("a\n  b"), "a\n  b");
+        assert_eq!(WhiteSpace::PreWrap.collapse("a  b"), "a  b");
+    }
+
+    #[test]
+    fn pre_line_keeps_newlines_only() {
+        assert_eq!(WhiteSpace::PreLine.collapse("a   b \n   c"), "a b\nc");
+    }
+
+    #[test]
+    fn wrapping() {
+        assert!(WhiteSpace::Normal.wraps());
+        assert!(WhiteSpace::PreWrap.wraps());
+        assert!(!WhiteSpace::Nowrap.wraps());
+        assert!(!WhiteSpace::Pre.wraps());
     }
 }

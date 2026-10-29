@@ -172,16 +172,16 @@ every row is a test that renders a snippet and checks the PDF, and every ❌ row
 | Category | Feature | Status |
 | --- | --- | --- |
 | Page | `@page` size | ✅ Supported |
-| Page | `@page` size with `landscape` | ❌ Not yet ([#56](https://github.com/MoncefMak/ferropdf/issues/56)) |
+| Page | `@page` size with `landscape` | ✅ Supported |
 | Page | `@page` margin | ✅ Supported |
 | Page | `Options(page_size=...)` | ✅ Supported |
 | Page | `@page` margin boxes (headers / footers) | ❌ Not yet ([#25](https://github.com/MoncefMak/ferropdf/issues/25)) |
 | Page | `counter(page)` / `counter(pages)` | ❌ Not yet ([#26](https://github.com/MoncefMak/ferropdf/issues/26)) |
 | Fragmentation | Automatic pagination of many blocks | ✅ Supported |
 | Fragmentation | `page-break-before: always` (legacy) | ✅ Supported |
-| Fragmentation | `break-before: page` | ❌ Not yet ([#15](https://github.com/MoncefMak/ferropdf/issues/15)) |
-| Fragmentation | `break-after: page` | ❌ Not yet ([#15](https://github.com/MoncefMak/ferropdf/issues/15)) |
-| Fragmentation | Paragraph taller than a page splits across pages | ❌ Not yet ([#12](https://github.com/MoncefMak/ferropdf/issues/12)) |
+| Fragmentation | `break-before: page` | ✅ Supported |
+| Fragmentation | `break-after: page` | ✅ Supported |
+| Fragmentation | Paragraph taller than a page splits across pages | ✅ Supported |
 | Fragmentation | `<thead>` repeated on each page | ✅ Supported |
 | Cascade | Custom properties `var()` | ✅ Supported |
 | Cascade | `calc()` | ❌ Not yet ([#52](https://github.com/MoncefMak/ferropdf/issues/52)) |
@@ -189,14 +189,14 @@ every row is a test that renders a snippet and checks the PDF, and every ❌ row
 | Cascade | CSS counters in `content` | ❌ Not yet ([#31](https://github.com/MoncefMak/ferropdf/issues/31)) |
 | Cascade | `@media print` | ✅ Supported |
 | Cascade | Width media queries (`min-width`) | ❌ Not yet ([#29](https://github.com/MoncefMak/ferropdf/issues/29)) |
-| Cascade | `<style>` inside `<body>` is not rendered | ❌ Not yet ([#14](https://github.com/MoncefMak/ferropdf/issues/14)) |
+| Cascade | `<style>` inside `<body>` is not rendered | ✅ Supported |
 | Text | Bold / italic | ✅ Supported |
-| Text | `text-align: right` | ❌ Not yet ([#48](https://github.com/MoncefMak/ferropdf/issues/48)) |
-| Text | `text-align: center` | ❌ Not yet ([#48](https://github.com/MoncefMak/ferropdf/issues/48)) |
-| Text | `text-align: justify` | ❌ Not yet ([#33](https://github.com/MoncefMak/ferropdf/issues/33)) |
-| Text | Whitespace collapsing (`white-space: normal`) | ❌ Not yet ([#13](https://github.com/MoncefMak/ferropdf/issues/13)) |
+| Text | `text-align: right` | ✅ Supported |
+| Text | `text-align: center` | ✅ Supported |
+| Text | `text-align: justify` | ✅ Supported |
+| Text | Whitespace collapsing (`white-space: normal`) | ✅ Supported |
 | Text | `white-space: pre` | ✅ Supported |
-| Text | `white-space: nowrap` | ❌ Not yet ([#16](https://github.com/MoncefMak/ferropdf/issues/16)) |
+| Text | `white-space: nowrap` | ✅ Supported |
 | Text | `letter-spacing` | ❌ Not yet ([#34](https://github.com/MoncefMak/ferropdf/issues/34)) |
 | Text | `text-transform` | ❌ Not yet ([#34](https://github.com/MoncefMak/ferropdf/issues/34)) |
 | Text | `text-indent` | ❌ Not yet ([#34](https://github.com/MoncefMak/ferropdf/issues/34)) |
