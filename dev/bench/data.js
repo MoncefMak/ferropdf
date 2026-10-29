@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793261751622,
+  "lastUpdate": 1793261786134,
   "repoUrl": "https://github.com/MoncefMak/ferropdf",
   "entries": {
     "FastPDF Criterion Benchmarks": [
@@ -1975,6 +1975,54 @@ window.BENCHMARK_DATA = {
             "name": "render_invoice_cached",
             "value": 2462074,
             "range": "± 87176",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "72460183+MoncefMak@users.noreply.github.com",
+            "name": "MoncefMak",
+            "username": "MoncefMak"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "7d42c98798497eac2fe7e4855019fd7782ae0b9b",
+          "message": "Merge pull request #63 from MoncefMak/fix/visual-borders\n\nBorders: border-radius, dashed/dotted/double, box-sizing, box-shadow clipping",
+          "timestamp": "2026-10-29T09:14:17+01:00",
+          "tree_id": "2ffb9c972dda72e3398d65be6c61e516ce0dfef8",
+          "url": "https://github.com/MoncefMak/ferropdf/commit/7d42c98798497eac2fe7e4855019fd7782ae0b9b"
+        },
+        "date": 1793261785311,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "render_simple",
+            "value": 5649000,
+            "range": "± 62334",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice",
+            "value": 6390701,
+            "range": "± 324563",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_simple_cached",
+            "value": 2630743,
+            "range": "± 5554",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice_cached",
+            "value": 3360945,
+            "range": "± 16319",
             "unit": "ns/iter"
           }
         ]
