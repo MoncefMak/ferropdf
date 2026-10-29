@@ -246,8 +246,14 @@ fn build_taffy_tree_inner(
     let mut child_taffy_ids = Vec::new();
     // Width available to the children (used to size tables before layout).
     let child_available = content_width_estimate(&style, available_width);
+    let is_flex_or_grid = matches!(style.display, FDisplay::Flex | FDisplay::Grid);
 
     for &child_id in &node.children {
+        // Collapsible white space between flex/grid items creates no item
+        // (CSS Flexbox §4, Grid §6): it would take a cell / add a gap.
+        if is_flex_or_grid && inline_kind(doc, child_id, styles) == InlineKind::Whitespace {
+            continue;
+        }
         build_taffy_tree_inner(
             doc,
             child_id,
@@ -265,6 +271,9 @@ fn build_taffy_tree_inner(
     }
 
     let mut taffy_style = style_to_taffy::convert(&style);
+    if style.display == FDisplay::Grid {
+        resolve_auto_repeat(&mut taffy_style, child_available, child_taffy_ids.len());
+    }
 
     // Block container mixing block-level and inline-level children: wrap each
     // run of inline content in an anonymous line box (CSS 2.1 §9.2.1.1), so
@@ -1000,4 +1009,75 @@ fn content_width_estimate(style: &ComputedStyle, available: f32) -> f32 {
         }
     };
     width.max(0.0)
+}
+
+/// Turn `repeat(auto-fill | auto-fit, …)` into a fixed count computed from
+/// the estimated container width. Taffy 0.5 panics on auto repetitions whose
+/// tracks have a flexible max (`minmax(120px, 1fr)` — its definite-size
+/// helper reads `max` twice), and that is the most common way to use them.
+fn resolve_auto_repeat(st: &mut taffy::Style, inner_width: f32, item_count: usize) {
+    use taffy::{
+        GridTrackRepetition, MaxTrackSizingFunction, MinTrackSizingFunction, TrackSizingFunction,
+    };
+    let fixed = |lp: &LengthPercentage| match lp {
+        LengthPercentage::Length(v) => Some(*v),
+        LengthPercentage::Percent(p) => Some(p * inner_width),
+    };
+    let track_size = |t: &taffy::NonRepeatedTrackSizingFunction| -> Option<f32> {
+        let max = match &t.max {
+            MaxTrackSizingFunction::Fixed(lp) => fixed(lp),
+            _ => None,
+        };
+        let min = match &t.min {
+            MinTrackSizingFunction::Fixed(lp) => fixed(lp),
+            _ => None,
+        };
+        match (min, max) {
+            (Some(a), Some(b)) => Some(a.max(b).max(1.0)),
+            (a, b) => a.or(b).map(|v| v.max(1.0)),
+        }
+    };
+    let gap = match st.gap.width {
+        LengthPercentage::Length(v) => v,
+        LengthPercentage::Percent(p) => p * inner_width,
+    };
+    let fixed_others: f32 = st
+        .grid_template_columns
+        .iter()
+        .filter_map(|t| match t {
+            TrackSizingFunction::Single(t) => track_size(t).map(|w| w + gap),
+            _ => None,
+        })
+        .sum();
+    for track in st
+        .grid_template_columns
+        .iter_mut()
+        .chain(st.grid_template_rows.iter_mut())
+    {
+        let TrackSizingFunction::Repeat(rep, tracks) = track else {
+            continue;
+        };
+        if !matches!(
+            rep,
+            GridTrackRepetition::AutoFill | GridTrackRepetition::AutoFit
+        ) {
+            continue;
+        }
+        let auto_fit = matches!(rep, GridTrackRepetition::AutoFit);
+        let unit: Option<f32> = tracks.iter().map(track_size).sum();
+        let count = match unit {
+            Some(unit) => {
+                let per = unit + gap * tracks.len() as f32;
+                (((inner_width - fixed_others + gap) / per).floor() as usize).max(1)
+            }
+            None => 1, // invalid per CSS: auto repetition needs definite sizes
+        };
+        // auto-fit collapses empty repeated tracks: never more than the items.
+        let count = if auto_fit {
+            count.min(item_count.max(1))
+        } else {
+            count
+        };
+        *rep = GridTrackRepetition::Count(count.min(u16::MAX as usize) as u16);
+    }
 }

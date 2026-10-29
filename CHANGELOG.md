@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- White space between flex/grid items (indented HTML) created invisible items: extra gaps, wrong `space-between`/`flex: 1` distribution, shifted grid cells.
+- `gap: <row> <column>` with two values was ignored; `align-items`/`align-self: start | end` fell back to `stretch`.
+- A panic inside the engine now raises `LayoutError` instead of a `PanicException` that escapes `except Exception`.
 - Tables sized their columns against the page width instead of their container, overflowing padded or narrower parents.
 - PNG transparency was lost (transparent areas rendered black); alpha is kept as a PDF soft mask.
 - SVG element names lost their case in the HTML parser (`linearGradient`, `clipPath`).
@@ -38,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PyO3 0.24 → 0.29 (RUSTSEC-2026-0176, RUSTSEC-2026-0177).
 
 ### Added
+- CSS Grid: `grid-template-columns/rows` (`fr`, lengths, `%`, `auto`, `min-/max-content`, `minmax()`, `fit-content()`, `repeat()` incl. `auto-fill`/`auto-fit`), `grid-column`/`grid-row`/`grid-area` (lines, `span`), `grid-auto-rows/columns/flow`, `justify-items`/`justify-self`, `place-items`/`place-self`, `grid-gap` aliases (#18).
 - `calc()` in lengths: `+ - * /`, parentheses, nested `calc()`, mixed units (px, pt, pc, mm, cm, in, Q, em, rem, %), with `var()`; `cm` and `in` units in plain lengths (#52).
 - SVG images — `<img src="logo.svg">`, SVG data URIs and inline `<svg>` — embedded as **vector** graphics via `svg2pdf` (gradients, paths, text) (#32).
 - HTML headers/footers: `position: running(name)` + `content: element(name)` in margin boxes (#28).

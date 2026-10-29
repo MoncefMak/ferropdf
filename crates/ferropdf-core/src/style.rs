@@ -83,6 +83,23 @@ pub enum TextAlign {
     Justify,
 }
 
+/// CSS Grid properties, kept as raw CSS and converted to Taffy's track /
+/// placement types by the layout crate (which owns the Taffy dependency).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct GridProps {
+    pub template_columns: Option<String>,
+    pub template_rows: Option<String>,
+    pub auto_columns: Option<String>,
+    pub auto_rows: Option<String>,
+    pub auto_flow: Option<String>,
+    pub column_start: Option<String>,
+    pub column_end: Option<String>,
+    pub row_start: Option<String>,
+    pub row_end: Option<String>,
+    pub justify_items: Option<String>,
+    pub justify_self: Option<String>,
+}
+
 /// CSS `box-sizing`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum BoxSizing {
@@ -345,6 +362,8 @@ pub struct ComputedStyle {
     /// Width / height ratio of a replaced element (`<img>`), from its
     /// intrinsic size. Lets Taffy derive the missing dimension.
     pub aspect_ratio: Option<f32>,
+    /// `grid-*`, `justify-items`, `justify-self` (not inherited).
+    pub grid: GridProps,
     pub direction: Direction,
     pub visibility: bool,
 
@@ -431,6 +450,7 @@ impl Default for ComputedStyle {
             position: Position::Static,
             running: None,
             aspect_ratio: None,
+            grid: GridProps::default(),
             direction: Direction::Ltr,
             visibility: true,
             width: Length::Auto,

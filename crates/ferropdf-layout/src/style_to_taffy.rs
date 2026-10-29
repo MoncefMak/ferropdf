@@ -1,5 +1,6 @@
 use ferropdf_core::{ComputedStyle, Length, Position as FPosition};
 use taffy::prelude::*;
+use taffy::MinMax;
 
 /// Convert ComputedStyle → taffy::Style
 /// Taffy automatically handles:
@@ -134,6 +135,7 @@ pub fn convert(style: &ComputedStyle) -> taffy::Style {
         aspect_ratio: style.aspect_ratio,
         ..Default::default()
     };
+    apply_grid(style, &mut out);
     if style.box_sizing == ferropdf_core::BoxSizing::ContentBox
         && style.display != ferropdf_core::Display::Table
     {
@@ -287,5 +289,306 @@ fn lpa(l: &Length) -> LengthPercentageAuto {
         Length::Auto => LengthPercentageAuto::Auto,
         Length::Zero => LengthPercentageAuto::Length(0.0),
         _ => LengthPercentageAuto::Auto,
+    }
+}
+
+// =============================================================================
+// CSS Grid → Taffy
+// =============================================================================
+
+fn apply_grid(style: &ComputedStyle, out: &mut taffy::Style) {
+    let g = &style.grid;
+    let fs = style.font_size;
+    if let Some(v) = &g.template_columns {
+        out.grid_template_columns = parse_track_list(v, fs);
+    }
+    if let Some(v) = &g.template_rows {
+        out.grid_template_rows = parse_track_list(v, fs);
+    }
+    if let Some(v) = &g.auto_columns {
+        out.grid_auto_columns = split_top_level(v)
+            .iter()
+            .filter_map(|t| parse_track(t, fs))
+            .collect();
+    }
+    if let Some(v) = &g.auto_rows {
+        out.grid_auto_rows = split_top_level(v)
+            .iter()
+            .filter_map(|t| parse_track(t, fs))
+            .collect();
+    }
+    if let Some(v) = &g.auto_flow {
+        let v = v.to_ascii_lowercase();
+        out.grid_auto_flow = match (v.contains("column"), v.contains("dense")) {
+            (true, true) => GridAutoFlow::ColumnDense,
+            (true, false) => GridAutoFlow::Column,
+            (false, true) => GridAutoFlow::RowDense,
+            (false, false) => GridAutoFlow::Row,
+        };
+    }
+    out.grid_column = taffy::Line {
+        start: parse_placement(g.column_start.as_deref()),
+        end: parse_placement(g.column_end.as_deref()),
+    };
+    out.grid_row = taffy::Line {
+        start: parse_placement(g.row_start.as_deref()),
+        end: parse_placement(g.row_end.as_deref()),
+    };
+    if let Some(v) = &g.justify_items {
+        out.justify_items = parse_align_items(v);
+    }
+    if let Some(v) = &g.justify_self {
+        out.justify_self = parse_align_items(v);
+    }
+}
+
+fn parse_align_items(v: &str) -> Option<AlignItems> {
+    match v.trim() {
+        "start" | "flex-start" | "self-start" | "left" => Some(AlignItems::Start),
+        "end" | "flex-end" | "self-end" | "right" => Some(AlignItems::End),
+        "center" => Some(AlignItems::Center),
+        "baseline" => Some(AlignItems::Baseline),
+        "stretch" => Some(AlignItems::Stretch),
+        _ => None, // normal / auto
+    }
+}
+
+/// `auto`, `3`, `-1`, `span 2`, `2 / span 3` halves. Named lines are not supported.
+fn parse_placement(v: Option<&str>) -> GridPlacement {
+    let Some(v) = v.map(str::trim) else {
+        return GridPlacement::Auto;
+    };
+    let mut words = v.split_whitespace();
+    match (words.next(), words.next()) {
+        (Some(w), Some(n)) if w.eq_ignore_ascii_case("span") => n
+            .parse::<u16>()
+            .ok()
+            .filter(|n| *n > 0)
+            .map(GridPlacement::Span)
+            .unwrap_or(GridPlacement::Auto),
+        (Some(n), None) => n
+            .parse::<i16>()
+            .ok()
+            .filter(|n| *n != 0)
+            .map(|n| GridPlacement::Line(n.into()))
+            .unwrap_or(GridPlacement::Auto),
+        _ => GridPlacement::Auto,
+    }
+}
+
+/// `grid-template-*`: `1fr 2fr`, `repeat(3, 1fr)`, `repeat(auto-fill, minmax(200px, 1fr))`,
+/// `200px auto minmax(100px, 30%)`, `[name]` line names ignored.
+fn parse_track_list(v: &str, font_size: f32) -> Vec<TrackSizingFunction> {
+    let v = v.trim();
+    if v.eq_ignore_ascii_case("none") {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    for tok in split_top_level(v) {
+        if tok.starts_with('[') {
+            continue;
+        }
+        if let Some(args) = function_args(tok, "repeat") {
+            let mut parts = args.splitn(2, ',');
+            let count = parts.next().unwrap_or("").trim().to_ascii_lowercase();
+            let tracks: Vec<NonRepeatedTrackSizingFunction> =
+                split_top_level(parts.next().unwrap_or(""))
+                    .iter()
+                    .filter(|t| !t.starts_with('['))
+                    .filter_map(|t| parse_track(t, font_size))
+                    .collect();
+            if tracks.is_empty() {
+                continue;
+            }
+            let repetition = match count.as_str() {
+                "auto-fill" => GridTrackRepetition::AutoFill,
+                "auto-fit" => GridTrackRepetition::AutoFit,
+                n => match n.parse::<u16>() {
+                    Ok(n) if n > 0 => GridTrackRepetition::Count(n),
+                    _ => continue,
+                },
+            };
+            out.push(TrackSizingFunction::Repeat(repetition, tracks));
+        } else if let Some(track) = parse_track(tok, font_size) {
+            out.push(TrackSizingFunction::Single(track));
+        }
+    }
+    out
+}
+
+fn parse_track(t: &str, font_size: f32) -> Option<NonRepeatedTrackSizingFunction> {
+    let t = t.trim();
+    if let Some(args) = function_args(t, "minmax") {
+        let mut it = split_comma(args).into_iter();
+        let min = it.next()?;
+        let max = it.next()?;
+        let min = match min.to_ascii_lowercase().as_str() {
+            "auto" => MinTrackSizingFunction::Auto,
+            "min-content" => MinTrackSizingFunction::MinContent,
+            "max-content" => MinTrackSizingFunction::MaxContent,
+            m => MinTrackSizingFunction::Fixed(track_length(m, font_size)?),
+        };
+        let max = parse_max_track(max, font_size)?;
+        return Some(MinMax { min, max });
+    }
+    if let Some(args) = function_args(t, "fit-content") {
+        let lp = track_length(args.trim(), font_size)?;
+        return Some(MinMax {
+            min: MinTrackSizingFunction::Auto,
+            max: MaxTrackSizingFunction::FitContent(lp),
+        });
+    }
+    let max = parse_max_track(t, font_size)?;
+    let min = match max {
+        MaxTrackSizingFunction::Fixed(lp) => MinTrackSizingFunction::Fixed(lp),
+        MaxTrackSizingFunction::MinContent => MinTrackSizingFunction::MinContent,
+        MaxTrackSizingFunction::MaxContent => MinTrackSizingFunction::MaxContent,
+        _ => MinTrackSizingFunction::Auto, // `1fr` = minmax(auto, 1fr)
+    };
+    Some(MinMax { min, max })
+}
+
+fn parse_max_track(t: &str, font_size: f32) -> Option<MaxTrackSizingFunction> {
+    let t = t.trim();
+    let lower = t.to_ascii_lowercase();
+    Some(match lower.as_str() {
+        "auto" => MaxTrackSizingFunction::Auto,
+        "min-content" => MaxTrackSizingFunction::MinContent,
+        "max-content" => MaxTrackSizingFunction::MaxContent,
+        _ => {
+            if let Some(n) = lower.strip_suffix("fr") {
+                MaxTrackSizingFunction::Fraction(
+                    n.trim().parse::<f32>().ok().filter(|f| *f >= 0.0)?,
+                )
+            } else {
+                MaxTrackSizingFunction::Fixed(track_length(t, font_size)?)
+            }
+        }
+    })
+}
+
+/// A length or percentage inside a track definition, in pt.
+fn track_length(t: &str, font_size: f32) -> Option<LengthPercentage> {
+    let t = t.trim().to_ascii_lowercase();
+    if t == "0" {
+        return Some(LengthPercentage::Length(0.0));
+    }
+    if t.starts_with("calc(") {
+        let c = ferropdf_style::calc::parse_calc(&t)?.resolve_font_relative(font_size, 12.0);
+        return match (c.percent != 0.0, c.pt != 0.0) {
+            (true, false) => Some(LengthPercentage::Percent(c.percent / 100.0)),
+            (false, _) => Some(LengthPercentage::Length(c.pt)),
+            (true, true) => None, // mixed calc() in tracks: unsupported
+        };
+    }
+    let num = |suffix: &str| {
+        t.strip_suffix(suffix)
+            .and_then(|n| n.trim().parse::<f32>().ok())
+    };
+    if let Some(v) = num("%") {
+        return Some(LengthPercentage::Percent(v / 100.0));
+    }
+    let pt = if let Some(v) = num("rem") {
+        v * 12.0
+    } else if let Some(v) = num("em") {
+        v * font_size
+    } else if let Some(v) = num("px") {
+        v * 0.75
+    } else if let Some(v) = num("pt") {
+        v
+    } else if let Some(v) = num("mm") {
+        v * 2.834_646
+    } else if let Some(v) = num("cm") {
+        v * 28.346_46
+    } else {
+        num("in")? * 72.0
+    };
+    Some(LengthPercentage::Length(pt))
+}
+
+/// Inner text of `name( … )` when `t` is exactly that function call.
+fn function_args<'a>(t: &'a str, name: &str) -> Option<&'a str> {
+    let open = t.find('(')?;
+    (t[..open].trim().eq_ignore_ascii_case(name) && t.ends_with(')'))
+        .then(|| &t[open + 1..t.len() - 1])
+}
+
+/// Split on whitespace outside parentheses.
+fn split_top_level(s: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut depth = 0i32;
+    let mut start: Option<usize> = None;
+    for (i, c) in s.char_indices() {
+        match c {
+            '(' | '[' => depth += 1,
+            ')' | ']' => depth -= 1,
+            _ => {}
+        }
+        if c.is_whitespace() && depth == 0 {
+            if let Some(st) = start.take() {
+                parts.push(&s[st..i]);
+            }
+        } else if start.is_none() {
+            start = Some(i);
+        }
+    }
+    if let Some(st) = start {
+        parts.push(&s[st..]);
+    }
+    parts
+}
+
+/// Split on commas outside parentheses.
+fn split_comma(s: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut depth = 0i32;
+    let mut last = 0;
+    for (i, c) in s.char_indices() {
+        match c {
+            '(' => depth += 1,
+            ')' => depth -= 1,
+            ',' if depth == 0 => {
+                parts.push(s[last..i].trim());
+                last = i + 1;
+            }
+            _ => {}
+        }
+    }
+    parts.push(s[last..].trim());
+    parts
+}
+
+#[cfg(test)]
+mod grid_tests {
+    use super::*;
+
+    #[test]
+    fn track_lists() {
+        let t = parse_track_list("repeat(4, 1fr)", 12.0);
+        assert!(
+            matches!(&t[0], TrackSizingFunction::Repeat(GridTrackRepetition::Count(4), v) if v.len() == 1)
+        );
+        let t = parse_track_list("[a] 200px minmax(100px, 1fr) [b] auto 30%", 12.0);
+        assert_eq!(t.len(), 4);
+        let t = parse_track_list("repeat(auto-fill, minmax(10em, 1fr))", 10.0);
+        let TrackSizingFunction::Repeat(GridTrackRepetition::AutoFill, v) = &t[0] else {
+            panic!("{t:?}")
+        };
+        assert_eq!(
+            v[0].min,
+            MinTrackSizingFunction::Fixed(LengthPercentage::Length(100.0))
+        );
+        assert!(parse_track_list("none", 12.0).is_empty());
+    }
+
+    #[test]
+    fn placements() {
+        assert_eq!(parse_placement(Some("span 2")), GridPlacement::Span(2));
+        assert_eq!(
+            parse_placement(Some("-1")),
+            GridPlacement::Line((-1).into())
+        );
+        assert_eq!(parse_placement(Some("auto")), GridPlacement::Auto);
+        assert_eq!(parse_placement(None), GridPlacement::Auto);
     }
 }

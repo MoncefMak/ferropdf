@@ -366,6 +366,34 @@ def chk_grid_columns():
     assert abs(d.word("G1")[1] - d.word("G2")[1]) < 1
 
 
+def _fill_rects(d: "Doc"):
+    return [dr["rect"] for dr in d.drawings() if dr.get("fill")]
+
+
+def chk_grid_placement():
+    d = Doc(wrap(
+        '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px 10px">\n'
+        '  <div style="grid-column:span 2;height:10px;background:#f00"></div>\n'
+        '  <div style="height:10px;background:#0f0"></div>\n'
+        '  <div style="grid-area:2 / 3;height:10px;background:#00f"></div>\n</div>'
+    ))
+    red, green, blue = _fill_rects(d)
+    assert abs(red.x0 - 56.7) < 1 and abs(green.y0 - red.y0) < 1 and green.x0 > red.x1
+    assert blue.y0 > red.y1 and abs(blue.x0 - green.x0) < 1, "explicit placement in row 2, column 3"
+
+
+def chk_grid_auto_fill():
+    items = "".join('<div style="height:10px;background:#f00"></div>' for _ in range(6))
+    d = Doc(wrap(f'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr))">{items}</div>'))
+    rects = _fill_rects(d)
+    assert len({round(r.y0) for r in rects}) == 2, "5 columns of ≥120px fit in the content width"
+
+
+def chk_flex_whitespace_gap():
+    d = Doc(wrap('<div style="display:flex;gap:20px">\n  <div>A1</div>\n  <div>B1</div>\n</div>'))
+    assert abs(d.word("B1")[0] - d.word("A1")[2] - 15) < 1.5, "one 20px gap, no extra item for white space"
+
+
 def chk_inline_block_shrink():
     d = Doc(wrap('<div><div>Block</div><span style="display:inline-block;background:#00f">IB</span> tail</div>'))
     assert abs(d.word("IB")[1] - d.word("tail")[1]) < 1
@@ -579,7 +607,10 @@ FEATURES = [
     Feature("Layout", "Flexbox row", chk_flex_row),
     Feature("Layout", "`justify-content: space-between`", chk_flex_justify_between),
     Feature("Layout", "Inline elements as flex items", chk_flex_inline_items),
-    Feature("Layout", "CSS grid columns", chk_grid_columns, 18),
+    Feature("Layout", "CSS grid columns", chk_grid_columns),
+    Feature("Layout", "Grid placement (`span`, `grid-area`, row/column gaps)", chk_grid_placement),
+    Feature("Layout", "Grid `repeat(auto-fill, minmax())`", chk_grid_auto_fill),
+    Feature("Layout", "White space between flex items ignored", chk_flex_whitespace_gap),
     Feature("Layout", "`inline-block` shrink-to-fit next to text", chk_inline_block_shrink),
     Feature("Layout", "`inline-block` padding around its label", chk_inline_block_padding),
     Feature("Layout", "Tables with `colspan`", chk_table_layout),
