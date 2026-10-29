@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793277821128,
+  "lastUpdate": 1793278871749,
   "repoUrl": "https://github.com/MoncefMak/ferropdf",
   "entries": {
     "FastPDF Criterion Benchmarks": [
@@ -2311,6 +2311,54 @@ window.BENCHMARK_DATA = {
             "name": "render_invoice_cached",
             "value": 2364861,
             "range": "± 145599",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "72460183+MoncefMak@users.noreply.github.com",
+            "name": "MoncefMak",
+            "username": "MoncefMak"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "7b759224385dcc3ae7ac6428c6a1da6428003713",
+          "message": "Merge pull request #71 from MoncefMak/feat/float\n\nfloat and clear support (emulated with flex rows)",
+          "timestamp": "2026-10-29T13:58:45+01:00",
+          "tree_id": "00065acf885f6eab438953954f095997304d336e",
+          "url": "https://github.com/MoncefMak/ferropdf/commit/7b759224385dcc3ae7ac6428c6a1da6428003713"
+        },
+        "date": 1793278870785,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "render_simple",
+            "value": 5661307,
+            "range": "± 157335",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice",
+            "value": 6434775,
+            "range": "± 190369",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_simple_cached",
+            "value": 2599344,
+            "range": "± 15550",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice_cached",
+            "value": 3365859,
+            "range": "± 13959",
             "unit": "ns/iter"
           }
         ]
