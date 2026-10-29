@@ -81,6 +81,17 @@ pub fn layout_with_font_system(
 /// their text is merged into a single rich-text buffer and shaped as one paragraph.
 /// This ensures correct word-wrapping across span boundaries.
 fn populate_shaped_lines(lb: &mut LayoutBox, fs: &mut cosmic_text::FontSystem) {
+    populate_shaped_lines_inner(lb, fs, (true, true));
+}
+
+/// `edges` = (trim start, trim end): whether this box starts/ends a line box,
+/// i.e. has no inline-level neighbour on that side. Spaces next to an inline
+/// sibling (`text <b>bold</b>`, `label <span class=btn>…</span>`) are kept.
+fn populate_shaped_lines_inner(
+    lb: &mut LayoutBox,
+    fs: &mut cosmic_text::FontSystem,
+    edges: (bool, bool),
+) {
     // Check if this block should merge its inline children
     if should_merge_inline_children(lb) {
         merge_inline_children(lb, fs);
@@ -94,7 +105,16 @@ fn populate_shaped_lines(lb: &mut LayoutBox, fs: &mut cosmic_text::FontSystem) {
             // A lone text leaf is its own line box: collapsible spaces at
             // its edges are removed (CSS Text 3 §4.1.2).
             let txt = if collapses(style.white_space) {
-                txt.trim_matches(' ')
+                let t = if edges.0 {
+                    txt.trim_start_matches(' ')
+                } else {
+                    txt.as_str()
+                };
+                if edges.1 {
+                    t.trim_end_matches(' ')
+                } else {
+                    t
+                }
             } else {
                 txt.as_str()
             };
@@ -112,9 +132,23 @@ fn populate_shaped_lines(lb: &mut LayoutBox, fs: &mut cosmic_text::FontSystem) {
             );
         }
     }
-    for child in &mut lb.children {
-        populate_shaped_lines(child, fs);
+    let inline: Vec<bool> = lb.children.iter().map(is_inline_level).collect();
+    let n = lb.children.len();
+    for (i, child) in lb.children.iter_mut().enumerate() {
+        let prev_inline = i > 0 && inline[i - 1];
+        let next_inline = i + 1 < n && inline[i + 1];
+        populate_shaped_lines_inner(child, fs, (!prev_inline, !next_inline));
     }
+}
+
+fn is_inline_level(lb: &LayoutBox) -> bool {
+    if lb.is_text_leaf() {
+        return lb
+            .text_content
+            .as_deref()
+            .is_some_and(|t| !t.trim().is_empty());
+    }
+    matches!(lb.style.display, Display::Inline | Display::InlineBlock)
 }
 
 /// Check if a LayoutBox is a block container whose children are all inline content.

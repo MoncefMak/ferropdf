@@ -307,6 +307,23 @@ def chk_inline_block_shrink():
     assert abs(d.word("IB")[1] - d.word("tail")[1]) < 1
 
 
+def chk_inline_block_padding():
+    d = Doc(wrap('<p>x <span style="display:inline-block;padding:10px;background:#00f">BTN</span> y</p>'))
+    box = next(dr["rect"] for dr in d.drawings() if dr.get("fill"))
+    btn = d.word("BTN")
+    assert btn[0] >= box.x0 + 5 and btn[2] <= box.x1 - 5, "label must sit inside the padding box"
+    assert d.word("y")[0] >= box.x1
+
+
+def chk_author_overrides_tag_defaults():
+    d = Doc(wrap('<p><a href="#" style="text-decoration:none">link</a> <b style="font-weight:normal">plain</b>'
+                 ' <span style="display:block">BLOCK</span></p>'))
+    assert not any(dr.get("color") for dr in d.drawings()), "no underline"
+    embedded = [f[3] for f in d.doc[0].get_fonts() if not f[3].startswith("Helvetica")]  # base-14 always declared
+    assert not any("Bold" in name for name in embedded), embedded
+    assert d.word("BLOCK")[1] > d.word("link")[1]
+
+
 def chk_position_absolute():
     d = Doc(wrap('<div style="position:relative;height:100px"><div style="position:absolute;top:50px;left:200px">ABS</div></div>'))
     assert d.word("ABS")[0] > 150
@@ -425,6 +442,7 @@ FEATURES = [
     Feature("Cascade", "Custom properties `var()`", chk_custom_properties),
     Feature("Cascade", "`calc()`", chk_calc, 52),
     Feature("Cascade", "`::before` / `::after` with literal `content`", chk_before_after_literal),
+    Feature("Cascade", "Author CSS overrides tag defaults (`a`, `b`, `span`)", chk_author_overrides_tag_defaults),
     Feature("Cascade", "CSS counters in `content`", chk_css_counters, 31),
     Feature("Cascade", "`@media print`", chk_media_print),
     Feature("Cascade", "Width media queries (`min-width`)", chk_media_width, 29),
@@ -444,7 +462,8 @@ FEATURES = [
     Feature("Layout", "Flexbox row", chk_flex_row),
     Feature("Layout", "`justify-content: space-between`", chk_flex_justify_between),
     Feature("Layout", "CSS grid columns", chk_grid_columns, 18),
-    Feature("Layout", "`inline-block` shrink-to-fit next to text", chk_inline_block_shrink, 17),
+    Feature("Layout", "`inline-block` shrink-to-fit next to text", chk_inline_block_shrink),
+    Feature("Layout", "`inline-block` padding around its label", chk_inline_block_padding),
     Feature("Layout", "Tables with `colspan`", chk_table_layout),
     Feature("Layout", "`position: absolute`", chk_position_absolute),
     Feature("Layout", "`float`", chk_float, 35),

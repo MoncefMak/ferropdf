@@ -168,6 +168,35 @@ impl Drop for FontSession<'_> {
     }
 }
 
+/// Advance width of one space in the given font, in pt (used for collapsed
+/// white space between two inline-level boxes).
+pub fn space_width(ctx: &TextContext, font_system: &mut FontSystem) -> f32 {
+    let measure = |text: &str, fs: &mut FontSystem| {
+        let mut buffer = Buffer::new(fs, Metrics::new(ctx.font_size, ctx.line_height));
+        buffer.set_wrap(fs, Wrap::None);
+        let family = if ctx.font_family.is_empty() {
+            Family::SansSerif
+        } else {
+            Family::Name(&ctx.font_family)
+        };
+        let mut attrs = Attrs::new().family(family);
+        if ctx.bold {
+            attrs = attrs.weight(cosmic_text::Weight::BOLD);
+        }
+        if ctx.italic {
+            attrs = attrs.style(cosmic_text::Style::Italic);
+        }
+        buffer.set_text(fs, text, attrs, Shaping::Advanced);
+        buffer.shape_until_scroll(fs, false);
+        buffer
+            .layout_runs()
+            .map(|r| r.line_w)
+            .fold(0.0_f32, f32::max)
+    };
+    // Trailing spaces may be excluded from line widths: measure between glyphs.
+    (measure("x x", font_system) - measure("xx", font_system)).max(0.0)
+}
+
 /// Measure a text node using cosmic-text.
 ///
 /// Called by Taffy's layout engine via `compute_layout_with_measure` whenever
