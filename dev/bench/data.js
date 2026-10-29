@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793255117913,
+  "lastUpdate": 1793257036254,
   "repoUrl": "https://github.com/MoncefMak/ferropdf",
   "entries": {
     "FastPDF Criterion Benchmarks": [
@@ -1831,6 +1831,54 @@ window.BENCHMARK_DATA = {
             "name": "render_invoice_cached",
             "value": 2604873,
             "range": "± 178699",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "72460183+MoncefMak@users.noreply.github.com",
+            "name": "MoncefMak",
+            "username": "MoncefMak"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "030f630892aa6c149fb59dbc4f81144e24ef9624",
+          "message": "Merge pull request #60 from MoncefMak/fix/v0.3-correctness\n\nFix v0.3 correctness bugs (re-land #58 on main)",
+          "timestamp": "2026-10-29T07:55:07+01:00",
+          "tree_id": "21be88cf3b8ce9ffe68b3d2ba9cb53451e0d8605",
+          "url": "https://github.com/MoncefMak/ferropdf/commit/030f630892aa6c149fb59dbc4f81144e24ef9624"
+        },
+        "date": 1793257035862,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "render_simple",
+            "value": 7255551,
+            "range": "± 34925",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice",
+            "value": 8192773,
+            "range": "± 33020",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_simple_cached",
+            "value": 3389441,
+            "range": "± 8009",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice_cached",
+            "value": 4323063,
+            "range": "± 13271",
             "unit": "ns/iter"
           }
         ]
