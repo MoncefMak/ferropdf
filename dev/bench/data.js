@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793271879978,
+  "lastUpdate": 1793273340217,
   "repoUrl": "https://github.com/MoncefMak/ferropdf",
   "entries": {
     "FastPDF Criterion Benchmarks": [
@@ -2215,6 +2215,54 @@ window.BENCHMARK_DATA = {
             "name": "render_invoice_cached",
             "value": 4087475,
             "range": "± 24044",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "72460183+MoncefMak@users.noreply.github.com",
+            "name": "MoncefMak",
+            "username": "MoncefMak"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "8e5e5b03942caeb46d2e3de2fa13be0546d6cda2",
+          "message": "Merge pull request #69 from MoncefMak/feat/calc\n\ncalc() support; size tables against their container",
+          "timestamp": "2026-10-29T12:26:26+01:00",
+          "tree_id": "f0b8892b301991b597d92666a1674f04cd31451f",
+          "url": "https://github.com/MoncefMak/ferropdf/commit/8e5e5b03942caeb46d2e3de2fa13be0546d6cda2"
+        },
+        "date": 1793273339317,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "render_simple",
+            "value": 5884519,
+            "range": "± 105640",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice",
+            "value": 6546319,
+            "range": "± 184047",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_simple_cached",
+            "value": 2651401,
+            "range": "± 12798",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice_cached",
+            "value": 3411446,
+            "range": "± 23163",
             "unit": "ns/iter"
           }
         ]
