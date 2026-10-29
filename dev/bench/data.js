@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1778345492595,
+  "lastUpdate": 1793255117913,
   "repoUrl": "https://github.com/MoncefMak/ferropdf",
   "entries": {
     "FastPDF Criterion Benchmarks": [
@@ -1783,6 +1783,54 @@ window.BENCHMARK_DATA = {
             "name": "render_invoice_cached",
             "value": 3997730,
             "range": "± 14850",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "72460183+MoncefMak@users.noreply.github.com",
+            "name": "MoncefMak",
+            "username": "MoncefMak"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "a0f8dd483aea1a222a57467c1556aa6603835f1c",
+          "message": "Merge pull request #57 from MoncefMak/phase0/corpus-matrix-bench\n\nPhase 0: template corpus, feature matrix, visual regression, multi-engine benchmark",
+          "timestamp": "2026-10-29T07:22:19+01:00",
+          "tree_id": "3531622c5d77ce005b8df0eb71a68aca508b2906",
+          "url": "https://github.com/MoncefMak/ferropdf/commit/a0f8dd483aea1a222a57467c1556aa6603835f1c"
+        },
+        "date": 1793255117276,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "render_simple",
+            "value": 3946348,
+            "range": "± 240305",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice",
+            "value": 4603892,
+            "range": "± 317800",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_simple_cached",
+            "value": 2235550,
+            "range": "± 139428",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice_cached",
+            "value": 2604873,
+            "range": "± 178699",
             "unit": "ns/iter"
           }
         ]
