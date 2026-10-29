@@ -3,8 +3,8 @@ use crate::text::TextContext;
 use crate::{style_to_taffy, text};
 use cosmic_text::FontSystem;
 use ferropdf_core::{
-    ComputedStyle, Display as FDisplay, Document, Insets, LayoutBox, LayoutTree, Length, NodeId,
-    Rect,
+    Clear, ComputedStyle, Display as FDisplay, Document, Float, Insets, LayoutBox, LayoutTree,
+    Length, NodeId, Rect,
 };
 use ferropdf_style::StyleTree;
 use std::collections::HashMap;
@@ -300,6 +300,21 @@ fn build_taffy_tree_inner(
                 font_system,
             )?;
         }
+        let has_float = kinds
+            .iter()
+            .any(|(cid, _)| styles.get(cid).is_some_and(|s| s.float != Float::None));
+        if has_float {
+            let dom_of: HashMap<taffy::NodeId, NodeId> =
+                kinds.iter().map(|(cid, _)| (node_map[cid], *cid)).collect();
+            child_taffy_ids = wrap_floats(
+                &child_taffy_ids,
+                &dom_of,
+                styles,
+                taffy,
+                table_cell_parent,
+                child_available,
+            )?;
+        }
     }
 
     // If this is a block container whose children are all inline/text,
@@ -554,15 +569,16 @@ fn read_layout(
             if node_map.contains_key(&child_id) {
                 // Children grouped into an anonymous line box are positioned
                 // relative to that wrapper, not to this element.
-                let (cx, cy) = match table_cell_parent.anon_wrapper.get(&child_id) {
-                    Some(&wrapper) => {
-                        let wl = taffy.layout(wrapper).map_err(|e| {
-                            ferropdf_core::FerroError::Layout(format!("Taffy read error: {:?}", e))
-                        })?;
-                        (x + wl.location.x, y + wl.location.y)
-                    }
-                    None => (x, y),
-                };
+                let (mut cx, mut cy) = (x, y);
+                let mut wrapper = table_cell_parent.anon_wrapper.get(&child_id).copied();
+                while let Some(w) = wrapper {
+                    let wl = taffy.layout(w).map_err(|e| {
+                        ferropdf_core::FerroError::Layout(format!("Taffy read error: {:?}", e))
+                    })?;
+                    cx += wl.location.x;
+                    cy += wl.location.y;
+                    wrapper = table_cell_parent.anon_outer.get(&w).copied();
+                }
                 let child_box = read_layout(
                     doc,
                     child_id,
@@ -697,6 +713,9 @@ pub(crate) struct BridgeState {
     pub table_cell_parent: HashMap<NodeId, NodeId>,
     /// Child → anonymous line-box wrapper it was placed in.
     pub anon_wrapper: HashMap<NodeId, taffy::NodeId>,
+    /// Anonymous wrapper → the anonymous wrapper enclosing it (float rows
+    /// contain line boxes and content blocks).
+    pub anon_outer: HashMap<taffy::NodeId, taffy::NodeId>,
     /// Root of the subtree being laid out.
     pub layout_root: Option<NodeId>,
     /// Nodes with mixed `calc()` values, resolved after a first layout.
@@ -858,8 +877,9 @@ fn inline_kind(doc: &Document, id: NodeId, styles: &StyleTree) -> InlineKind {
             InlineKind::Inline
         };
     }
-    match styles.get(&id).map(|s| &s.display) {
-        Some(FDisplay::Inline) | Some(FDisplay::InlineBlock) => InlineKind::Inline,
+    match styles.get(&id).map(|s| (&s.display, s.float)) {
+        Some((_, f)) if f != Float::None => InlineKind::Block, // floats leave the line
+        Some((FDisplay::Inline, _)) | Some((FDisplay::InlineBlock, _)) => InlineKind::Inline,
         _ => InlineKind::Block,
     }
 }
@@ -1079,5 +1099,172 @@ fn resolve_auto_repeat(st: &mut taffy::Style, inner_width: f32, item_count: usiz
             count
         };
         *rep = GridTrackRepetition::Count(count.min(u16::MAX as usize) as u16);
+    }
+}
+
+/// Emulate floats (Taffy 0.5 has none). From each floated child up to the
+/// next element with `clear` (or the end), floats are placed on lines in
+/// source order, like CSS: a float goes on the current line if its declared
+/// width still fits (auto widths are assumed to fit), otherwise it starts a
+/// new line. Each line is an anonymous flex row: left floats in order, then
+/// (first line only) the run's non-floated content in a flexible column,
+/// then right floats with the first one pushed to the right edge
+/// (`margin-left: auto`), so successive right floats stack from the right.
+///
+/// Approximation: content beside a float stays in a column next to it; it
+/// does not wrap underneath the float once it is taller.
+fn wrap_floats(
+    items: &[taffy::NodeId],
+    dom_of: &HashMap<taffy::NodeId, NodeId>,
+    styles: &StyleTree,
+    taffy: &mut TaffyTree<TextContext>,
+    state: &mut BridgeState,
+    container_width: f32,
+) -> ferropdf_core::Result<Vec<taffy::NodeId>> {
+    let err = |e: taffy::TaffyError| {
+        ferropdf_core::FerroError::Layout(format!("Taffy float error: {:?}", e))
+    };
+    let style_of = |t: &taffy::NodeId| dom_of.get(t).and_then(|id| styles.get(id));
+    let float_of = |t: &taffy::NodeId| style_of(t).map_or(Float::None, |s| s.float);
+    let clears = |t: &taffy::NodeId| style_of(t).is_some_and(|s| s.clear != Clear::None);
+    // Declared outer width of a float, when known before layout.
+    let outer_width = |t: &taffy::NodeId| -> f32 {
+        let Some(st) = style_of(t) else { return 0.0 };
+        let len = |l: &Length| match l {
+            Length::Pt(v) | Length::Px(v) => *v,
+            Length::Percent(p) => container_width * p / 100.0,
+            Length::Calc(c) => c.against(container_width),
+            _ => 0.0,
+        };
+        let w = len(&st.width);
+        if w == 0.0 {
+            return 0.0; // auto: shrink-to-fit, assume it fits
+        }
+        let extra = if st.box_sizing == ferropdf_core::BoxSizing::ContentBox {
+            len(&st.padding[1]) + len(&st.padding[3]) + st.border_left.width + st.border_right.width
+        } else {
+            0.0
+        };
+        w + extra + len(&st.margin[1]) + len(&st.margin[3])
+    };
+
+    struct Line {
+        lefts: Vec<taffy::NodeId>,
+        rights: Vec<taffy::NodeId>,
+        used: f32,
+    }
+
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < items.len() {
+        if float_of(&items[i]) == Float::None {
+            out.push(items[i]);
+            i += 1;
+            continue;
+        }
+        let mut end = i + 1;
+        while end < items.len() && !clears(&items[end]) {
+            end += 1;
+        }
+        let run = &items[i..end];
+        let others: Vec<_> = run
+            .iter()
+            .copied()
+            .filter(|t| float_of(t) == Float::None)
+            .collect();
+
+        let mut lines = vec![Line {
+            lefts: Vec::new(),
+            rights: Vec::new(),
+            used: 0.0,
+        }];
+        for t in run.iter().filter(|t| float_of(t) != Float::None) {
+            let w = outer_width(t);
+            let line = lines.last_mut().expect("at least one line");
+            let empty = line.lefts.is_empty() && line.rights.is_empty();
+            if !empty && line.used + w > container_width + 0.5 {
+                lines.push(Line {
+                    lefts: Vec::new(),
+                    rights: Vec::new(),
+                    used: 0.0,
+                });
+            }
+            let line = lines.last_mut().expect("at least one line");
+            line.used += w;
+            match float_of(t) {
+                Float::Left => line.lefts.push(*t),
+                _ => line.rights.push(*t),
+            }
+        }
+
+        for (n, line) in lines.iter().enumerate() {
+            let mut row_children = line.lefts.clone();
+            let content = if n == 0 && !others.is_empty() {
+                let content_style = taffy::Style {
+                    display: taffy::Display::Block,
+                    flex_grow: 1.0,
+                    flex_shrink: 1.0,
+                    flex_basis: Dimension::Length(0.0),
+                    min_size: Size {
+                        width: Dimension::Length(0.0),
+                        height: Dimension::Auto,
+                    },
+                    ..Default::default()
+                };
+                let c = taffy
+                    .new_with_children(content_style, &others)
+                    .map_err(err)?;
+                row_children.push(c);
+                Some(c)
+            } else {
+                None
+            };
+            for (k, r) in line.rights.iter().rev().enumerate() {
+                if k == 0 {
+                    let mut st = taffy.style(*r).map_err(err)?.clone();
+                    st.margin.left = LengthPercentageAuto::Auto;
+                    taffy.set_style(*r, st).map_err(err)?;
+                }
+                row_children.push(*r);
+            }
+            let row_style = taffy::Style {
+                display: taffy::Display::Flex,
+                flex_direction: taffy::FlexDirection::Row,
+                align_items: Some(taffy::AlignItems::FlexStart),
+                ..Default::default()
+            };
+            let row = taffy
+                .new_with_children(row_style, &row_children)
+                .map_err(err)?;
+            for t in line.lefts.iter().chain(line.rights.iter()) {
+                place_in(*t, row, dom_of, state);
+            }
+            if let Some(c) = content {
+                state.anon_outer.insert(c, row);
+                for t in &others {
+                    place_in(*t, c, dom_of, state);
+                }
+            }
+            out.push(row);
+        }
+        i = end;
+    }
+    Ok(out)
+}
+
+/// Record that `item` (a DOM child or an anonymous wrapper) now sits in `wrapper`.
+fn place_in(
+    item: taffy::NodeId,
+    wrapper: taffy::NodeId,
+    dom_of: &HashMap<taffy::NodeId, NodeId>,
+    state: &mut BridgeState,
+) {
+    match dom_of.get(&item) {
+        Some(id) => {
+            state.anon_wrapper.insert(*id, wrapper);
+        }
+        None => {
+            state.anon_outer.insert(item, wrapper);
+        }
     }
 }

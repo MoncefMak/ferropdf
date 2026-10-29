@@ -481,6 +481,15 @@ def chk_transform():
     assert any(not dr["rect"].is_empty and abs(dr["rect"].height - 30) > 5 for dr in d.drawings() if dr.get("fill"))
 
 
+def chk_float_header_and_clear():
+    d = Doc(wrap('<div><div style="float:left">LOGOF</div>\n<div style="float:right">FIRSTR</div>\n'
+                 '<div style="float:right">SECONDR</div></div><h2 style="clear:both">TITLEF</h2>'))
+    logo, first, second, title = (d.word(w) for w in ("LOGOF", "FIRSTR", "SECONDR", "TITLEF"))
+    assert abs(logo[1] - first[1]) < 1 and abs(first[1] - second[1]) < 1, "floats share the line"
+    assert first[2] > d.page_width() - 70 and second[2] < first[0], "first right float is rightmost"
+    assert title[1] > logo[3], "clear: both goes below the floats"
+
+
 def chk_overflow_hidden():
     d = Doc(wrap('<div style="width:60px;height:14px;overflow:hidden">' + "clip " * 40 + "</div>"))
     assert len(d.words()) < 10
@@ -615,7 +624,8 @@ FEATURES = [
     Feature("Layout", "`inline-block` padding around its label", chk_inline_block_padding),
     Feature("Layout", "Tables with `colspan`", chk_table_layout),
     Feature("Layout", "`position: absolute`", chk_position_absolute),
-    Feature("Layout", "`float`", chk_float, 35),
+    Feature("Layout", "`float` (text beside a floated box)", chk_float),
+    Feature("Layout", "`float` left/right header + `clear`", chk_float_header_and_clear),
     Feature("Layout", "`overflow: hidden`", chk_overflow_hidden, 36),
     Feature("Layout", "`box-sizing` (content-box default, border-box)", chk_box_sizing),
     Feature("Visual", "Solid borders", chk_border_solid),

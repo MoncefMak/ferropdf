@@ -556,6 +556,21 @@ fn apply_single(
                 style.widows = v;
             }
         }
+        CssProperty::Unknown(ref name) if name == "float" => {
+            style.float = match raw {
+                "left" | "inline-start" => Float::Left,
+                "right" | "inline-end" => Float::Right,
+                _ => Float::None,
+            };
+        }
+        CssProperty::Unknown(ref name) if name == "clear" => {
+            style.clear = match raw {
+                "left" | "inline-start" => Clear::Left,
+                "right" | "inline-end" => Clear::Right,
+                "both" => Clear::Both,
+                _ => Clear::None,
+            };
+        }
         CssProperty::Unknown(ref name) if apply_grid_property(style, name, raw) => {}
         CssProperty::Unknown(ref name) if name == "box-decoration-break" => {
             style.box_decoration_break = match raw {
