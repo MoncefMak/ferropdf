@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Invoice — utility classes</title>
+<style>
+  /* Hand-written subset of Tailwind-style utilities (no CDN). */
+  *, ::before, ::after { box-sizing: border-box; border-width: 0; border-style: solid; border-color: #e5e7eb; }
+  body { margin: 0; font-family: "DejaVu Sans", sans-serif; line-height: 1.5; }
+  .p-10 { padding: 2.5rem; } .p-4 { padding: 1rem; } .px-3 { padding-left: .75rem; padding-right: .75rem; }
+  .py-2 { padding-top: .5rem; padding-bottom: .5rem; } .mt-8 { margin-top: 2rem; } .mt-2 { margin-top: .5rem; }
+  .flex { display: flex; } .justify-between { justify-content: space-between; } .items-center { align-items: center; }
+  .gap-4 { gap: 1rem; } .flex-1 { flex: 1 1 0%; } .w-full { width: 100%; }
+  .text-xs { font-size: .75rem; } .text-sm { font-size: .875rem; } .text-2xl { font-size: 1.5rem; } .text-3xl { font-size: 1.875rem; }
+  .font-semibold { font-weight: 600; } .font-bold { font-weight: 700; } .uppercase { text-transform: uppercase; }
+  .tracking-wide { letter-spacing: .025em; } .text-right { text-align: right; }
+  .text-gray-500 { color: #6b7280; } .text-gray-900 { color: #111827; } .text-white { color: #fff; }
+  .text-indigo-600 { color: #4f46e5; } .bg-indigo-600 { background-color: #4f46e5; } .bg-gray-50 { background-color: #f9fafb; }
+  .rounded-lg { border-radius: .5rem; } .rounded-full { border-radius: 9999px; } .border { border-width: 1px; } .border-b { border-bottom-width: 1px; }
+  .shadow { box-shadow: 0 1px 3px rgba(0,0,0,.1); } .inline-block { display: inline-block; }
+  .divide-y > * + * { border-top-width: 1px; }
+</style>
+</head>
+<body class="text-gray-900">
+<div class="p-10">
+  <div class="flex justify-between items-center">
+    <div>
+      <div class="text-3xl font-bold text-indigo-600">Lumen</div>
+      <div class="text-sm text-gray-500">Cloud analytics for small teams</div>
+    </div>
+    <div class="text-right">
+      <div class="text-xs uppercase tracking-wide text-gray-500">Invoice</div>
+      <div class="text-2xl font-semibold">#LUM-8812</div>
+      <span class="inline-block mt-2 px-3 py-2 text-xs font-semibold rounded-full bg-indigo-600 text-white">Due in 14 days</span>
+    </div>
+  </div>
+
+  <div class="flex gap-4 mt-8">
+    <div class="flex-1 p-4 rounded-lg bg-gray-50 border">
+      <div class="text-xs uppercase tracking-wide text-gray-500">Billed to</div>
+      <div class="font-semibold">Fjord Logistics AS</div>
+      <div class="text-sm">Strandgata 9, 0152 Oslo, Norway</div>
+    </div>
+    <div class="flex-1 p-4 rounded-lg bg-gray-50 border">
+      <div class="text-xs uppercase tracking-wide text-gray-500">Period</div>
+      <div class="font-semibold">1 – 31 October 2026</div>
+      <div class="text-sm">Plan: Team (annual)</div>
+    </div>
+  </div>
+
+  <div class="mt-8 rounded-lg border shadow">
+    <div class="flex px-3 py-2 bg-gray-50 border-b text-xs uppercase tracking-wide text-gray-500">
+      <div class="flex-1">Item</div><div class="flex-1 text-right">Seats</div><div class="flex-1 text-right">Amount</div>
+    </div>
+    <div class="divide-y">
+      <div class="flex px-3 py-2 text-sm"><div class="flex-1">Team plan</div><div class="flex-1 text-right">12</div><div class="flex-1 text-right">$588.00</div></div>
+      <div class="flex px-3 py-2 text-sm"><div class="flex-1">Extra storage (500 GB)</div><div class="flex-1 text-right">1</div><div class="flex-1 text-right">$45.00</div></div>
+      <div class="flex px-3 py-2 text-sm"><div class="flex-1">Priority support</div><div class="flex-1 text-right">1</div><div class="flex-1 text-right">$99.00</div></div>
+    </div>
+  </div>
+
+  <div class="flex justify-between mt-8">
+    <div class="text-sm text-gray-500">Questions? billing@lumen.example</div>
+    <div class="text-right">
+      <div class="text-sm text-gray-500">Total due</div>
+      <div class="text-3xl font-bold">$732.00</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Monthly dashboard</title>
+<style>
+  @page { size: A4; margin: 14mm; }
+  body { font-family: "DejaVu Sans", sans-serif; font-size: 9pt; color: #1e293b; }
+  h1 { font-size: 18pt; margin: 0 0 4mm; }
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4mm; }
+  .kpi { border: 1px solid #e2e8f0; border-radius: 6px; padding: 4mm; background: #f8fafc; }
+  .kpi .label { color: #64748b; font-size: 7.5pt; text-transform: uppercase; letter-spacing: 1px; }
+  .kpi .value { font-size: 16pt; font-weight: bold; }
+  .up { color: #16a34a; } .down { color: #dc2626; }
+  .panels { display: grid; grid-template-columns: 2fr 1fr; gap: 4mm; margin-top: 5mm; }
+  .panel { border: 1px solid #e2e8f0; border-radius: 6px; padding: 4mm; }
+  .panel h2 { font-size: 10pt; margin: 0 0 3mm; }
+  .bar { height: 5mm; background: #e2e8f0; border-radius: 3px; margin: 1.5mm 0 3mm; overflow: hidden; }
+  .bar > div { height: 100%; background: #6366f1; border-radius: 3px; }
+  table { width: 100%; border-collapse: collapse; }
+  td, th { padding: 2mm; border-bottom: 1px solid #e2e8f0; text-align: left; }
+</style>
+</head>
+<body>
+  <h1>October 2026 &mdash; Product dashboard</h1>
+  <div class="kpis">
+    <div class="kpi"><div class="label">Revenue</div><div class="value">$184k</div><div class="up">▲ 12.4%</div></div>
+    <div class="kpi"><div class="label">Active users</div><div class="value">23,910</div><div class="up">▲ 5.1%</div></div>
+    <div class="kpi"><div class="label">Churn</div><div class="value">2.3%</div><div class="down">▲ 0.4 pt</div></div>
+    <div class="kpi"><div class="label">NPS</div><div class="value">47</div><div class="up">▲ 3</div></div>
+  </div>
+  <div class="panels">
+    <div class="panel">
+      <h2>Weekly signups</h2>
+      <svg width="100%" height="140" viewBox="0 0 400 140" xmlns="http://www.w3.org/2000/svg">
+        <polyline fill="none" stroke="#6366f1" stroke-width="3" points="0,120 57,98 114,104 171,70 228,76 285,44 342,50 400,20"/>
+        <line x1="0" y1="139" x2="400" y2="139" stroke="#94a3b8"/>
+      </svg>
+    </div>
+    <div class="panel">
+      <h2>Plan mix</h2>
+      Free <div class="bar"><div style="width: 62%"></div></div>
+      Team <div class="bar"><div style="width: 28%"></div></div>
+      Enterprise <div class="bar"><div style="width: 10%"></div></div>
+    </div>
+  </div>
+  <div class="panel" style="margin-top: 5mm">
+    <h2>Top accounts</h2>
+    <table>
+      <tr><th>Account</th><th>Plan</th><th>MRR</th><th>Health</th></tr>
+      <tr><td>Fjord Logistics</td><td>Enterprise</td><td>$9,400</td><td class="up">Good</td></tr>
+      <tr><td>Northwind Studio</td><td>Team</td><td>$1,180</td><td class="up">Good</td></tr>
+      <tr><td>Acme Corp</td><td>Enterprise</td><td>$7,250</td><td class="down">At risk</td></tr>
+    </table>
+  </div>
+</body>
+</html>

@@ -26,3 +26,6 @@ Thumbs.db
 
 # Maturin
 *.whl
+
+# Visual regression output (actual renders + diff masks)
+tests/corpus/_output/

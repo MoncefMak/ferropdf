@@ -32,7 +32,7 @@ jobs:
         run: |
           python -m venv .venv
           source .venv/bin/activate 2>/dev/null || source .venv/Scripts/activate
-          pip install maturin pytest pytest-cov pypdf
+          pip install maturin pytest pytest-cov pypdf pymupdf pytest-github-actions-annotate-failures
           maturin develop --release
         shell: bash
 
@@ -41,6 +41,36 @@ jobs:
           source .venv/bin/activate 2>/dev/null || source .venv/Scripts/activate
           pytest tests/ -v --tb=short
         shell: bash
+
+  visual:
+    # Pixel comparison of the template corpus against tests/corpus/reference.
+    # Linux only: references depend on the DejaVu fonts and the rasteriser.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install fonts
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fonts-dejavu-core fonts-dejavu-extra
+      - name: Build and install
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install maturin pytest pypdf pymupdf pillow
+          maturin develop --release
+      - name: Visual regression
+        run: |
+          source .venv/bin/activate
+          FERROPDF_VISUAL=1 pytest tests/test_visual.py -v --tb=line
+      - name: Upload diffs
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: visual-diffs
+          path: tests/corpus/_output
+          retention-days: 14
 
   lint:
     runs-on: ubuntu-latest

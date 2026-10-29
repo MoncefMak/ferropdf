@@ -1,0 +1,517 @@
+"""Feature matrix — one small, structural check per CSS / PDF feature.
+
+Every entry renders a minimal HTML snippet and asserts an observable property
+of the PDF (page count, glyph positions, drawing operators, annotations...).
+
+* Supported features are plain tests.
+* Known gaps are marked ``xfail(strict=True)`` and point at their GitHub issue.
+  When someone implements the feature the test XPASSes, which *fails* the run:
+  remove the ``issue`` from the entry and update the README table.
+
+The same table drives the README "CSS support" section:
+
+    python tests/test_feature_matrix.py            # prints a Markdown table
+"""
+
+from __future__ import annotations
+
+import base64
+import struct
+import sys
+import warnings
+import zlib
+from dataclasses import dataclass
+from typing import Callable
+
+import pytest
+
+pymupdf = pytest.importorskip("pymupdf") if __name__ != "__main__" else __import__("pymupdf")
+
+import ferropdf  # noqa: E402
+
+ISSUES = "https://github.com/MoncefMak/ferropdf/issues/"
+
+
+def _has_dejavu() -> bool:
+    """The matrix (and the README table) is defined on the reference platform:
+    DejaVu fonts installed, as in the Linux CI job. Font-dependent checks are
+    skipped elsewhere."""
+    import glob
+    import os
+
+    dirs = ["/usr/share/fonts", "/usr/local/share/fonts", os.path.expanduser("~/.fonts"),
+            os.path.expanduser("~/.local/share/fonts"), "/Library/Fonts",
+            os.path.expanduser("~/Library/Fonts"), r"C:\Windows\Fonts"]
+    return any(glob.glob(os.path.join(d, "**", "DejaVuSans.ttf"), recursive=True) for d in dirs if os.path.isdir(d))
+
+
+HAS_DEJAVU = _has_dejavu()
+
+
+# --------------------------------------------------------------------------- helpers
+
+
+class Doc:
+    """Rendered PDF with convenience accessors (coordinates in PDF points)."""
+
+    def __init__(self, html: str, **options):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            if options:
+                self.pdf = ferropdf.from_html(html, options=ferropdf.Options(**options))
+            else:
+                self.pdf = ferropdf.from_html(html)
+        self.doc = pymupdf.open(stream=self.pdf, filetype="pdf")
+
+    @property
+    def pages(self) -> int:
+        return self.doc.page_count
+
+    def text(self, page: int = 0) -> str:
+        return " ".join(self.doc[page].get_text().split())
+
+    def all_text(self) -> str:
+        return " ".join(self.text(i) for i in range(self.pages))
+
+    def words(self, page: int = 0):
+        """[(x0, y0, x1, y1, word)]"""
+        return [(w[0], w[1], w[2], w[3], w[4]) for w in self.doc[page].get_text("words")]
+
+    def word(self, text: str, page: int = 0):
+        for w in self.words(page):
+            if w[4] == text:
+                return w
+        raise AssertionError(f"word {text!r} not found on page {page + 1}: {self.text(page)!r}")
+
+    def drawings(self, page: int = 0):
+        return self.doc[page].get_drawings()
+
+    def page_width(self, page: int = 0) -> float:
+        return self.doc[page].rect.width
+
+
+def wrap(body: str, css: str = "") -> str:
+    return (
+        "<html><head><style>body{font-family:'DejaVu Sans',sans-serif}" + css + "</style></head>"
+        f"<body>{body}</body></html>"
+    )
+
+
+def _png_data_uri(w: int = 4, h: int = 4) -> str:
+    raw = b"".join(b"\x00" + b"\xff\x00\x00" * w for _ in range(h))
+
+    def chunk(tag: bytes, data: bytes) -> bytes:
+        return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
+
+    png = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
+    png += chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b"")
+    return "data:image/png;base64," + base64.b64encode(png).decode()
+
+
+SVG_URI = "data:image/svg+xml;base64," + base64.b64encode(
+    b'<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40">'
+    b'<rect width="40" height="40" fill="#f00"/></svg>'
+).decode()
+
+LONG_TEXT = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. " * 160
+
+
+# --------------------------------------------------------------------------- checks
+# Each check takes no argument and raises AssertionError when the feature is broken.
+
+
+def chk_page_size():
+    d = Doc(wrap("<p>x</p>", "@page{size:A6}"))
+    assert round(d.page_width()) == 298
+
+
+def chk_page_landscape():
+    d = Doc(wrap("<p>x</p>", "@page{size:A4 landscape}"))
+    assert round(d.page_width()) == 842
+
+
+def chk_page_margin():
+    d = Doc(wrap("<p>Start</p>", "@page{margin:30mm}"))
+    assert abs(d.word("Start")[0] - 85.0) < 2
+
+
+def chk_options_page_size():
+    d = Doc(wrap("<p>x</p>"), page_size="Letter")
+    assert round(d.page_width()) == 612
+
+
+def chk_legacy_page_break():
+    d = Doc(wrap('<p>A</p><p style="page-break-before:always">B</p>'))
+    assert d.pages == 2
+
+
+def chk_break_before():
+    d = Doc(wrap('<p>A</p><p style="break-before:page">B</p>'))
+    assert d.pages == 2
+
+
+def chk_break_after():
+    d = Doc(wrap('<p style="break-after:page">A</p><p>B</p>'))
+    assert d.pages == 2
+
+
+def chk_long_text_splits():
+    d = Doc(wrap(f"<p>{LONG_TEXT}</p>"))
+    assert d.pages >= 2 and "Lorem" in d.text(0) and "Lorem" in d.text(1)
+
+
+def chk_many_blocks_paginate():
+    d = Doc(wrap("".join(f"<p>Paragraph {i}</p>" for i in range(120))))
+    assert d.pages >= 2 and "Paragraph 119" in d.all_text()
+
+
+def chk_thead_repeat():
+    rows = "".join(f"<tr><td>row{i}</td></tr>" for i in range(90))
+    d = Doc(wrap(f"<table><thead><tr><th>HEADER</th></tr></thead><tbody>{rows}</tbody></table>"))
+    assert d.pages >= 2 and d.text(1).startswith("HEADER")
+
+
+def chk_margin_boxes():
+    d = Doc(wrap("<p>body</p>", '@page{@bottom-center{content:"FOOTERTEXT"}}'))
+    assert "FOOTERTEXT" in d.text(0)
+
+
+def chk_page_counters():
+    d = Doc(
+        wrap(
+            '<p>a</p><p style="page-break-before:always">b</p>',
+            '@page{@bottom-center{content:"P" counter(page) "of" counter(pages)}}',
+        )
+    )
+    assert "P2of2" in d.text(1).replace(" ", "")
+
+
+def chk_custom_properties():
+    d = Doc(wrap('<div style="background:var(--c);height:20px"></div>', ":root{--c:#00ff00}"))
+    assert any(dr.get("fill") and tuple(round(c, 2) for c in dr["fill"]) == (0, 1, 0) for dr in d.drawings())
+
+
+def chk_calc():
+    d = Doc(wrap('<div style="width:calc(100px + 100px);height:10px;background:#f00"></div>'))
+    widths = [dr["rect"].width for dr in d.drawings() if dr.get("fill")]
+    assert any(abs(w - 150) < 1 for w in widths)  # 200px = 150pt
+
+
+def chk_before_after_literal():
+    d = Doc(wrap('<p class="x">mid</p>', '.x::before{content:"BEFORE"}.x::after{content:"AFTER"}'))
+    assert "BEFOREmidAFTER" in d.text().replace(" ", "")
+
+
+def chk_css_counters():
+    d = Doc(wrap('<p class="n">a</p><p class="n">b</p>', '.n{counter-increment:k}.n::before{content:counter(k) "."}'))
+    assert "2.b" in d.text().replace(" ", "")
+
+
+def chk_media_print():
+    d = Doc(wrap("<p>x</p>", "@media print{p{color:#ff0000}}"))
+    assert b"1 0 0 rg" in d.pdf
+
+
+def chk_media_width():
+    d = Doc(wrap('<p class="w">x</p>', "@media (min-width: 300px){.w{color:#ff0000}}"))
+    assert b"1 0 0 rg" in d.pdf
+
+
+def chk_lists():
+    d = Doc(wrap('<ul><li>a</li></ul><ol><li>b</li></ol><ol style="list-style-type:upper-roman"><li>c</li><li>d</li></ol>'))
+    t = d.text()
+    assert "•" in t and "1." in t and "II." in t
+
+
+def chk_text_align_right():
+    d = Doc(wrap('<p style="text-align:right">R</p>'))
+    assert d.word("R")[2] > d.page_width() - 80
+
+
+def chk_text_align_center():
+    d = Doc(wrap('<p style="text-align:center">C</p>'))
+    assert abs((d.word("C")[0] + d.word("C")[2]) / 2 - d.page_width() / 2) < 10
+
+
+def chk_justify():
+    d = Doc(wrap(f'<p style="text-align:justify;width:300px">{LONG_TEXT[:400]}</p>'))
+    lines: dict[int, list] = {}
+    for w in d.words():
+        lines.setdefault(round(w[1]), []).append(w)
+    full = sorted(lines.values(), key=lambda ws: ws[0][1])[:-1]  # all but the last line
+    rights = [max(w[2] for w in ws) for ws in full]
+    assert len(rights) >= 2 and max(rights) - min(rights) < 1.5
+
+
+def chk_whitespace_collapse():
+    d = Doc(wrap("<p>alpha\n        beta   gamma\n\tdelta</p>"))
+    ys = {round(w[1]) for w in d.words()}
+    assert len(ys) == 1, "all four words should be on one line"
+
+
+def chk_white_space_pre():
+    d = Doc(wrap("<pre>one\ntwo</pre>"))
+    assert d.word("one")[1] < d.word("two")[1]
+
+
+def chk_nowrap():
+    d = Doc(wrap('<p style="white-space:nowrap;width:40px">nowrap nowrap</p>'))
+    assert "nowrap nowrap" in d.text() and len({round(w[1]) for w in d.words()}) == 1
+
+
+def chk_style_in_body_hidden():
+    d = Doc("<html><body><style>p{color:red}</style><p>hello</p></body></html>")
+    assert d.text() == "hello"
+
+
+def chk_letter_spacing():
+    a = Doc(wrap("<p>WIDE</p>")).word("WIDE")
+    b = Doc(wrap('<p style="letter-spacing:10px">WIDE</p>')).word("WIDE")
+    assert (b[2] - b[0]) - (a[2] - a[0]) > 20
+
+
+def chk_text_transform():
+    d = Doc(wrap('<p style="text-transform:uppercase">shout</p>'))
+    assert "SHOUT" in d.text()
+
+
+def chk_text_indent():
+    d = Doc(wrap('<p style="text-indent:50px">Indented</p><p>Normal</p>'))
+    assert d.word("Indented")[0] - d.word("Normal")[0] > 30
+
+
+def chk_font_weight_style():
+    d = Doc(wrap("<p><b>bold</b> <i>ital</i></p>"))
+    fonts = " ".join(f[3] for f in d.doc[0].get_fonts())
+    assert "Bold" in fonts and ("Oblique" in fonts or "Italic" in fonts)
+
+
+def chk_flex_row():
+    d = Doc(wrap('<div style="display:flex;gap:40px"><div>LEFT</div><div>RIGHT</div></div>'))
+    left, right = d.word("LEFT"), d.word("RIGHT")
+    assert abs(left[1] - right[1]) < 1 and right[0] > left[2]
+
+
+def chk_flex_justify_between():
+    d = Doc(wrap('<div style="display:flex;justify-content:space-between"><div>L</div><div>R</div></div>'))
+    assert d.word("R")[2] > d.page_width() - 80
+
+
+def chk_grid_columns():
+    d = Doc(wrap('<div style="display:grid;grid-template-columns:1fr 1fr"><div>G1</div><div>G2</div></div>'))
+    assert abs(d.word("G1")[1] - d.word("G2")[1]) < 1
+
+
+def chk_inline_block_shrink():
+    d = Doc(wrap('<div><div>Block</div><span style="display:inline-block;background:#00f">IB</span> tail</div>'))
+    assert abs(d.word("IB")[1] - d.word("tail")[1]) < 1
+
+
+def chk_position_absolute():
+    d = Doc(wrap('<div style="position:relative;height:100px"><div style="position:absolute;top:50px;left:200px">ABS</div></div>'))
+    assert d.word("ABS")[0] > 150
+
+
+def chk_table_layout():
+    d = Doc(wrap('<table><tr><td>c1</td><td>c2</td></tr><tr><td colspan="2">wide</td></tr></table>'))
+    assert d.word("c2")[0] > d.word("c1")[2] and d.word("wide")[1] > d.word("c1")[1]
+
+
+def chk_border_solid():
+    d = Doc(wrap('<div style="border:2px solid #f00;height:20px"></div>'))
+    assert any(dr.get("color") for dr in d.drawings())
+
+
+def chk_border_dashed():
+    d = Doc(wrap('<div style="border:2px dashed #f00;height:20px"></div>'))
+    assert any(dr.get("dashes") and dr["dashes"] not in ("[] 0", "[] 0.0") for dr in d.drawings())
+
+
+def chk_border_radius():
+    d = Doc(wrap('<div style="width:100px;height:40px;background:#00f;border-radius:20px"></div>'))
+    assert any(item[0] == "c" for dr in d.drawings() for item in dr["items"])
+
+
+def chk_box_shadow():
+    d = Doc(wrap('<div style="width:100px;height:40px;box-shadow:4px 4px 0 #000"></div>'))
+    assert len(d.drawings()) >= 1
+
+
+def chk_opacity():
+    d = Doc(wrap('<div style="opacity:.5;background:#f00;height:20px"></div>'))
+    assert b"/ca" in d.pdf or b"/CA" in d.pdf
+
+
+def chk_gradient():
+    d = Doc(wrap('<div style="height:40px;background:linear-gradient(to right,#f00,#00f)"></div>'))
+    assert b"/Shading" in d.pdf or len(d.drawings()) > 0
+
+
+def chk_transform():
+    d = Doc(wrap('<div style="margin:40px;width:100px;height:40px;background:#f00;transform:rotate(30deg)"></div>'))
+    assert any(not dr["rect"].is_empty and abs(dr["rect"].height - 30) > 5 for dr in d.drawings() if dr.get("fill"))
+
+
+def chk_overflow_hidden():
+    d = Doc(wrap('<div style="width:60px;height:14px;overflow:hidden">' + "clip " * 40 + "</div>"))
+    assert len(d.words()) < 10
+
+
+def chk_float():
+    d = Doc(wrap('<div style="width:400px"><div style="float:right;width:100px">FLT</div><p style="margin:0">Wrap</p></div>'))
+    assert abs(d.word("FLT")[1] - d.word("Wrap")[1]) < 2
+
+
+def chk_png_image():
+    d = Doc(wrap(f'<img src="{_png_data_uri()}" width="20" height="20">'))
+    assert len(d.doc[0].get_images()) == 1
+
+
+def chk_svg_image():
+    d = Doc(wrap(f'<img src="{SVG_URI}" width="40" height="40">'))
+    assert len(d.doc[0].get_images()) == 1 or len(d.drawings()) >= 1
+
+
+def chk_inline_svg():
+    d = Doc(wrap('<svg width="40" height="40"><rect width="40" height="40" fill="#f00"/></svg>'))
+    assert len(d.drawings()) >= 1
+
+
+def chk_rtl_arabic():
+    d = Doc(wrap('<p dir="rtl">مرحبا بالعالم</p>'))
+    assert d.text() != "" and d.words()[0][0] > d.page_width() / 2
+
+
+def chk_links():
+    d = Doc(wrap('<a href="https://example.com">link</a>'))
+    assert any(l.get("uri") == "https://example.com" for l in d.doc[0].get_links())
+
+
+def chk_outline():
+    d = Doc(wrap("<h1>One</h1><h2>Two</h2>"))
+    assert len(d.doc.get_toc()) >= 2
+
+
+def chk_metadata():
+    d = Doc(wrap("<p>x</p>"), title="T1", author="A1")
+    assert d.doc.metadata["title"] == "T1" and d.doc.metadata["author"] == "A1"
+
+
+# --------------------------------------------------------------------------- matrix
+
+
+@dataclass(frozen=True)
+class Feature:
+    category: str
+    name: str
+    check: Callable[[], None]
+    issue: int | None = None  # open issue => expected to fail (strict xfail)
+    needs_fonts: bool = False  # result depends on installed fonts (see HAS_DEJAVU)
+
+
+FEATURES = [
+    Feature("Page", "`@page` size", chk_page_size),
+    Feature("Page", "`@page` size with `landscape`", chk_page_landscape, 56),
+    Feature("Page", "`@page` margin", chk_page_margin),
+    Feature("Page", "`Options(page_size=...)`", chk_options_page_size),
+    Feature("Page", "`@page` margin boxes (headers / footers)", chk_margin_boxes, 25),
+    Feature("Page", "`counter(page)` / `counter(pages)`", chk_page_counters, 26),
+    Feature("Fragmentation", "Automatic pagination of many blocks", chk_many_blocks_paginate),
+    Feature("Fragmentation", "`page-break-before: always` (legacy)", chk_legacy_page_break),
+    Feature("Fragmentation", "`break-before: page`", chk_break_before, 15),
+    Feature("Fragmentation", "`break-after: page`", chk_break_after, 15),
+    Feature("Fragmentation", "Paragraph taller than a page splits across pages", chk_long_text_splits, 12),
+    Feature("Fragmentation", "`<thead>` repeated on each page", chk_thead_repeat),
+    Feature("Cascade", "Custom properties `var()`", chk_custom_properties),
+    Feature("Cascade", "`calc()`", chk_calc, 52),
+    Feature("Cascade", "`::before` / `::after` with literal `content`", chk_before_after_literal),
+    Feature("Cascade", "CSS counters in `content`", chk_css_counters, 31),
+    Feature("Cascade", "`@media print`", chk_media_print),
+    Feature("Cascade", "Width media queries (`min-width`)", chk_media_width, 29),
+    Feature("Cascade", "`<style>` inside `<body>` is not rendered", chk_style_in_body_hidden, 14),
+    Feature("Text", "Bold / italic", chk_font_weight_style),
+    Feature("Text", "`text-align: right`", chk_text_align_right, 48),
+    Feature("Text", "`text-align: center`", chk_text_align_center, 48),
+    Feature("Text", "`text-align: justify`", chk_justify, 33),
+    Feature("Text", "Whitespace collapsing (`white-space: normal`)", chk_whitespace_collapse, 13),
+    Feature("Text", "`white-space: pre`", chk_white_space_pre),
+    Feature("Text", "`white-space: nowrap`", chk_nowrap, 16),
+    Feature("Text", "`letter-spacing`", chk_letter_spacing, 34),
+    Feature("Text", "`text-transform`", chk_text_transform, 34),
+    Feature("Text", "`text-indent`", chk_text_indent, 34),
+    Feature("Text", "Arabic shaping + RTL alignment", chk_rtl_arabic, needs_fonts=True),
+    Feature("Text", "Lists (disc, decimal, roman)", chk_lists),
+    Feature("Layout", "Flexbox row", chk_flex_row),
+    Feature("Layout", "`justify-content: space-between`", chk_flex_justify_between),
+    Feature("Layout", "CSS grid columns", chk_grid_columns, 18),
+    Feature("Layout", "`inline-block` shrink-to-fit next to text", chk_inline_block_shrink, 17),
+    Feature("Layout", "Tables with `colspan`", chk_table_layout),
+    Feature("Layout", "`position: absolute`", chk_position_absolute),
+    Feature("Layout", "`float`", chk_float, 35),
+    Feature("Layout", "`overflow: hidden`", chk_overflow_hidden, 36),
+    Feature("Visual", "Solid borders", chk_border_solid),
+    Feature("Visual", "Dashed / dotted borders", chk_border_dashed, 19),
+    Feature("Visual", "`border-radius`", chk_border_radius, 49),
+    Feature("Visual", "`box-shadow`", chk_box_shadow),
+    Feature("Visual", "`opacity`", chk_opacity),
+    Feature("Visual", "Gradients", chk_gradient, 37),
+    Feature("Visual", "`transform`", chk_transform, 38),
+    Feature("Images", "PNG / JPEG `<img>`", chk_png_image),
+    Feature("Images", "SVG `<img>`", chk_svg_image, 32),
+    Feature("Images", "Inline `<svg>`", chk_inline_svg, 32),
+    Feature("PDF", "Title / author metadata", chk_metadata),
+    Feature("PDF", "Clickable links", chk_links, 40),
+    Feature("PDF", "Outline / bookmarks", chk_outline, 41),
+]
+
+
+@pytest.mark.parametrize(
+    "feature",
+    [
+        pytest.param(
+            f,
+            id=f.check.__name__.removeprefix("chk_") if hasattr(str, "removeprefix") else f.check.__name__[4:],
+            marks=([pytest.mark.xfail(strict=True, reason=f"not supported yet — {ISSUES}{f.issue}")] if f.issue else [])
+            + ([pytest.mark.skipif(not HAS_DEJAVU, reason="font-dependent: needs DejaVu fonts")] if f.needs_fonts else []),
+        )
+        for f in FEATURES
+    ],
+)
+def test_feature(feature: Feature):
+    feature.check()
+
+
+def markdown_table() -> str:
+    lines = ["| Category | Feature | Status |", "| --- | --- | --- |"]
+    for f in FEATURES:
+        try:
+            f.check()
+            ok = True
+        except Exception:  # noqa: BLE001
+            ok = False
+        if ok:
+            status = "✅ Supported"
+        elif f.issue:
+            status = f"❌ Not yet ([#{f.issue}]({ISSUES}{f.issue}))"
+        else:
+            status = "⚠️ Broken"
+        lines.append(f"| {f.category} | {f.name} | {status} |")
+    return "\n".join(lines)
+
+
+@pytest.mark.skipif(not HAS_DEJAVU, reason="README table is generated on the reference platform (DejaVu fonts)")
+def test_readme_table_in_sync():
+    """The README "CSS support" table must match the matrix above."""
+    from pathlib import Path
+
+    readme = (Path(__file__).resolve().parent.parent / "README.md").read_text(encoding="utf-8")
+    start, end = "<!-- feature-matrix:start -->", "<!-- feature-matrix:end -->"
+    current = readme.split(start, 1)[1].split(end, 1)[0].strip()
+    assert current == markdown_table(), (
+        "README feature table is stale — regenerate it with `python tests/test_feature_matrix.py` "
+        "and paste the output between the feature-matrix markers"
+    )
+
+
+if __name__ == "__main__":
+    sys.stdout.write(markdown_table() + "\n")

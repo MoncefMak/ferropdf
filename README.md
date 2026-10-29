@@ -24,7 +24,7 @@ A native Rust HTML-to-PDF engine exposed as a Python package via PyO3. Releases 
 | **Font subsetting** | Automatic | Manual |
 | **Install** | `pip install ferropdf` | System deps required |
 
-ferropdf intentionally targets **document rendering**, not full-fidelity browser layout. For honest performance comparisons, run [`bench/compare.py`](bench/compare.py) against your own workload — see [Performance](#performance) below.
+ferropdf intentionally targets **document rendering**, not full-fidelity browser layout. For honest performance comparisons, run [`bench/engines.py`](bench/engines.py) against your own workload — see [Performance](#performance) below.
 
 ---
 
@@ -164,82 +164,69 @@ async def invoice_pdf(id: int):
 ## CSS support
 
 ferropdf uses industry-standard libraries for parsing and layout — not a hand-rolled engine.
+The table below is **generated from the test suite** ([`tests/test_feature_matrix.py`](tests/test_feature_matrix.py)):
+every row is a test that renders a snippet and checks the PDF, and every ❌ row is a strict
+`xfail` linked to its issue, so the table cannot silently drift from reality.
 
-### Layout
+<!-- feature-matrix:start -->
+| Category | Feature | Status |
+| --- | --- | --- |
+| Page | `@page` size | ✅ Supported |
+| Page | `@page` size with `landscape` | ❌ Not yet ([#56](https://github.com/MoncefMak/ferropdf/issues/56)) |
+| Page | `@page` margin | ✅ Supported |
+| Page | `Options(page_size=...)` | ✅ Supported |
+| Page | `@page` margin boxes (headers / footers) | ❌ Not yet ([#25](https://github.com/MoncefMak/ferropdf/issues/25)) |
+| Page | `counter(page)` / `counter(pages)` | ❌ Not yet ([#26](https://github.com/MoncefMak/ferropdf/issues/26)) |
+| Fragmentation | Automatic pagination of many blocks | ✅ Supported |
+| Fragmentation | `page-break-before: always` (legacy) | ✅ Supported |
+| Fragmentation | `break-before: page` | ❌ Not yet ([#15](https://github.com/MoncefMak/ferropdf/issues/15)) |
+| Fragmentation | `break-after: page` | ❌ Not yet ([#15](https://github.com/MoncefMak/ferropdf/issues/15)) |
+| Fragmentation | Paragraph taller than a page splits across pages | ❌ Not yet ([#12](https://github.com/MoncefMak/ferropdf/issues/12)) |
+| Fragmentation | `<thead>` repeated on each page | ✅ Supported |
+| Cascade | Custom properties `var()` | ✅ Supported |
+| Cascade | `calc()` | ❌ Not yet ([#52](https://github.com/MoncefMak/ferropdf/issues/52)) |
+| Cascade | `::before` / `::after` with literal `content` | ✅ Supported |
+| Cascade | CSS counters in `content` | ❌ Not yet ([#31](https://github.com/MoncefMak/ferropdf/issues/31)) |
+| Cascade | `@media print` | ✅ Supported |
+| Cascade | Width media queries (`min-width`) | ❌ Not yet ([#29](https://github.com/MoncefMak/ferropdf/issues/29)) |
+| Cascade | `<style>` inside `<body>` is not rendered | ❌ Not yet ([#14](https://github.com/MoncefMak/ferropdf/issues/14)) |
+| Text | Bold / italic | ✅ Supported |
+| Text | `text-align: right` | ❌ Not yet ([#48](https://github.com/MoncefMak/ferropdf/issues/48)) |
+| Text | `text-align: center` | ❌ Not yet ([#48](https://github.com/MoncefMak/ferropdf/issues/48)) |
+| Text | `text-align: justify` | ❌ Not yet ([#33](https://github.com/MoncefMak/ferropdf/issues/33)) |
+| Text | Whitespace collapsing (`white-space: normal`) | ❌ Not yet ([#13](https://github.com/MoncefMak/ferropdf/issues/13)) |
+| Text | `white-space: pre` | ✅ Supported |
+| Text | `white-space: nowrap` | ❌ Not yet ([#16](https://github.com/MoncefMak/ferropdf/issues/16)) |
+| Text | `letter-spacing` | ❌ Not yet ([#34](https://github.com/MoncefMak/ferropdf/issues/34)) |
+| Text | `text-transform` | ❌ Not yet ([#34](https://github.com/MoncefMak/ferropdf/issues/34)) |
+| Text | `text-indent` | ❌ Not yet ([#34](https://github.com/MoncefMak/ferropdf/issues/34)) |
+| Text | Arabic shaping + RTL alignment | ✅ Supported |
+| Text | Lists (disc, decimal, roman) | ✅ Supported |
+| Layout | Flexbox row | ✅ Supported |
+| Layout | `justify-content: space-between` | ✅ Supported |
+| Layout | CSS grid columns | ❌ Not yet ([#18](https://github.com/MoncefMak/ferropdf/issues/18)) |
+| Layout | `inline-block` shrink-to-fit next to text | ❌ Not yet ([#17](https://github.com/MoncefMak/ferropdf/issues/17)) |
+| Layout | Tables with `colspan` | ✅ Supported |
+| Layout | `position: absolute` | ✅ Supported |
+| Layout | `float` | ❌ Not yet ([#35](https://github.com/MoncefMak/ferropdf/issues/35)) |
+| Layout | `overflow: hidden` | ❌ Not yet ([#36](https://github.com/MoncefMak/ferropdf/issues/36)) |
+| Visual | Solid borders | ✅ Supported |
+| Visual | Dashed / dotted borders | ❌ Not yet ([#19](https://github.com/MoncefMak/ferropdf/issues/19)) |
+| Visual | `border-radius` | ❌ Not yet ([#49](https://github.com/MoncefMak/ferropdf/issues/49)) |
+| Visual | `box-shadow` | ✅ Supported |
+| Visual | `opacity` | ✅ Supported |
+| Visual | Gradients | ❌ Not yet ([#37](https://github.com/MoncefMak/ferropdf/issues/37)) |
+| Visual | `transform` | ❌ Not yet ([#38](https://github.com/MoncefMak/ferropdf/issues/38)) |
+| Images | PNG / JPEG `<img>` | ✅ Supported |
+| Images | SVG `<img>` | ❌ Not yet ([#32](https://github.com/MoncefMak/ferropdf/issues/32)) |
+| Images | Inline `<svg>` | ❌ Not yet ([#32](https://github.com/MoncefMak/ferropdf/issues/32)) |
+| PDF | Title / author metadata | ✅ Supported |
+| PDF | Clickable links | ❌ Not yet ([#40](https://github.com/MoncefMak/ferropdf/issues/40)) |
+| PDF | Outline / bookmarks | ❌ Not yet ([#41](https://github.com/MoncefMak/ferropdf/issues/41)) |
+<!-- feature-matrix:end -->
 
-| Feature | Status |
-|---|---|
-| Block layout | Supported |
-| Flexbox (`flex-direction`, `flex-wrap`, `gap`, `justify-content`, `align-items`) | Supported |
-| Tables (`<table>`, `<thead>`, `<tbody>`, `<tr>`, `<td>`, `colspan`, `rowspan`, `border-collapse`) | Supported |
-| `position: relative`, `position: absolute` | Supported |
-| `width`, `height` (px, %, em) | Supported |
-| `margin`, `padding` (px, mm, em, auto) | Supported |
-| `box-sizing: border-box` | Supported |
-| CSS Grid | Experimental (taffy) |
-| `position: fixed`, `sticky` | Not yet |
-| `float` | Not yet |
-| `overflow` | Not yet |
-
-### Typography
-
-| Feature | Status |
-|---|---|
-| `font-family` (system fonts, fallbacks) | Supported |
-| `font-size` (px, pt, mm, em, rem) | Supported |
-| `font-weight` (normal, bold, 100–900) | Supported |
-| `font-style` (normal, italic) | Supported |
-| `line-height` | Supported |
-| `text-align` (left, center, right) | Supported |
-| `@font-face` (data: URI + base_url paths) | Supported |
-| Arabic shaping + `direction: rtl` | Supported (via cosmic-text/rustybuzz) |
-| `text-align: justify` | Not yet |
-| `letter-spacing`, `word-spacing` | Not yet |
-
-### Visual
-
-| Feature | Status |
-|---|---|
-| `color`, `background-color` (hex, rgb, rgba, named) | Supported |
-| `border` (width, style, color) | Supported |
-| `border-radius` | Supported |
-| `box-shadow` (offset + blur + color) | Supported |
-| `opacity` | Supported |
-| `linear-gradient`, `radial-gradient` | Not yet |
-| `transform`, `filter`, `clip-path` | Not yet |
-
-### Selectors
-
-| Feature | Status |
-|---|---|
-| Type, class, id, descendant, child, attribute | Supported |
-| `:first-child`, `:last-child`, `:only-child` | Supported |
-| `:nth-child(n)`, `:nth-of-type(n)` | Supported |
-| `:hover`, `:focus`, `:checked` (interactive states) | Skipped silently — no DOM events in PDF |
-| `::before`, `::after` (with `content:`) | Planned (v0.4) |
-
-### At-rules
-
-| Feature | Status |
-|---|---|
-| `@font-face` | Supported |
-| `@page { margin / size }` | Planned (v0.4) |
-| `@media print`, `@media screen` | Planned (v0.4) |
-| `@import` | Not yet |
-| CSS custom properties (`var(--x)`) | Planned (v0.4) |
-
-### Page
-
-| Feature | Status |
-|---|---|
-| Multi-page documents | Supported |
-| Page sizes (A0–A10, Letter, Legal, Tabloid, B-series) | Supported |
-| Custom page sizes (e.g. `"210mm 297mm"`) | Supported |
-| Configurable margins | Supported |
-| PDF metadata (title, author) | Supported |
-| `@page` rules | Planned (v0.4) |
-
-> Until `@page` and `@media print` land, page size and margins are configured via `Options(page_size=…, margin=…)`.
+Regenerate after changing a feature: `python tests/test_feature_matrix.py`.
+See the [roadmap milestones](https://github.com/MoncefMak/ferropdf/milestones) for what is planned next.
 
 ---
 
@@ -278,11 +265,20 @@ Python bindings are via [PyO3](https://pyo3.rs) + [maturin](https://www.maturin.
 
 The `Engine` class amortizes font scan cost across renders — first render bootstraps the system font cache (~100 ms), subsequent renders complete in single-digit to low-double-digit milliseconds for typical invoice/report-sized documents. PDFs stay small because only used glyphs are embedded.
 
-The repo includes [`bench/compare.py`](bench/compare.py) which times ferropdf vs WeasyPrint on a few fixtures. Re-run yourself rather than trusting numbers from a README:
+[`bench/engines.py`](bench/engines.py) benchmarks ferropdf, WeasyPrint, PlutoPrint and Chromium (Playwright) on the
+[template corpus](tests/corpus/) — warm and cold render time, peak memory, threaded throughput and install
+footprint, each engine in an isolated process. Latest results: [`bench/RESULTS.md`](bench/RESULTS.md).
+Re-run it yourself rather than trusting numbers from a README:
 
 ```bash
-pip install ferropdf weasyprint
-python bench/compare.py
+pip install ferropdf weasyprint plutoprint playwright psutil && playwright install chromium
+python bench/engines.py --markdown my-results.md
+```
+
+To compare *output quality* side by side, render the corpus with every engine:
+
+```bash
+python tests/corpus/report.py /tmp/report && open /tmp/report/index.html
 ```
 
 ferropdf is significantly faster on simple-layout documents because its CSS surface is much smaller than WeasyPrint's. The gap narrows as you exercise CSS features ferropdf doesn't yet implement (gradients, transforms, advanced selectors). For honest comparisons, time **your** workload on **your** hardware.
