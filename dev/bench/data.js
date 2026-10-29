@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793273340217,
+  "lastUpdate": 1793277821128,
   "repoUrl": "https://github.com/MoncefMak/ferropdf",
   "entries": {
     "FastPDF Criterion Benchmarks": [
@@ -2263,6 +2263,54 @@ window.BENCHMARK_DATA = {
             "name": "render_invoice_cached",
             "value": 3411446,
             "range": "± 23163",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "72460183+MoncefMak@users.noreply.github.com",
+            "name": "MoncefMak",
+            "username": "MoncefMak"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "d50565d565fe3b2a4ebecdbd3c93ddf83ad7c181",
+          "message": "Merge pull request #70 from MoncefMak/feat/grid\n\nCSS Grid support; ignore white space between flex/grid items",
+          "timestamp": "2026-10-29T13:41:19+01:00",
+          "tree_id": "184cf73ea458501a6c31a245be756870a82ac721",
+          "url": "https://github.com/MoncefMak/ferropdf/commit/d50565d565fe3b2a4ebecdbd3c93ddf83ad7c181"
+        },
+        "date": 1793277820270,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "render_simple",
+            "value": 4421283,
+            "range": "± 610160",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice",
+            "value": 5086466,
+            "range": "± 174757",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_simple_cached",
+            "value": 1747057,
+            "range": "± 144386",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice_cached",
+            "value": 2364861,
+            "range": "± 145599",
             "unit": "ns/iter"
           }
         ]
