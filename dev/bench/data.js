@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793262530802,
+  "lastUpdate": 1793265225861,
   "repoUrl": "https://github.com/MoncefMak/ferropdf",
   "entries": {
     "FastPDF Criterion Benchmarks": [
@@ -2071,6 +2071,54 @@ window.BENCHMARK_DATA = {
             "name": "render_invoice_cached",
             "value": 3736551,
             "range": "± 14073",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "72460183+MoncefMak@users.noreply.github.com",
+            "name": "MoncefMak",
+            "username": "MoncefMak"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "f906cc26bd49201e4c10796581176591db80f375",
+          "message": "Merge pull request #66 from MoncefMak/feat/tfoot-repeat\n\nRepeat <tfoot> on every page; fix multi-row <thead> repetition",
+          "timestamp": "2026-10-29T10:11:42+01:00",
+          "tree_id": "acd9a201b4977188c0f4391fb21b00a19d0ba4a2",
+          "url": "https://github.com/MoncefMak/ferropdf/commit/f906cc26bd49201e4c10796581176591db80f375"
+        },
+        "date": 1793265224979,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "render_simple",
+            "value": 7153261,
+            "range": "± 80757",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice",
+            "value": 8113243,
+            "range": "± 37891",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_simple_cached",
+            "value": 3323483,
+            "range": "± 7882",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice_cached",
+            "value": 4280582,
+            "range": "± 17450",
             "unit": "ns/iter"
           }
         ]
