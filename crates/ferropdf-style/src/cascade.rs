@@ -556,6 +556,22 @@ fn apply_single(
                 style.widows = v;
             }
         }
+        CssProperty::Unknown(ref name)
+            if matches!(name.as_str(), "overflow" | "overflow-x" | "overflow-y") =>
+        {
+            let clips = |v: &str| matches!(v, "hidden" | "clip" | "auto" | "scroll");
+            let mut parts = raw.split_whitespace();
+            let first = parts.next().unwrap_or("visible");
+            let second = parts.next().unwrap_or(first);
+            match name.as_str() {
+                "overflow-x" => style.overflow_clip_x = clips(first),
+                "overflow-y" => style.overflow_clip_y = clips(first),
+                _ => {
+                    style.overflow_clip_x = clips(first);
+                    style.overflow_clip_y = clips(second);
+                }
+            }
+        }
         CssProperty::Unknown(ref name) if name == "float" => {
             style.float = match raw {
                 "left" | "inline-start" => Float::Left,
