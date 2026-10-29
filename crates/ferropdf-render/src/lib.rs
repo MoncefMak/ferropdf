@@ -1,5 +1,6 @@
 mod display_list;
 mod font_subsetter;
+mod images;
 mod margin_boxes;
 mod painter;
 mod pdf;
@@ -61,6 +62,8 @@ pub fn render_with_warnings(
     // 1. Parse HTML — keep `parse_result` mutable so we can synthesise
     // `::before`/`::after` text nodes into the document later.
     let mut parse_result = ferropdf_parse::parse(html)?;
+    // Inline <svg> elements become <img src="data:image/svg+xml…">.
+    images::inline_svgs_to_img(&mut parse_result.document);
 
     // 2. Parse stylesheets (UA + inline + external)
     let ua_css = ferropdf_parse::css::UA_CSS;
@@ -345,42 +348,21 @@ fn apply_image_sizes(
         }
         let Some((iw, ih)) = node
             .attr("src")
-            .and_then(|src| intrinsic_image_size(src, base_url))
+            .and_then(|src| images::intrinsic_size(src, base_url))
         else {
             continue;
         };
-        if iw == 0 || ih == 0 {
+        if iw <= 0.0 || ih <= 0.0 {
             continue;
         }
-        let ratio = iw as f32 / ih as f32;
+        let ratio = iw / ih;
         style.aspect_ratio = Some(ratio);
         match (&style.width, &style.height) {
             (w, h) if unset(w) && unset(h) => {
-                style.width = Length::Pt(iw as f32 * PX);
+                style.width = Length::Pt(iw * PX);
             }
             (w, Length::Pt(h)) if unset(w) => style.width = Length::Pt(h * ratio),
             _ => {}
         }
     }
-}
-
-/// Intrinsic pixel size of an image, reading only its header.
-fn intrinsic_image_size(src: &str, base_url: Option<&str>) -> Option<(u32, u32)> {
-    let data = if let Some(rest) = src.strip_prefix("data:") {
-        let comma = rest.find(',')?;
-        if !rest[..comma].contains(";base64") {
-            return None;
-        }
-        use base64::Engine as _;
-        base64::engine::general_purpose::STANDARD
-            .decode(rest[comma + 1..].trim())
-            .ok()?
-    } else {
-        sandbox::read_sandboxed(src, base_url).ok()?
-    };
-    image::ImageReader::new(std::io::Cursor::new(data))
-        .with_guessed_format()
-        .ok()?
-        .into_dimensions()
-        .ok()
 }

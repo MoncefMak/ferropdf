@@ -99,6 +99,11 @@ impl TreeSink for DomSink {
         }
 
         let id = self.doc.create_element(&tag, attr_map);
+        // SVG is case-sensitive (`linearGradient`, `clipPath`, `foreignObject`):
+        // keep the name html5ever adjusted for foreign content, below <svg>.
+        if name.ns == ns!(svg) && tag != "svg" {
+            self.doc.nodes[id].tag_name = Some(name.local.to_string());
+        }
         self.qual_names.insert(id, name);
         id
     }

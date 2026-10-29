@@ -268,8 +268,9 @@ every row is a test that renders a snippet and checks the PDF, and every ❌ row
 | Images | PNG / JPEG `<img>` | ✅ Supported |
 | Images | `<img width height>` attributes | ✅ Supported |
 | Images | Intrinsic image size and aspect ratio | ✅ Supported |
-| Images | SVG `<img>` | ❌ Not yet ([#32](https://github.com/MoncefMak/ferropdf/issues/32)) |
-| Images | Inline `<svg>` | ❌ Not yet ([#32](https://github.com/MoncefMak/ferropdf/issues/32)) |
+| Images | PNG transparency (alpha) | ✅ Supported |
+| Images | SVG `<img>` (vector) | ✅ Supported |
+| Images | Inline `<svg>` (vector) | ✅ Supported |
 | PDF | Title / author metadata | ✅ Supported |
 | PDF | Clickable links | ❌ Not yet ([#40](https://github.com/MoncefMak/ferropdf/issues/40)) |
 | PDF | Outline / bookmarks | ❌ Not yet ([#41](https://github.com/MoncefMak/ferropdf/issues/41)) |
