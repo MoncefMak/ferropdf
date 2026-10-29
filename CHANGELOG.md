@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `text-align: right | center` had no effect since 0.2.7; `justify` now works (#48, #33).
+- Whitespace collapsing per `white-space` (`normal`, `nowrap`, `pre`, `pre-wrap`, `pre-line`) (#13, #16).
+- `<style>`, `<script>` and other non-rendered elements inside `<body>` were printed (#14).
+- `break-before` / `break-after` / `break-inside` (#15); `@page { size: A4 landscape }` (#56).
+- Paragraphs taller than a page were lost, and a line was dropped at page boundaries (#12).
+- Table columns now respect the table width; nested tables no longer drawn off-page.
+- A shared `Engine` serialised concurrent renders on a global font lock (#53).
+- `from_html()`, `from_file()`, `write_pdf()` and the Django/FastAPI helpers reloaded system fonts on every call (#54).
+- `@font-face` fonts leaked from one document into later renders of the same engine.
+
+### Changed
+- System fonts are loaded once per process and shared by all engines; each render uses a pooled font system.
+- PyO3 0.24 → 0.29 (RUSTSEC-2026-0176, RUSTSEC-2026-0177).
+
+### Added
+- Template corpus, feature-matrix tests (README table generated from them), visual regression tests, multi-engine benchmark (`bench/engines.py`).
+
 ## [0.2.9] - 2026-04
 
 ### Fixed

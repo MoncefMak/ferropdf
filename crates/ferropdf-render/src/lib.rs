@@ -43,6 +43,9 @@ pub fn render_with_warnings(
     font_db: &FontDatabase,
 ) -> ferropdf_core::Result<RenderResult> {
     let mut warnings: Vec<RenderWarning> = Vec::new();
+    // One font system for the whole render, checked out of the engine's pool:
+    // concurrent renders never contend, and @font-face stays private to it.
+    let mut fonts = font_db.session();
 
     // 0. Reject oversize input early so adversarial HTML can't amplify memory.
     let max_html = opts.max_html_bytes.unwrap_or(DEFAULT_MAX_HTML_BYTES);
@@ -94,7 +97,7 @@ pub fn render_with_warnings(
     for sheet in &stylesheets {
         for ff in &sheet.font_faces {
             match load_font_face_data(&ff.src, opts.base_url.as_deref()) {
-                Ok(Some(data)) => font_db.load_font_data(data),
+                Ok(Some(data)) => fonts.load_font_data(data),
                 Ok(None) => {}
                 Err(reason) => warnings.push(RenderWarning::StylesheetFailed {
                     path: ff.src.clone(),
@@ -154,12 +157,12 @@ pub fn render_with_warnings(
     )?;
 
     // 6. Layout with Taffy (all in points typographiques)
-    let layout_tree = ferropdf_layout::layout_with_fonts(
+    let layout_tree = ferropdf_layout::layout_with_font_system(
         &parse_result.document,
         &styles,
         page_config.content_width_pt(),
         page_config.content_height_pt(),
-        font_db,
+        fonts.font_system(),
     )?;
 
     // 7. Paginate
@@ -172,12 +175,11 @@ pub fn render_with_warnings(
         .collect();
 
     // 9. Write PDF (reuse fontdb from cosmic-text — no second load_system_fonts)
-    let db_guard = font_db.fontdb();
     let pdf_bytes = pdf::write_pdf(
         &display_lists,
         &page_config,
         opts,
-        Some(db_guard.db()),
+        Some(fonts.db()),
         &mut warnings,
     )?;
 

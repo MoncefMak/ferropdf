@@ -5,7 +5,7 @@ pub mod text;
 
 use ferropdf_core::{Display, Document, InlineSpan, LayoutBox, LayoutTree};
 use ferropdf_style::StyleTree;
-pub use text::FontDatabase;
+pub use text::{FontDatabase, FontSession};
 
 /// Build a layout tree from a styled document using Taffy for layout computation.
 /// All coordinates are in typographic points (pt).
@@ -33,11 +33,28 @@ pub fn layout_with_fonts(
     available_height: f32,
     font_db: &FontDatabase,
 ) -> ferropdf_core::Result<LayoutTree> {
-    let mut font_system = font_db.font_system_mut();
+    let mut session = font_db.session();
+    layout_with_font_system(
+        document,
+        styles,
+        available_width,
+        available_height,
+        session.font_system(),
+    )
+}
+
+/// Layout with an already checked-out font system (see [`FontDatabase::session`]).
+pub fn layout_with_font_system(
+    document: &Document,
+    styles: &StyleTree,
+    available_width: f32,
+    available_height: f32,
+    font_system: &mut cosmic_text::FontSystem,
+) -> ferropdf_core::Result<LayoutTree> {
     let mut tree = taffy_bridge::build_layout(
         document,
         styles,
-        &mut font_system,
+        font_system,
         available_width,
         available_height,
     )?;
@@ -51,10 +68,8 @@ pub fn layout_with_fonts(
     // Post-pass: shape text at final content widths to populate shaped_lines.
     // This is the SINGLE SOURCE OF TRUTH for line breaks — pdf.rs must not re-wrap.
     if let Some(ref mut root) = tree.root {
-        populate_shaped_lines(root, &mut font_system);
+        populate_shaped_lines(root, font_system);
     }
-
-    drop(font_system);
 
     Ok(tree)
 }
