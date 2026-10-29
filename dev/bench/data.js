@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793261786134,
+  "lastUpdate": 1793262530802,
   "repoUrl": "https://github.com/MoncefMak/ferropdf",
   "entries": {
     "FastPDF Criterion Benchmarks": [
@@ -2023,6 +2023,54 @@ window.BENCHMARK_DATA = {
             "name": "render_invoice_cached",
             "value": 3360945,
             "range": "± 16319",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "72460183+MoncefMak@users.noreply.github.com",
+            "name": "MoncefMak",
+            "username": "MoncefMak"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "ec48d31bb413d956896cc09ec32789abdf257d28",
+          "message": "Merge pull request #65 from MoncefMak/feat/page-margin-boxes\n\n@page margin boxes: running headers/footers and page numbers",
+          "timestamp": "2026-10-29T09:26:30+01:00",
+          "tree_id": "37488f293663c627c0caa84f7baa753a7587c813",
+          "url": "https://github.com/MoncefMak/ferropdf/commit/ec48d31bb413d956896cc09ec32789abdf257d28"
+        },
+        "date": 1793262529907,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "render_simple",
+            "value": 5375273,
+            "range": "± 41741",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice",
+            "value": 6267809,
+            "range": "± 31208",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_simple_cached",
+            "value": 2842221,
+            "range": "± 9920",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice_cached",
+            "value": 3736551,
+            "range": "± 14073",
             "unit": "ns/iter"
           }
         ]
