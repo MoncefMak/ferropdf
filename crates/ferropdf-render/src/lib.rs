@@ -115,8 +115,7 @@ pub fn render_with_warnings(
         margins: PageMargins::from_css_str(&opts.margin),
         orientation: ferropdf_core::Orientation::Portrait,
     };
-    let mut last_page_size: Option<String> = None;
-    let mut last_page_margin: Option<String> = None;
+    // Applied in source order, so `margin` then `margin-top` behaves as in CSS.
     for sheet in &stylesheets {
         for pr in &sheet.page_rules {
             // Page size and margins are document-wide here: per-page values
@@ -125,18 +124,17 @@ pub fn render_with_warnings(
                 continue;
             }
             if let Some(s) = &pr.size {
-                last_page_size = Some(s.clone());
+                page_config.size = PageSize::from_str(s);
             }
             if let Some(m) = &pr.margin {
-                last_page_margin = Some(m.clone());
+                page_config.margins = PageMargins::from_css_str(m);
+            }
+            for (side, value) in pr.margin_sides.iter().enumerate() {
+                if let Some(v) = value {
+                    page_config.margins.set_side(side, v);
+                }
             }
         }
-    }
-    if let Some(s) = last_page_size {
-        page_config.size = PageSize::from_str(&s);
-    }
-    if let Some(m) = last_page_margin {
-        page_config.margins = PageMargins::from_css_str(&m);
     }
 
     // 4b. Materialise `::before` / `::after` content as real text
@@ -155,12 +153,19 @@ pub fn render_with_warnings(
     }
 
     // 5. Resolve styles (all values resolved to pt)
-    let styles = ferropdf_style::resolve(
+    let mut styles = ferropdf_style::resolve(
         &parse_result.document,
         &stylesheets,
         ua_css,
         page_config.content_width_pt(),
     )?;
+
+    // 5b. Replaced elements: <img width/height> attributes and intrinsic size.
+    apply_image_sizes(
+        &parse_result.document,
+        &mut styles,
+        opts.base_url.as_deref(),
+    );
 
     // 6. Layout with Taffy (all in points typographiques)
     let layout_tree = ferropdf_layout::layout_with_font_system(
@@ -182,11 +187,18 @@ pub fn render_with_warnings(
             .flat_map(|s| s.page_rules.iter())
             .collect();
         let root_style = root_element_style(&parse_result.document, &styles);
+        let running = layout_running_elements(
+            &parse_result.document,
+            &styles,
+            page_config.content_width_pt(),
+            fonts.font_system(),
+        )?;
         margin_boxes::add_margin_boxes(
             &mut pages,
             &page_rules,
             &page_config,
             &root_style,
+            &running,
             fonts.font_system(),
         );
     }
@@ -258,4 +270,117 @@ fn root_element_style(
         .and_then(|id| styles.get(id))
         .cloned()
         .unwrap_or_default()
+}
+
+/// Lay out every running element (`position: running(name)`), first
+/// occurrence per name, at the content width.
+fn layout_running_elements(
+    doc: &ferropdf_core::Document,
+    styles: &ferropdf_style::StyleTree,
+    width: f32,
+    fs: &mut cosmic_text::FontSystem,
+) -> ferropdf_core::Result<std::collections::HashMap<String, ferropdf_core::LayoutBox>> {
+    let mut out = std::collections::HashMap::new();
+    let mut stack = vec![doc.root()];
+    while let Some(id) = stack.pop() {
+        if let Some(name) = styles.get(&id).and_then(|s| s.running.clone()) {
+            if let std::collections::hash_map::Entry::Vacant(slot) = out.entry(name) {
+                if let Some(b) = ferropdf_layout::layout_element(doc, styles, id, width, fs)? {
+                    slot.insert(b);
+                }
+            }
+            continue; // a running element's subtree belongs to it
+        }
+        // Depth-first, document order.
+        stack.extend(doc.get(id).children.iter().rev());
+    }
+    Ok(out)
+}
+
+/// Size `<img>` elements like browsers do: CSS `width`/`height` win; otherwise
+/// the `width`/`height` attributes (presentational hints, in CSS px or %);
+/// otherwise the image's intrinsic size. The intrinsic ratio is kept as
+/// `aspect_ratio` so a single given dimension (or `max-width`) scales the
+/// other. Images that cannot be read keep their style (the PDF writer warns).
+fn apply_image_sizes(
+    doc: &ferropdf_core::Document,
+    styles: &mut ferropdf_style::StyleTree,
+    base_url: Option<&str>,
+) {
+    use ferropdf_core::Length;
+    const PX: f32 = 0.75; // CSS px → pt
+
+    let attr_len = |v: Option<&str>| -> Option<Length> {
+        let v = v?.trim();
+        if let Some(p) = v.strip_suffix('%') {
+            return p.trim().parse::<f32>().ok().map(Length::Percent);
+        }
+        let v = v.strip_suffix("px").unwrap_or(v);
+        v.parse::<f32>()
+            .ok()
+            .filter(|n| *n >= 0.0)
+            .map(|n| Length::Pt(n * PX))
+    };
+
+    let mut stack = vec![doc.root()];
+    while let Some(id) = stack.pop() {
+        let node = doc.get(id);
+        stack.extend(node.children.iter().copied());
+        if node.tag_name.as_deref() != Some("img") {
+            continue;
+        }
+        let Some(style) = styles.get_mut(&id) else {
+            continue;
+        };
+        let unset = |l: &Length| matches!(l, Length::Auto | Length::None);
+        if unset(&style.width) {
+            if let Some(w) = attr_len(node.attr("width")) {
+                style.width = w;
+            }
+        }
+        if unset(&style.height) {
+            if let Some(h) = attr_len(node.attr("height")) {
+                style.height = h;
+            }
+        }
+        let Some((iw, ih)) = node
+            .attr("src")
+            .and_then(|src| intrinsic_image_size(src, base_url))
+        else {
+            continue;
+        };
+        if iw == 0 || ih == 0 {
+            continue;
+        }
+        let ratio = iw as f32 / ih as f32;
+        style.aspect_ratio = Some(ratio);
+        match (&style.width, &style.height) {
+            (w, h) if unset(w) && unset(h) => {
+                style.width = Length::Pt(iw as f32 * PX);
+            }
+            (w, Length::Pt(h)) if unset(w) => style.width = Length::Pt(h * ratio),
+            _ => {}
+        }
+    }
+}
+
+/// Intrinsic pixel size of an image, reading only its header.
+fn intrinsic_image_size(src: &str, base_url: Option<&str>) -> Option<(u32, u32)> {
+    let data = if let Some(rest) = src.strip_prefix("data:") {
+        let comma = rest.find(',')?;
+        if !rest[..comma].contains(";base64") {
+            return None;
+        }
+        use base64::Engine as _;
+        base64::engine::general_purpose::STANDARD
+            .decode(rest[comma + 1..].trim())
+            .ok()?
+    } else {
+        sandbox::read_sandboxed(src, base_url).ok()?
+    };
+    image::ImageReader::new(std::io::Cursor::new(data))
+        .with_guessed_format()
+        .ok()?
+        .into_dimensions()
+        .ok()
 }

@@ -339,6 +339,12 @@ pub struct BoxShadow {
 pub struct ComputedStyle {
     pub display: Display,
     pub position: Position,
+    /// `position: running(name)` — element moved out of the flow and shown in
+    /// `@page` margin boxes via `content: element(name)` (GCPM 3 §2.2).
+    pub running: Option<String>,
+    /// Width / height ratio of a replaced element (`<img>`), from its
+    /// intrinsic size. Lets Taffy derive the missing dimension.
+    pub aspect_ratio: Option<f32>,
     pub direction: Direction,
     pub visibility: bool,
 
@@ -423,6 +429,8 @@ impl Default for ComputedStyle {
         Self {
             display: Display::Block,
             position: Position::Static,
+            running: None,
+            aspect_ratio: None,
             direction: Direction::Ltr,
             visibility: true,
             width: Length::Auto,

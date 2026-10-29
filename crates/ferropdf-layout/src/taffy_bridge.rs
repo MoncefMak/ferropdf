@@ -18,12 +18,26 @@ pub fn build_layout(
     available_width: f32,
     _available_height: f32,
 ) -> ferropdf_core::Result<LayoutTree> {
-    let mut taffy: TaffyTree<TextContext> = TaffyTree::new();
-    let mut node_map: HashMap<NodeId, taffy::NodeId> = HashMap::new();
-    let mut table_cell_parent = BridgeState::default();
-
     let root = doc.root();
     let body = find_body(doc, root).unwrap_or(root);
+    build_layout_from(doc, styles, font_system, body, available_width)
+}
+
+/// Lay out the subtree rooted at `body` (the `<body>` element, or a running
+/// element laid out on its own for a page margin box).
+pub fn build_layout_from(
+    doc: &Document,
+    styles: &StyleTree,
+    font_system: &mut FontSystem,
+    body: NodeId,
+    available_width: f32,
+) -> ferropdf_core::Result<LayoutTree> {
+    let mut taffy: TaffyTree<TextContext> = TaffyTree::new();
+    let mut node_map: HashMap<NodeId, taffy::NodeId> = HashMap::new();
+    let mut table_cell_parent = BridgeState {
+        layout_root: Some(body),
+        ..Default::default()
+    };
 
     build_taffy_tree(
         doc,
@@ -40,6 +54,20 @@ pub fn build_layout(
         Some(n) => *n,
         None => return Ok(LayoutTree::new()),
     };
+
+    // A root with `width: auto` fills the available width, like a block in
+    // its containing block (Taffy would otherwise shrink-to-fit it).
+    if let Ok(root_style) = taffy.style(taffy_root) {
+        if root_style.size.width == Dimension::Auto {
+            let horizontal_margin = styles
+                .get(&body)
+                .map(|s| length_to_px(&s.margin[1]) + length_to_px(&s.margin[3]))
+                .unwrap_or(0.0);
+            let mut st = root_style.clone();
+            st.size.width = Dimension::Length((available_width - horizontal_margin).max(0.0));
+            let _ = taffy.set_style(taffy_root, st);
+        }
+    }
 
     // Compute layout with cosmic-text measure function for text leaves.
     // Height is unconstrained (infinite ribbon model) so content flows naturally.
@@ -141,6 +169,11 @@ fn build_taffy_tree_inner(
     let style = styles.get(&node_id).cloned().unwrap_or_default();
 
     if style.display == FDisplay::None {
+        return Ok(());
+    }
+    // Running elements leave the normal flow; they are laid out separately
+    // (with themselves as layout root) for the page margin boxes.
+    if style.running.is_some() && table_cell_parent.layout_root != Some(node_id) {
         return Ok(());
     }
 
@@ -623,6 +656,8 @@ pub(crate) struct BridgeState {
     pub table_cell_parent: HashMap<NodeId, NodeId>,
     /// Child → anonymous line-box wrapper it was placed in.
     pub anon_wrapper: HashMap<NodeId, taffy::NodeId>,
+    /// Root of the subtree being laid out.
+    pub layout_root: Option<NodeId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

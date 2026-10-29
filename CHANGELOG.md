@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- `@page { margin }` and `Options(margin=)` accepted a single value only: `margin: 10mm 20mm`, three/four values and unitless `0` all fell back to 20mm.
+- `<img>` without CSS width/height was drawn 0×0: the `width`/`height` attributes and the intrinsic image size (and its aspect ratio, e.g. with `max-width: 100%`) are now used.
+- Inline elements inside a flex/grid container were merged into one paragraph instead of being separate items (`display:flex` + `<span>`s).
 - Multi-row `<thead>` overlapped on continuation pages; a header left alone at the bottom of a page now moves with the first body row; content after a multi-page table no longer overlaps its last rows.
 - `<thead>`/`<tfoot>` are laid out first/last wherever they appear in the source.
 - `text-align: right | center` had no effect since 0.2.7; `justify` now works (#48, #33).
@@ -31,6 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PyO3 0.24 → 0.29 (RUSTSEC-2026-0176, RUSTSEC-2026-0177).
 
 ### Added
+- HTML headers/footers: `position: running(name)` + `content: element(name)` in margin boxes (#28).
+- `@page { margin-top | margin-right | margin-bottom | margin-left }`.
 - `<tfoot>` is repeated at the bottom of every page a table spans (#30).
 - `@page` margin boxes (`@top-left|center|right`, `@bottom-left|center|right`) with `counter(page)` / `counter(pages)` and counter styles (#25, #26).
 - `@page :first`, `:left`, `:right` selectors for margin boxes.

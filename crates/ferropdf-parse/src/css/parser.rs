@@ -21,6 +21,8 @@ pub struct PageRule {
     /// Raw value of the `size` declaration (`"A4"`, `"210mm 297mm"`, …),
     /// to be parsed by `PageSize::from_str` downstream.
     pub size: Option<String>,
+    /// Raw `margin-top` / `-right` / `-bottom` / `-left` values, in that order.
+    pub margin_sides: [Option<String>; 4],
     /// Margin boxes declared inside the rule (`@top-center { … }`).
     pub margin_boxes: Vec<MarginBoxRule>,
 }
@@ -427,6 +429,15 @@ fn parse_page_rule(parser: &mut Parser<'_, '_>) -> Option<PageRule> {
                 let raw_value = decl.value.to_cow().trim().to_string();
                 if let CssProperty::Margin = decl.property {
                     rule.margin = Some(raw_value);
+                    rule.margin_sides = Default::default();
+                } else if let Some(side) = match decl.property {
+                    CssProperty::MarginTop => Some(0),
+                    CssProperty::MarginRight => Some(1),
+                    CssProperty::MarginBottom => Some(2),
+                    CssProperty::MarginLeft => Some(3),
+                    _ => None,
+                } {
+                    rule.margin_sides[side] = Some(raw_value);
                 } else if let CssProperty::Unknown(name) = &decl.property {
                     if name.eq_ignore_ascii_case("size") {
                         rule.size = Some(raw_value);
