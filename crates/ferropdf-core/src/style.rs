@@ -100,6 +100,25 @@ pub struct GridProps {
     pub justify_self: Option<String>,
 }
 
+/// CSS `float`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Float {
+    #[default]
+    None,
+    Left,
+    Right,
+}
+
+/// CSS `clear`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Clear {
+    #[default]
+    None,
+    Left,
+    Right,
+    Both,
+}
+
 /// CSS `box-sizing`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum BoxSizing {
@@ -364,6 +383,8 @@ pub struct ComputedStyle {
     pub aspect_ratio: Option<f32>,
     /// `grid-*`, `justify-items`, `justify-self` (not inherited).
     pub grid: GridProps,
+    pub float: Float,
+    pub clear: Clear,
     pub direction: Direction,
     pub visibility: bool,
 
@@ -451,6 +472,8 @@ impl Default for ComputedStyle {
             running: None,
             aspect_ratio: None,
             grid: GridProps::default(),
+            float: Float::None,
+            clear: Clear::None,
             direction: Direction::Ltr,
             visibility: true,
             width: Length::Auto,

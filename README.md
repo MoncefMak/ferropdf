@@ -257,7 +257,8 @@ every row is a test that renders a snippet and checks the PDF, and every ❌ row
 | Layout | `inline-block` padding around its label | ✅ Supported |
 | Layout | Tables with `colspan` | ✅ Supported |
 | Layout | `position: absolute` | ✅ Supported |
-| Layout | `float` | ❌ Not yet ([#35](https://github.com/MoncefMak/ferropdf/issues/35)) |
+| Layout | `float` (text beside a floated box) | ✅ Supported |
+| Layout | `float` left/right header + `clear` | ✅ Supported |
 | Layout | `overflow: hidden` | ❌ Not yet ([#36](https://github.com/MoncefMak/ferropdf/issues/36)) |
 | Layout | `box-sizing` (content-box default, border-box) | ✅ Supported |
 | Visual | Solid borders | ✅ Supported |

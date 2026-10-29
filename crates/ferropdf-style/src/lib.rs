@@ -129,6 +129,23 @@ fn resolve_recursive(
 
         // Resolve relative units (em/rem/px/mm → pt)
         compute::resolve_units(&mut style, parent_style, root_font_size);
+
+        // Floats are blockified (CSS 2.1 §9.7); absolutely positioned boxes
+        // do not float.
+        if matches!(
+            style.position,
+            ferropdf_core::Position::Absolute | ferropdf_core::Position::Fixed
+        ) {
+            style.float = ferropdf_core::Float::None;
+        }
+        if style.float != ferropdf_core::Float::None
+            && matches!(
+                style.display,
+                ferropdf_core::Display::Inline | ferropdf_core::Display::InlineBlock
+            )
+        {
+            style.display = ferropdf_core::Display::Block;
+        }
     }
 
     tree.insert(node_id, style.clone());
