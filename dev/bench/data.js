@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793278871749,
+  "lastUpdate": 1793284963363,
   "repoUrl": "https://github.com/MoncefMak/ferropdf",
   "entries": {
     "FastPDF Criterion Benchmarks": [
@@ -2359,6 +2359,54 @@ window.BENCHMARK_DATA = {
             "name": "render_invoice_cached",
             "value": 3365859,
             "range": "± 13959",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "72460183+MoncefMak@users.noreply.github.com",
+            "name": "MoncefMak",
+            "username": "MoncefMak"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "aca934895b2f83b44a95f21fc32dc32db7d757de",
+          "message": "Merge pull request #72 from MoncefMak/feat/overflow\n\noverflow: hidden / clip with rounded clipping",
+          "timestamp": "2026-10-29T15:40:26+01:00",
+          "tree_id": "0091b6bf6caac5fe52a7a7d2b3de21db0c02e6ed",
+          "url": "https://github.com/MoncefMak/ferropdf/commit/aca934895b2f83b44a95f21fc32dc32db7d757de"
+        },
+        "date": 1793284962648,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "render_simple",
+            "value": 4371039,
+            "range": "± 413319",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice",
+            "value": 4886722,
+            "range": "± 282699",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_simple_cached",
+            "value": 1657126,
+            "range": "± 36317",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice_cached",
+            "value": 2217216,
+            "range": "± 69395",
             "unit": "ns/iter"
           }
         ]
