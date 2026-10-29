@@ -275,16 +275,29 @@ pub fn write_pdf(
             if let DrawOp::DrawImage { src, .. } = op {
                 if !image_map.contains_key(src) {
                     match load_image(src, opts.base_url.as_deref()) {
-                        Ok((rgb_data, width, height)) => {
-                            let pdf_ref = next_ref();
+                        Ok(kind) => {
                             let pdf_name = format!("Im{img_counter}");
                             img_counter += 1;
+                            let (pdf_ref, kind) = match kind {
+                                ImageKind::Svg { chunk, root } => {
+                                    // Renumber svg2pdf's objects into our ref space.
+                                    let mut map = HashMap::new();
+                                    let chunk = chunk.renumber(|old| {
+                                        *map.entry(old).or_insert_with(&mut next_ref)
+                                    });
+                                    (map[&root], ImageKind::Svg { chunk, root })
+                                }
+                                raster => (next_ref(), raster),
+                            };
+                            let smask_ref = match &kind {
+                                ImageKind::Raster { alpha: Some(_), .. } => Some(next_ref()),
+                                _ => None,
+                            };
                             image_map.insert(
                                 src.clone(),
                                 LoadedImage {
-                                    rgb_data,
-                                    width,
-                                    height,
+                                    kind,
+                                    smask_ref,
                                     pdf_ref,
                                     pdf_name,
                                 },
@@ -748,23 +761,47 @@ pub fn write_pdf(
     }
 
     // Write image XObjects
-    for img in image_map.values() {
-        // Deflate-compress the raw RGB data
+    let deflate = |data: &[u8]| -> ferropdf_core::Result<Vec<u8>> {
         let mut encoder = ZlibEncoder::new(Vec::new(), Compression::fast());
         encoder
-            .write_all(&img.rgb_data)
+            .write_all(data)
             .map_err(|e| FerroError::Image(format!("Image compression error: {e}")))?;
-        let compressed = encoder
+        encoder
             .finish()
-            .map_err(|e| FerroError::Image(format!("Image compression finish error: {e}")))?;
-
-        let mut xobj = pdf.image_xobject(img.pdf_ref, &compressed);
-        xobj.filter(Filter::FlateDecode);
-        xobj.width(img.width as i32);
-        xobj.height(img.height as i32);
-        xobj.color_space().device_rgb();
-        xobj.bits_per_component(8);
-        xobj.finish();
+            .map_err(|e| FerroError::Image(format!("Image compression finish error: {e}")))
+    };
+    for img in image_map.values() {
+        match &img.kind {
+            ImageKind::Svg { chunk, .. } => pdf.extend(chunk),
+            ImageKind::Raster {
+                rgb,
+                alpha,
+                width,
+                height,
+            } => {
+                let compressed = deflate(rgb)?;
+                let mut xobj = pdf.image_xobject(img.pdf_ref, &compressed);
+                xobj.filter(Filter::FlateDecode);
+                xobj.width(*width as i32);
+                xobj.height(*height as i32);
+                xobj.color_space().device_rgb();
+                xobj.bits_per_component(8);
+                if let Some(mask_ref) = img.smask_ref {
+                    xobj.s_mask(mask_ref);
+                }
+                xobj.finish();
+                if let (Some(mask_ref), Some(alpha)) = (img.smask_ref, alpha) {
+                    let compressed = deflate(alpha)?;
+                    let mut mask = pdf.image_xobject(mask_ref, &compressed);
+                    mask.filter(Filter::FlateDecode);
+                    mask.width(*width as i32);
+                    mask.height(*height as i32);
+                    mask.color_space().device_gray();
+                    mask.bits_per_component(8);
+                    mask.finish();
+                }
+            }
+        }
     }
 
     // Write ExtGState objects for opacity
@@ -826,34 +863,55 @@ fn measure_text_width(text: &str, font_size: f32, font_data: Option<&[u8]>) -> f
 // =============================================================================
 
 struct LoadedImage {
-    rgb_data: Vec<u8>,
-    width: u32,
-    height: u32,
+    kind: ImageKind,
+    /// Soft mask (alpha channel) object, for raster images with transparency.
+    smask_ref: Option<Ref>,
     pdf_ref: Ref,
     pdf_name: String,
 }
 
-/// Load image from a source string (data URI or sandboxed file path).
+#[derive(Debug)]
+enum ImageKind {
+    Raster {
+        rgb: Vec<u8>,
+        /// 8-bit alpha, only when the image has non-opaque pixels.
+        alpha: Option<Vec<u8>>,
+        width: u32,
+        height: u32,
+    },
+    /// Vector SVG as a Form XObject (unit square) produced by svg2pdf.
+    Svg { chunk: pdf_writer::Chunk, root: Ref },
+}
+
+/// Load an image from a source string (data URI or sandboxed file path).
 ///
 /// Returns `Err(reason)` rather than `FerroError` because image failures are
 /// non-fatal — the caller turns the reason into a `RenderWarning::ImageLoadFailed`
 /// and the render continues without the image.
-fn load_image(src: &str, base_url: Option<&str>) -> Result<(Vec<u8>, u32, u32), String> {
-    let data = if src.starts_with("data:") {
-        let comma = src
-            .find(',')
-            .ok_or_else(|| "invalid data URI: no comma".to_string())?;
-        let encoded = &src[comma + 1..];
-        base64::Engine::decode(&base64::engine::general_purpose::STANDARD, encoded)
-            .map_err(|e| format!("base64 decode error: {}", e))?
-    } else {
-        crate::sandbox::read_sandboxed(src, base_url)?
-    };
+fn load_image(src: &str, base_url: Option<&str>) -> Result<ImageKind, String> {
+    let data = crate::images::source_bytes(src, base_url)?;
+
+    if crate::images::is_svg(src, &data) {
+        let tree = crate::images::parse_svg(&data)?;
+        let (chunk, root) = svg2pdf::to_chunk(&tree, svg2pdf::ConversionOptions::default());
+        return Ok(ImageKind::Svg { chunk, root });
+    }
 
     let img = image::load_from_memory(&data).map_err(|e| format!("cannot decode image: {}", e))?;
-    let rgb = img.to_rgb8();
-    let (w, h) = rgb.dimensions();
-    Ok((rgb.into_raw(), w, h))
+    let (width, height) = (img.width(), img.height());
+    let alpha = if img.color().has_alpha() {
+        let rgba = img.to_rgba8();
+        let a: Vec<u8> = rgba.pixels().map(|p| p.0[3]).collect();
+        a.iter().any(|&v| v != 255).then_some(a)
+    } else {
+        None
+    };
+    Ok(ImageKind::Raster {
+        rgb: img.to_rgb8().into_raw(),
+        alpha,
+        width,
+        height,
+    })
 }
 
 #[cfg(test)]
@@ -867,8 +925,13 @@ mod tests {
     #[test]
     fn load_image_decodes_data_uri() {
         let src = format!("data:image/png;base64,{}", ONE_PX_PNG_B64);
-        let (rgb, w, h) = load_image(&src, None).expect("data URI should decode");
-        assert_eq!((w, h), (1, 1));
+        let ImageKind::Raster {
+            rgb, width, height, ..
+        } = load_image(&src, None).expect("data URI should decode")
+        else {
+            panic!("expected a raster image")
+        };
+        assert_eq!((width, height), (1, 1));
         assert_eq!(rgb.len(), 3); // 1 pixel × 3 bytes RGB
     }
 
@@ -894,9 +957,46 @@ mod tests {
             base64::Engine::decode(&base64::engine::general_purpose::STANDARD, ONE_PX_PNG_B64)
                 .unwrap();
         std::fs::write(dir.path().join("logo.png"), &png_bytes).unwrap();
-        let (_rgb, w, h) =
-            load_image("logo.png", Some(dir.path().to_str().unwrap())).expect("should load");
-        assert_eq!((w, h), (1, 1));
+        let kind = load_image("logo.png", Some(dir.path().to_str().unwrap())).expect("should load");
+        assert!(matches!(
+            kind,
+            ImageKind::Raster {
+                width: 1,
+                height: 1,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn load_image_keeps_alpha_channel() {
+        // 2×1 RGBA: one opaque red, one fully transparent pixel.
+        let mut png = Vec::new();
+        image::RgbaImage::from_raw(2, 1, vec![255, 0, 0, 255, 0, 0, 0, 0])
+            .unwrap()
+            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+            .unwrap();
+        let src = format!(
+            "data:image/png;base64,{}",
+            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &png)
+        );
+        let ImageKind::Raster { alpha, .. } = load_image(&src, None).unwrap() else {
+            panic!("raster expected")
+        };
+        assert_eq!(alpha, Some(vec![255, 0]));
+    }
+
+    #[test]
+    fn load_image_converts_svg_to_vector() {
+        let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10" fill="#00f"/></svg>"##;
+        let src = format!(
+            "data:image/svg+xml;base64,{}",
+            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, svg)
+        );
+        assert!(matches!(
+            load_image(&src, None).unwrap(),
+            ImageKind::Svg { .. }
+        ));
     }
 
     #[test]

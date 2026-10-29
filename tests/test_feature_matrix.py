@@ -97,13 +97,15 @@ def wrap(body: str, css: str = "") -> str:
     )
 
 
-def _png_data_uri(w: int = 4, h: int = 4) -> str:
-    raw = b"".join(b"\x00" + b"\xff\x00\x00" * w for _ in range(h))
+def _png_data_uri(w: int = 4, h: int = 4, rgba: bytes | None = None) -> str:
+    """Solid red RGB PNG, or an RGBA PNG filled with `rgba` (4 bytes)."""
+    pixel, color_type = (rgba, 6) if rgba else (b"\xff\x00\x00", 2)
+    raw = b"".join(b"\x00" + pixel * w for _ in range(h))
 
     def chunk(tag: bytes, data: bytes) -> bytes:
         return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
 
-    png = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
+    png = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, color_type, 0, 0, 0))
     png += chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b"")
     return "data:image/png;base64," + base64.b64encode(png).decode()
 
@@ -480,12 +482,21 @@ def chk_img_intrinsic_size_and_ratio():
 
 def chk_svg_image():
     d = Doc(wrap(f'<img src="{SVG_URI}" width="40" height="40">'))
-    assert len(d.doc[0].get_images()) == 1 or len(d.drawings()) >= 1
+    assert not d.doc[0].get_images() and len(d.drawings()) >= 1, "SVG must be embedded as vectors"
+
+
+def chk_png_transparency():
+    uri = _png_data_uri(10, 10, rgba=b"\x00\x00\x00\x00")
+    d = Doc(wrap(f'<div style="background:#0000ff;padding:20px"><img src="{uri}" width="100" height="100"></div>'))
+    pix = d.doc[0].get_pixmap(dpi=72)
+    # Centre of the fully transparent image shows the blue background, not black.
+    assert pix.pixel(57 + 15 + 37, 57 + 15 + 37) == (0, 0, 255)
 
 
 def chk_inline_svg():
-    d = Doc(wrap('<svg width="40" height="40"><rect width="40" height="40" fill="#f00"/></svg>'))
-    assert len(d.drawings()) >= 1
+    d = Doc(wrap('<p>x</p><svg width="40" height="40"><rect width="40" height="40" fill="#f00"/></svg>'))
+    rects = [dr["rect"] for dr in d.drawings() if dr.get("fill") == (1.0, 0.0, 0.0)]
+    assert rects and abs(rects[0].width - 30) < 1, "40px inline svg drawn as a 30pt vector rect"
 
 
 def chk_rtl_arabic():
@@ -581,8 +592,9 @@ FEATURES = [
     Feature("Images", "PNG / JPEG `<img>`", chk_png_image),
     Feature("Images", "`<img width height>` attributes", chk_img_size_attributes),
     Feature("Images", "Intrinsic image size and aspect ratio", chk_img_intrinsic_size_and_ratio),
-    Feature("Images", "SVG `<img>`", chk_svg_image, 32),
-    Feature("Images", "Inline `<svg>`", chk_inline_svg, 32),
+    Feature("Images", "PNG transparency (alpha)", chk_png_transparency),
+    Feature("Images", "SVG `<img>` (vector)", chk_svg_image),
+    Feature("Images", "Inline `<svg>` (vector)", chk_inline_svg),
     Feature("PDF", "Title / author metadata", chk_metadata),
     Feature("PDF", "Clickable links", chk_links, 40),
     Feature("PDF", "Outline / bookmarks", chk_outline, 41),

@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- PNG transparency was lost (transparent areas rendered black); alpha is kept as a PDF soft mask.
+- SVG element names lost their case in the HTML parser (`linearGradient`, `clipPath`).
 - `@page { margin }` and `Options(margin=)` accepted a single value only: `margin: 10mm 20mm`, three/four values and unitless `0` all fell back to 20mm.
 - `<img>` without CSS width/height was drawn 0×0: the `width`/`height` attributes and the intrinsic image size (and its aspect ratio, e.g. with `max-width: 100%`) are now used.
 - Inline elements inside a flex/grid container were merged into one paragraph instead of being separate items (`display:flex` + `<span>`s).
@@ -29,11 +31,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `inline-block` elements: padding ignored around their label, full width after a block sibling, spaces next to them dropped (#17).
 
 ### Changed
+- `pdf-writer` 0.9 → 0.10 (required by `svg2pdf` 0.11).
 - **`box-sizing` is now implemented and defaults to `content-box`, like browsers** (the UA sheet used to declare `* { box-sizing: border-box }`, and the property itself was ignored). Documents that relied on the old behaviour should add `* { box-sizing: border-box }` (#50).
 - System fonts are loaded once per process and shared by all engines; each render uses a pooled font system.
 - PyO3 0.24 → 0.29 (RUSTSEC-2026-0176, RUSTSEC-2026-0177).
 
 ### Added
+- SVG images — `<img src="logo.svg">`, SVG data URIs and inline `<svg>` — embedded as **vector** graphics via `svg2pdf` (gradients, paths, text) (#32).
 - HTML headers/footers: `position: running(name)` + `content: element(name)` in margin boxes (#28).
 - `@page { margin-top | margin-right | margin-bottom | margin-left }`.
 - `<tfoot>` is repeated at the bottom of every page a table spans (#30).
