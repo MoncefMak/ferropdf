@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793268281390,
+  "lastUpdate": 1793271879978,
   "repoUrl": "https://github.com/MoncefMak/ferropdf",
   "entries": {
     "FastPDF Criterion Benchmarks": [
@@ -2167,6 +2167,54 @@ window.BENCHMARK_DATA = {
             "name": "render_invoice_cached",
             "value": 3327596,
             "range": "± 10403",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "72460183+MoncefMak@users.noreply.github.com",
+            "name": "MoncefMak",
+            "username": "MoncefMak"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b2012d59ed96c70bfcb213da2046e13f5f4b0319",
+          "message": "Merge pull request #68 from MoncefMak/feat/svg\n\nVector SVG images (img, data URI, inline <svg>) and PNG transparency",
+          "timestamp": "2026-10-29T12:02:01+01:00",
+          "tree_id": "ae7c2297439f97b6bb442721719d7edd3ec41ce7",
+          "url": "https://github.com/MoncefMak/ferropdf/commit/b2012d59ed96c70bfcb213da2046e13f5f4b0319"
+        },
+        "date": 1793271879629,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "render_simple",
+            "value": 6687341,
+            "range": "± 43047",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice",
+            "value": 7641402,
+            "range": "± 33085",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_simple_cached",
+            "value": 3157291,
+            "range": "± 9687",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice_cached",
+            "value": 4087475,
+            "range": "± 24044",
             "unit": "ns/iter"
           }
         ]
