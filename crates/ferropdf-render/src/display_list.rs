@@ -17,6 +17,15 @@ pub enum DrawOp {
         width: f32,
         style: BorderStyle,
     },
+    /// Stroke all four sides of a box with rounded corners (uniform border).
+    /// `rect` is the border box; the stroke is drawn inside it.
+    StrokeRoundedRect {
+        rect: Rect,
+        color: Color,
+        width: f32,
+        style: BorderStyle,
+        border_radius: [f32; 4],
+    },
     /// Draw text at a position
     DrawText {
         text: String,

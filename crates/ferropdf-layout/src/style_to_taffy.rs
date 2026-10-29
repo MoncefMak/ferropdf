@@ -7,7 +7,7 @@ use taffy::prelude::*;
 /// - padding subtracted only once (Fix 2)
 /// - flex, grid, block layout
 pub fn convert(style: &ComputedStyle) -> taffy::Style {
-    taffy::Style {
+    let mut out = taffy::Style {
         position: match style.position {
             FPosition::Absolute | FPosition::Fixed => Position::Absolute,
             _ => Position::Relative,
@@ -132,7 +132,41 @@ pub fn convert(style: &ComputedStyle) -> taffy::Style {
         },
 
         ..Default::default()
+    };
+    if style.box_sizing == ferropdf_core::BoxSizing::ContentBox
+        && style.display != ferropdf_core::Display::Table
+    {
+        apply_content_box(style, &mut out);
     }
+    out
+}
+
+/// Taffy 0.5 sizes are border-box. For `box-sizing: content-box` (the CSS
+/// default) add padding + border to definite lengths. Percentage sizes are
+/// left as-is (would need `calc()`), i.e. they behave as border-box.
+fn apply_content_box(style: &ComputedStyle, out: &mut taffy::Style) {
+    let abs = |l: &Length| match l {
+        Length::Pt(v) => Some(*v),
+        Length::Zero | Length::Auto | Length::None => Some(0.0),
+        _ => None,
+    };
+    let horizontal = abs(&style.padding[1])
+        .zip(abs(&style.padding[3]))
+        .map(|(r, l)| r + l + style.border_left.width + style.border_right.width);
+    let vertical = abs(&style.padding[0])
+        .zip(abs(&style.padding[2]))
+        .map(|(t, b)| t + b + style.border_top.width + style.border_bottom.width);
+    let grow = |d: &mut Dimension, extra: Option<f32>| {
+        if let (Dimension::Length(v), Some(e)) = (*d, extra) {
+            *d = Dimension::Length(v + e);
+        }
+    };
+    grow(&mut out.size.width, horizontal);
+    grow(&mut out.min_size.width, horizontal);
+    grow(&mut out.max_size.width, horizontal);
+    grow(&mut out.size.height, vertical);
+    grow(&mut out.min_size.height, vertical);
+    grow(&mut out.max_size.height, vertical);
 }
 
 /// Convert a `<table>` ComputedStyle into a CSS Grid taffy::Style.

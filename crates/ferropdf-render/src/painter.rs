@@ -306,6 +306,33 @@ fn paint_borders(layout_box: &LayoutBox, ops: &mut Vec<DrawOp>, rect: Rect) {
         (false, false)
     };
 
+    // Rounded corners with a uniform border: one rounded path for all sides.
+    let radii = style.border_radius.to_array();
+    let sides = [
+        &style.border_top,
+        &style.border_right,
+        &style.border_bottom,
+        &style.border_left,
+    ];
+    let uniform = sides.iter().all(|b| {
+        b.width == sides[0].width && b.color == sides[0].color && b.style == sides[0].style
+    });
+    if radii.iter().any(|r| *r > 0.0)
+        && uniform
+        && !collapse
+        && sides[0].width > 0.0
+        && sides[0].style != BorderStyle::None
+    {
+        ops.push(DrawOp::StrokeRoundedRect {
+            rect,
+            color: sides[0].color,
+            width: sides[0].width,
+            style: sides[0].style,
+            border_radius: radii,
+        });
+        return;
+    }
+
     // Top border
     if !skip_top && style.border_top.width > 0.0 && style.border_top.style != BorderStyle::None {
         ops.push(DrawOp::StrokeRect {

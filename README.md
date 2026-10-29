@@ -212,10 +212,13 @@ every row is a test that renders a snippet and checks the PDF, and every ❌ row
 | Layout | `position: absolute` | ✅ Supported |
 | Layout | `float` | ❌ Not yet ([#35](https://github.com/MoncefMak/ferropdf/issues/35)) |
 | Layout | `overflow: hidden` | ❌ Not yet ([#36](https://github.com/MoncefMak/ferropdf/issues/36)) |
+| Layout | `box-sizing` (content-box default, border-box) | ✅ Supported |
 | Visual | Solid borders | ✅ Supported |
-| Visual | Dashed / dotted borders | ❌ Not yet ([#19](https://github.com/MoncefMak/ferropdf/issues/19)) |
-| Visual | `border-radius` | ❌ Not yet ([#49](https://github.com/MoncefMak/ferropdf/issues/49)) |
+| Visual | Dashed / dotted borders | ✅ Supported |
+| Visual | Double borders | ✅ Supported |
+| Visual | `border-radius` | ✅ Supported |
 | Visual | `box-shadow` | ✅ Supported |
+| Visual | `box-shadow` not painted under the box | ✅ Supported |
 | Visual | `opacity` | ✅ Supported |
 | Visual | Gradients | ❌ Not yet ([#37](https://github.com/MoncefMak/ferropdf/issues/37)) |
 | Visual | `transform` | ❌ Not yet ([#38](https://github.com/MoncefMak/ferropdf/issues/38)) |

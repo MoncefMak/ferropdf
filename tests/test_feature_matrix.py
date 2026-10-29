@@ -334,6 +334,19 @@ def chk_table_layout():
     assert d.word("c2")[0] > d.word("c1")[2] and d.word("wide")[1] > d.word("c1")[1]
 
 
+def chk_box_sizing():
+    d = Doc(wrap('<div style="width:200px;padding:20px;height:10px;background:#f00"></div>'
+                 '<div style="box-sizing:border-box;width:200px;padding:20px;height:50px;background:#0f0"></div>'))
+    widths = {tuple(round(c, 1) for c in dr["fill"]): dr["rect"].width for dr in d.drawings() if dr.get("fill")}
+    assert abs(widths[(1.0, 0.0, 0.0)] - 180) < 1, "content-box: 200px + 2×20px = 240px = 180pt"
+    assert abs(widths[(0.0, 1.0, 0.0)] - 150) < 1, "border-box: 200px = 150pt"
+
+
+def chk_border_double():
+    d = Doc(wrap('<div style="border-top:6px double #f00;height:20px"></div>'))
+    assert sum(1 for dr in d.drawings() if dr.get("color")) >= 2
+
+
 def chk_border_solid():
     d = Doc(wrap('<div style="border:2px solid #f00;height:20px"></div>'))
     assert any(dr.get("color") for dr in d.drawings())
@@ -352,6 +365,13 @@ def chk_border_radius():
 def chk_box_shadow():
     d = Doc(wrap('<div style="width:100px;height:40px;box-shadow:4px 4px 0 #000"></div>'))
     assert len(d.drawings()) >= 1
+
+
+def chk_box_shadow_outside_only():
+    d = Doc(wrap('<div style="margin:40px;width:200px;height:100px;box-shadow:0 2px 6px rgba(0,0,0,.5)"></div>'))
+    pix = d.doc[0].get_pixmap(dpi=72)
+    # Centre of the (transparent) box must stay white; the shadow is outside.
+    assert pix.pixel(57 + 30 + 75, 57 + 30 + 37) == (255, 255, 255)
 
 
 def chk_opacity():
@@ -468,10 +488,13 @@ FEATURES = [
     Feature("Layout", "`position: absolute`", chk_position_absolute),
     Feature("Layout", "`float`", chk_float, 35),
     Feature("Layout", "`overflow: hidden`", chk_overflow_hidden, 36),
+    Feature("Layout", "`box-sizing` (content-box default, border-box)", chk_box_sizing),
     Feature("Visual", "Solid borders", chk_border_solid),
-    Feature("Visual", "Dashed / dotted borders", chk_border_dashed, 19),
-    Feature("Visual", "`border-radius`", chk_border_radius, 49),
+    Feature("Visual", "Dashed / dotted borders", chk_border_dashed),
+    Feature("Visual", "Double borders", chk_border_double),
+    Feature("Visual", "`border-radius`", chk_border_radius),
     Feature("Visual", "`box-shadow`", chk_box_shadow),
+    Feature("Visual", "`box-shadow` not painted under the box", chk_box_shadow_outside_only),
     Feature("Visual", "`opacity`", chk_opacity),
     Feature("Visual", "Gradients", chk_gradient, 37),
     Feature("Visual", "`transform`", chk_transform, 38),

@@ -1,7 +1,6 @@
 /* User-Agent stylesheet — styles navigateur par défaut */
 /* Embarqué avec include_str!("ua.css") */
 
-* { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
 
 /* Non-rendered elements (HTML Living Standard §15.3.1) */

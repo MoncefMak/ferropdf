@@ -7,6 +7,7 @@ use crate::RenderOptions;
 use ferropdf_core::{FerroError, PageConfig};
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
+use pdf_writer::types::LineCapStyle;
 use pdf_writer::{Content, Filter, Finish, Name, Pdf, Rect as PdfWriterRect, Ref, Str, TextStr};
 use std::collections::HashMap;
 use std::io::Write;
@@ -355,18 +356,90 @@ pub fn write_pdf(
 
         for op in &display_list.ops {
             match op {
-                DrawOp::FillRect { rect, color, .. } if !color.is_transparent() => {
+                DrawOp::FillRect {
+                    rect,
+                    color,
+                    border_radius,
+                } if !color.is_transparent() => {
                     content.set_fill_rgb(color.r, color.g, color.b);
                     let pr = to_pdf_rect(rect.x, rect.y, rect.width, rect.height, page_h);
-                    content.rect(pr.x, pr.y, pr.width, pr.height);
+                    if border_radius.iter().any(|r| *r > 0.0) {
+                        rounded_rect_path(
+                            &mut content,
+                            pr.x,
+                            pr.y,
+                            pr.width,
+                            pr.height,
+                            *border_radius,
+                        );
+                    } else {
+                        content.rect(pr.x, pr.y, pr.width, pr.height);
+                    }
                     content.fill_nonzero();
                 }
                 DrawOp::FillRect { .. } => {}
+                DrawOp::StrokeRoundedRect {
+                    rect,
+                    color,
+                    width,
+                    style,
+                    border_radius,
+                } => {
+                    content.set_stroke_rgb(color.r, color.g, color.b);
+                    let pr = to_pdf_rect(rect.x, rect.y, rect.width, rect.height, page_h);
+                    let paths: Vec<(f32, f32)> = if *style == ferropdf_core::BorderStyle::Double {
+                        // Two strokes of w/3: outer and inner thirds of the border.
+                        vec![(width / 3.0, width / 6.0), (width / 3.0, width * 5.0 / 6.0)]
+                    } else {
+                        vec![(*width, width / 2.0)]
+                    };
+                    for (line_w, inset) in paths {
+                        content.set_line_width(line_w);
+                        set_border_dash(&mut content, *style, *width);
+                        let radii = border_radius.map(|r| (r - inset).max(0.0));
+                        rounded_rect_path(
+                            &mut content,
+                            pr.x + inset,
+                            pr.y + inset,
+                            (pr.width - 2.0 * inset).max(0.0),
+                            (pr.height - 2.0 * inset).max(0.0),
+                            radii,
+                        );
+                        content.stroke();
+                    }
+                    reset_border_dash(&mut content);
+                }
                 DrawOp::StrokeRect {
-                    rect, color, width, ..
+                    rect,
+                    color,
+                    width,
+                    style,
+                } if *style == ferropdf_core::BorderStyle::Double && *width >= 3.0 => {
+                    // Two parallel lines of w/3, w/3 apart, centred on the edge.
+                    content.set_stroke_rgb(color.r, color.g, color.b);
+                    content.set_line_width(width / 3.0);
+                    for off in [-width / 3.0, width / 3.0] {
+                        if rect.height < 0.01 {
+                            let py = y_to_pdf(rect.y, page_h) + off;
+                            content.move_to(rect.x, py);
+                            content.line_to(rect.x + rect.width, py);
+                        } else {
+                            let px = rect.x + off;
+                            content.move_to(px, y_to_pdf(rect.y, page_h));
+                            content.line_to(px, y_to_pdf(rect.y + rect.height, page_h));
+                        }
+                        content.stroke();
+                    }
+                }
+                DrawOp::StrokeRect {
+                    rect,
+                    color,
+                    width,
+                    style,
                 } => {
                     content.set_stroke_rgb(color.r, color.g, color.b);
                     content.set_line_width(*width);
+                    set_border_dash(&mut content, *style, *width);
                     // Borders are lines — use move_to/line_to for precise placement
                     // StrokeRect encodes a single border side as a degenerate rect:
                     //   height==0 → horizontal line, width==0 → vertical line
@@ -391,6 +464,7 @@ pub fn write_pdf(
                         content.rect(pr.x, pr.y, pr.width.max(0.1), pr.height.max(0.1));
                         content.stroke();
                     }
+                    reset_border_dash(&mut content);
                 }
                 DrawOp::DrawText {
                     text,
@@ -554,9 +628,29 @@ pub fn write_pdf(
                         content.end_text();
                     }
                 }
-                DrawOp::DrawBoxShadow { rect, shadow, .. } => {
+                DrawOp::DrawBoxShadow {
+                    rect,
+                    shadow,
+                    border_radius,
+                } => {
                     // Approximate box-shadow using multiple semi-transparent filled rects.
                     // For blur, we draw several layers with decreasing opacity.
+                    // An outer shadow is only visible outside the border box
+                    // (CSS Backgrounds 3 §7.1.1): clip the box out (even-odd)
+                    // so it never shows through a transparent background.
+                    content.save_state();
+                    content.rect(-10_000.0, -10_000.0, page_w + 20_000.0, page_h + 20_000.0);
+                    let br = to_pdf_rect(rect.x, rect.y, rect.width, rect.height, page_h);
+                    rounded_rect_path(
+                        &mut content,
+                        br.x,
+                        br.y,
+                        br.width,
+                        br.height,
+                        *border_radius,
+                    );
+                    content.clip_even_odd();
+                    content.end_path();
                     let spread = shadow.spread;
                     let blur = shadow.blur_radius;
                     let sx = rect.x + shadow.offset_x - spread;
@@ -576,7 +670,14 @@ pub fn write_pdf(
                                 content.set_parameters(Name(gs_name.as_bytes()));
                             }
                         }
-                        content.rect(pr.x, pr.y, pr.width, pr.height);
+                        rounded_rect_path(
+                            &mut content,
+                            pr.x,
+                            pr.y,
+                            pr.width,
+                            pr.height,
+                            *border_radius,
+                        );
                         content.fill_nonzero();
                         content.restore_state();
                     } else {
@@ -598,11 +699,13 @@ pub fn write_pdf(
                                 content.set_parameters(Name(gs_name.as_bytes()));
                             }
                             content.set_fill_rgb(shadow.color.r, shadow.color.g, shadow.color.b);
-                            content.rect(pr.x, pr.y, pr.width, pr.height);
+                            let radii = border_radius.map(|r| r + expand);
+                            rounded_rect_path(&mut content, pr.x, pr.y, pr.width, pr.height, radii);
                             content.fill_nonzero();
                         }
                         content.restore_state();
                     }
+                    content.restore_state();
                 }
                 DrawOp::SetOpacity(alpha) => {
                     let key = (*alpha * 1000.0) as u32;
@@ -836,5 +939,115 @@ mod tests {
         assert_eq!(y_to_pdf(0.0, 800.0), 800.0);
         assert_eq!(y_to_pdf(800.0, 800.0), 0.0);
         assert_eq!(y_to_pdf(100.0, 800.0), 700.0);
+    }
+}
+
+/// Append a rounded-rectangle path (PDF coordinates, origin bottom-left).
+///
+/// `radii` = [top-left, top-right, bottom-right, bottom-left] in CSS order.
+/// Radii are scaled down together when adjacent ones exceed a side
+/// (CSS Backgrounds 3 §5.5), which is what turns `border-radius: 9999px`
+/// into a pill rather than a broken shape.
+pub(crate) fn rounded_rect_path(
+    content: &mut Content,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    radii: [f32; 4],
+) {
+    let [tl, tr, br, bl] = clamp_radii(w, h, radii);
+    // Bézier control-point distance for a quarter circle.
+    const K: f32 = 0.552_284_8;
+    let top = y + h;
+    let right = x + w;
+    content.move_to(x + tl, top);
+    content.line_to(right - tr, top);
+    if tr > 0.0 {
+        content.cubic_to(
+            right - tr + tr * K,
+            top,
+            right,
+            top - tr + tr * K,
+            right,
+            top - tr,
+        );
+    }
+    content.line_to(right, y + br);
+    if br > 0.0 {
+        content.cubic_to(
+            right,
+            y + br - br * K,
+            right - br + br * K,
+            y,
+            right - br,
+            y,
+        );
+    }
+    content.line_to(x + bl, y);
+    if bl > 0.0 {
+        content.cubic_to(x + bl - bl * K, y, x, y + bl - bl * K, x, y + bl);
+    }
+    content.line_to(x, top - tl);
+    if tl > 0.0 {
+        content.cubic_to(x, top - tl + tl * K, x + tl - tl * K, top, x + tl, top);
+    }
+    content.close_path();
+}
+
+pub(crate) fn clamp_radii(w: f32, h: f32, radii: [f32; 4]) -> [f32; 4] {
+    let [tl, tr, br, bl] = radii.map(|r| r.max(0.0));
+    let ratio = |side: f32, a: f32, b: f32| {
+        if a + b > side && a + b > 0.0 {
+            side / (a + b)
+        } else {
+            1.0
+        }
+    };
+    let f = ratio(w, tl, tr)
+        .min(ratio(w, bl, br))
+        .min(ratio(h, tl, bl))
+        .min(ratio(h, tr, br));
+    [tl * f, tr * f, br * f, bl * f]
+}
+
+/// Dash pattern for `dashed` / `dotted` borders (approximating browsers:
+/// dashes 3×width long, dots as round caps spaced 2×width).
+fn set_border_dash(content: &mut Content, style: ferropdf_core::BorderStyle, width: f32) {
+    match style {
+        ferropdf_core::BorderStyle::Dashed => {
+            content.set_dash_pattern([3.0 * width, 3.0 * width], 0.0);
+        }
+        ferropdf_core::BorderStyle::Dotted => {
+            content.set_line_cap(LineCapStyle::RoundCap);
+            content.set_dash_pattern([0.0, 2.0 * width], 0.0);
+        }
+        _ => {}
+    }
+}
+
+fn reset_border_dash(content: &mut Content) {
+    content.set_dash_pattern([], 0.0);
+    content.set_line_cap(LineCapStyle::ButtCap);
+}
+
+#[cfg(test)]
+mod radius_tests {
+    use super::clamp_radii;
+
+    #[test]
+    fn pill_radii_are_clamped_to_half_the_height() {
+        let r = clamp_radii(200.0, 40.0, [9999.0; 4]);
+        for v in r {
+            assert!((v - 20.0).abs() < 0.01, "{r:?}");
+        }
+    }
+
+    #[test]
+    fn small_radii_are_untouched() {
+        assert_eq!(
+            clamp_radii(100.0, 50.0, [5.0, 6.0, 7.0, 8.0]),
+            [5.0, 6.0, 7.0, 8.0]
+        );
     }
 }
