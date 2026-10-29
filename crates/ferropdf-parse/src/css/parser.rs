@@ -7,19 +7,51 @@ pub struct Stylesheet {
     pub font_faces: Vec<FontFaceRule>,
     /// `@page { margin: ...; size: ... }` rules. Multiple `@page` rules
     /// override each other in source order; the last one wins. Only the
-    /// barebones margin/size pair is captured today — `@page :first` and
-    /// margin boxes (`@top-left { content: ... }`) are out of scope.
+    /// `size`, `margin`, the page selector and nested margin boxes are kept.
     pub page_rules: Vec<PageRule>,
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct PageRule {
+    /// Which pages the rule applies to (`@page`, `@page :first`, …).
+    pub selector: PageSelector,
     /// Raw value of the `margin` declaration (`"2cm"`, `"10mm 15mm"`, …),
     /// to be parsed by `PageMargins::from_css_str` downstream.
     pub margin: Option<String>,
     /// Raw value of the `size` declaration (`"A4"`, `"210mm 297mm"`, …),
     /// to be parsed by `PageSize::from_str` downstream.
     pub size: Option<String>,
+    /// Margin boxes declared inside the rule (`@top-center { … }`).
+    pub margin_boxes: Vec<MarginBoxRule>,
+}
+
+/// Page selector of an `@page` rule (CSS Paged Media 3 §4.2).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum PageSelector {
+    #[default]
+    All,
+    First,
+    Left,
+    Right,
+}
+
+impl PageSelector {
+    /// Cascade weight: `:first` beats `:left`/`:right`, which beat a bare `@page`.
+    pub fn specificity(self) -> u8 {
+        match self {
+            PageSelector::All => 0,
+            PageSelector::Left | PageSelector::Right => 1,
+            PageSelector::First => 2,
+        }
+    }
+}
+
+/// A margin box at-rule nested in `@page`, e.g. `@bottom-center { content: counter(page) }`.
+#[derive(Debug, Clone)]
+pub struct MarginBoxRule {
+    /// Lower-cased name without `@`: `top-left`, `bottom-center`, …
+    pub name: String,
+    pub declarations: Vec<Declaration>,
 }
 
 /// A parsed @font-face rule
@@ -331,22 +363,66 @@ fn skip_at_rule(parser: &mut Parser<'_, '_>) -> Result<(), ()> {
     }
 }
 
-/// Parse a barebones `@page { margin: ...; size: ...; }` at-rule. The
-/// `@page` keyword has already been consumed. We skip any prelude (e.g.
-/// `:first`, `:left`) and read declarations from the curly block. Only
-/// `margin` and `size` are recognised — every other property is ignored.
+/// Parse an `@page [:first|:left|:right] { … }` at-rule (the `@page` keyword
+/// has already been consumed). Recognises `margin`, `size` and nested margin
+/// box rules (`@top-center { … }`); other page properties are ignored.
 fn parse_page_rule(parser: &mut Parser<'_, '_>) -> Option<PageRule> {
-    // Skip any prelude tokens until we hit the curly block.
+    let mut rule = PageRule::default();
+    let mut after_colon = false;
     loop {
         match parser.next_including_whitespace() {
             Ok(&Token::CurlyBracketBlock) => break,
+            Ok(&Token::Colon) => after_colon = true,
+            Ok(Token::Ident(name)) if after_colon => {
+                rule.selector = match name.to_ascii_lowercase().as_str() {
+                    "first" => PageSelector::First,
+                    "left" => PageSelector::Left,
+                    "right" => PageSelector::Right,
+                    _ => rule.selector,
+                };
+                after_colon = false;
+            }
             Ok(_) => {}
             Err(_) => return None,
         }
     }
-    let mut rule = PageRule::default();
     let _ = parser.parse_nested_block(|p| -> Result<(), ParseError<'_, ()>> {
         while !p.is_exhausted() {
+            let _ = p.try_parse(|q| -> Result<(), ParseError<'_, ()>> {
+                q.expect_whitespace()?;
+                Ok(())
+            });
+            if p.is_exhausted() {
+                break;
+            }
+            // Nested margin box: `@top-center { declarations }`
+            let start = p.state();
+            if let Ok(Token::AtKeyword(name)) = p.next() {
+                let name = name.to_ascii_lowercase();
+                let mut declarations = Vec::new();
+                loop {
+                    match p.next() {
+                        Ok(&Token::CurlyBracketBlock) => {
+                            let _ = p.parse_nested_block(|b| -> Result<(), ParseError<'_, ()>> {
+                                while !b.is_exhausted() {
+                                    if let Some(decl) = parse_declaration(b) {
+                                        declarations.push(decl);
+                                    } else {
+                                        let _ = b.next();
+                                    }
+                                }
+                                Ok(())
+                            });
+                            break;
+                        }
+                        Ok(_) => {}
+                        Err(_) => break,
+                    }
+                }
+                rule.margin_boxes.push(MarginBoxRule { name, declarations });
+                continue;
+            }
+            p.reset(&start);
             if let Some(decl) = parse_declaration(p) {
                 let raw_value = decl.value.to_cow().trim().to_string();
                 if let CssProperty::Margin = decl.property {
@@ -778,5 +854,37 @@ impl<'a> ToCssString for Token<'a> {
             Token::CloseCurlyBracket => "}".to_string(),
             _ => String::new(),
         }
+    }
+}
+
+#[cfg(test)]
+mod page_rule_tests {
+    use super::*;
+
+    #[test]
+    fn parses_selector_and_margin_boxes() {
+        let css = r#"
+            @page { size: A4; margin: 20mm;
+                @top-right { content: "Report"; font-size: 8pt }
+                @bottom-center { content: "Page " counter(page) " of " counter(pages) }
+            }
+            @page :first { @top-right { content: none } }
+            p { color: red }
+        "#;
+        let sheet = parse_stylesheet(css).unwrap();
+        assert_eq!(sheet.page_rules.len(), 2);
+        let all = &sheet.page_rules[0];
+        assert_eq!(all.selector, PageSelector::All);
+        assert_eq!(all.size.as_deref(), Some("A4"));
+        assert_eq!(all.margin.as_deref(), Some("20mm"));
+        let names: Vec<_> = all.margin_boxes.iter().map(|m| m.name.as_str()).collect();
+        assert_eq!(names, ["top-right", "bottom-center"]);
+        let content = &all.margin_boxes[1].declarations[0];
+        assert_eq!(
+            content.value.to_cow(),
+            r#""Page " counter(page) " of " counter(pages)"#
+        );
+        assert_eq!(sheet.page_rules[1].selector, PageSelector::First);
+        assert_eq!(sheet.rules.len(), 1, "rules after @page still parse");
     }
 }

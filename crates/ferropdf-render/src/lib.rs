@@ -1,5 +1,6 @@
 mod display_list;
 mod font_subsetter;
+mod margin_boxes;
 mod painter;
 mod pdf;
 mod sandbox;
@@ -118,6 +119,11 @@ pub fn render_with_warnings(
     let mut last_page_margin: Option<String> = None;
     for sheet in &stylesheets {
         for pr in &sheet.page_rules {
+            // Page size and margins are document-wide here: per-page values
+            // from `:first` / `:left` / `:right` are not supported yet.
+            if pr.selector != ferropdf_parse::PageSelector::All {
+                continue;
+            }
             if let Some(s) = &pr.size {
                 last_page_size = Some(s.clone());
             }
@@ -166,7 +172,24 @@ pub fn render_with_warnings(
     )?;
 
     // 7. Paginate
-    let pages = ferropdf_page::paginate(&layout_tree, &page_config)?;
+    let mut pages = ferropdf_page::paginate(&layout_tree, &page_config)?;
+
+    // 7b. Margin boxes (running headers/footers, page counters) — needs the
+    // final page count, so it runs after pagination.
+    {
+        let page_rules: Vec<&ferropdf_parse::PageRule> = stylesheets
+            .iter()
+            .flat_map(|s| s.page_rules.iter())
+            .collect();
+        let root_style = root_element_style(&parse_result.document, &styles);
+        margin_boxes::add_margin_boxes(
+            &mut pages,
+            &page_rules,
+            &page_config,
+            &root_style,
+            fonts.font_system(),
+        );
+    }
 
     // 8. Build display lists
     let display_lists: Vec<_> = pages
@@ -220,4 +243,19 @@ fn load_font_face_data(src: &str, base_url: Option<&str>) -> Result<Option<Vec<u
     }
 
     sandbox::read_sandboxed(src, base_url).map(Some)
+}
+
+/// Computed style of the root (`<html>`) element, from which `@page` margin
+/// boxes inherit. Falls back to defaults for fragments without `<html>`.
+fn root_element_style(
+    doc: &ferropdf_core::Document,
+    styles: &ferropdf_style::StyleTree,
+) -> ferropdf_core::ComputedStyle {
+    doc.get(doc.root())
+        .children
+        .iter()
+        .find(|&&id| doc.get(id).tag_name.as_deref() == Some("html"))
+        .and_then(|id| styles.get(id))
+        .cloned()
+        .unwrap_or_default()
 }

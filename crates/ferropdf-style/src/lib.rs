@@ -57,6 +57,19 @@ pub fn resolve(
     Ok(style_tree)
 }
 
+/// Compute the style of a box that is not in the DOM (an `@page` margin box)
+/// from its declarations, inheriting from `parent` (the root element style).
+pub fn style_from_declarations(
+    parent: &ComputedStyle,
+    declarations: &[ferropdf_parse::Declaration],
+) -> ComputedStyle {
+    let root_font_size = 12.0_f32;
+    let mut style = inherit::inherit_from(parent);
+    cascade::apply_inline_declarations(&mut style, declarations, root_font_size);
+    compute::resolve_units(&mut style, Some(parent), root_font_size);
+    style
+}
+
 #[allow(clippy::too_many_arguments)]
 fn resolve_recursive(
     doc: &Document,
