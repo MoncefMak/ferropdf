@@ -20,7 +20,7 @@ pub fn build_layout(
 ) -> ferropdf_core::Result<LayoutTree> {
     let mut taffy: TaffyTree<TextContext> = TaffyTree::new();
     let mut node_map: HashMap<NodeId, taffy::NodeId> = HashMap::new();
-    let mut table_cell_parent: HashMap<NodeId, NodeId> = HashMap::new();
+    let mut table_cell_parent = BridgeState::default();
 
     let root = doc.root();
     let body = find_body(doc, root).unwrap_or(root);
@@ -105,7 +105,7 @@ fn build_taffy_tree(
     styles: &StyleTree,
     taffy: &mut TaffyTree<TextContext>,
     node_map: &mut HashMap<NodeId, taffy::NodeId>,
-    table_cell_parent: &mut HashMap<NodeId, NodeId>,
+    table_cell_parent: &mut BridgeState,
     font_system: &mut FontSystem,
     available_width: f32,
 ) -> ferropdf_core::Result<()> {
@@ -129,7 +129,7 @@ fn build_taffy_tree_inner(
     styles: &StyleTree,
     taffy: &mut TaffyTree<TextContext>,
     node_map: &mut HashMap<NodeId, taffy::NodeId>,
-    table_cell_parent: &mut HashMap<NodeId, NodeId>,
+    table_cell_parent: &mut BridgeState,
     font_system: &mut FontSystem,
     available_width: f32,
     depth: usize,
@@ -204,6 +204,33 @@ fn build_taffy_tree_inner(
 
     let mut taffy_style = style_to_taffy::convert(&style);
 
+    // Block container mixing block-level and inline-level children: wrap each
+    // run of inline content in an anonymous line box (CSS 2.1 §9.2.1.1), so
+    // inline-blocks and text flow on lines instead of stacking full-width.
+    if matches!(
+        style.display,
+        FDisplay::Block | FDisplay::ListItem | FDisplay::TableCell
+    ) {
+        let kinds: Vec<(NodeId, InlineKind)> = node
+            .children
+            .iter()
+            .filter(|cid| node_map.contains_key(cid))
+            .map(|&cid| (cid, inline_kind(doc, cid, styles)))
+            .collect();
+        let has_block = kinds.iter().any(|(_, k)| *k == InlineKind::Block);
+        let has_inline = kinds.iter().any(|(_, k)| *k == InlineKind::Inline);
+        if has_block && has_inline {
+            child_taffy_ids = wrap_inline_runs(
+                &kinds,
+                &style,
+                taffy,
+                node_map,
+                table_cell_parent,
+                font_system,
+            )?;
+        }
+    }
+
     // If this is a block container whose children are all inline/text,
     // switch to flex-row + wrap so that inline elements flow horizontally.
     // Map text-align to justify-content for inline-block centering (CSS spec).
@@ -217,6 +244,13 @@ fn build_taffy_tree_inner(
             matches!(cs.display, FDisplay::Inline | FDisplay::InlineBlock)
         });
         if all_inline {
+            let kinds: Vec<(NodeId, InlineKind)> = node
+                .children
+                .iter()
+                .filter(|cid| node_map.contains_key(cid))
+                .map(|&cid| (cid, inline_kind(doc, cid, styles)))
+                .collect();
+            size_inner_spaces(&kinds, taffy, node_map, font_system)?;
             taffy_style.display = taffy::Display::Flex;
             taffy_style.flex_direction = taffy::FlexDirection::Row;
             taffy_style.flex_wrap = taffy::FlexWrap::Wrap;
@@ -246,7 +280,7 @@ fn build_table_as_grid(
     styles: &StyleTree,
     taffy: &mut TaffyTree<TextContext>,
     node_map: &mut HashMap<NodeId, taffy::NodeId>,
-    table_cell_parent: &mut HashMap<NodeId, NodeId>,
+    table_cell_parent: &mut BridgeState,
     font_system: &mut FontSystem,
     available_width: f32,
 ) -> ferropdf_core::Result<()> {
@@ -313,7 +347,9 @@ fn build_table_as_grid(
                 }
                 cell_taffy_ids.push(tid);
             }
-            table_cell_parent.insert(cell.node_id, table_id);
+            table_cell_parent
+                .table_cell_parent
+                .insert(cell.node_id, table_id);
         }
     }
 
@@ -350,7 +386,7 @@ fn read_layout(
     styles: &StyleTree,
     taffy: &TaffyTree<TextContext>,
     node_map: &HashMap<NodeId, taffy::NodeId>,
-    table_cell_parent: &HashMap<NodeId, NodeId>,
+    table_cell_parent: &BridgeState,
     offset_x: f32,
     offset_y: f32,
 ) -> ferropdf_core::Result<LayoutBox> {
@@ -438,10 +474,21 @@ fn read_layout(
         }
     } else {
         for &child_id in &node.children {
-            if table_cell_parent.contains_key(&child_id) {
+            if table_cell_parent.table_cell_parent.contains_key(&child_id) {
                 continue;
             }
             if node_map.contains_key(&child_id) {
+                // Children grouped into an anonymous line box are positioned
+                // relative to that wrapper, not to this element.
+                let (cx, cy) = match table_cell_parent.anon_wrapper.get(&child_id) {
+                    Some(&wrapper) => {
+                        let wl = taffy.layout(wrapper).map_err(|e| {
+                            ferropdf_core::FerroError::Layout(format!("Taffy read error: {:?}", e))
+                        })?;
+                        (x + wl.location.x, y + wl.location.y)
+                    }
+                    None => (x, y),
+                };
                 let child_box = read_layout(
                     doc,
                     child_id,
@@ -449,8 +496,8 @@ fn read_layout(
                     taffy,
                     node_map,
                     table_cell_parent,
-                    x,
-                    y,
+                    cx,
+                    cy,
                 )?;
                 children.push(child_box);
             }
@@ -563,4 +610,153 @@ mod table_width_tests {
         assert_eq!(resolve_table_width(&Length::Pt(390.0), 400.0), 390.0);
         assert_eq!(resolve_table_width(&Length::Auto, 400.0), 400.0);
     }
+}
+
+/// Side tables produced while building the Taffy tree.
+#[derive(Default)]
+pub(crate) struct BridgeState {
+    /// Table cell → its `<table>` (cells are laid out by the table grid).
+    pub table_cell_parent: HashMap<NodeId, NodeId>,
+    /// Child → anonymous line-box wrapper it was placed in.
+    pub anon_wrapper: HashMap<NodeId, taffy::NodeId>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum InlineKind {
+    Block,
+    Inline,
+    /// Collapsible white space only: belongs to no line box.
+    Whitespace,
+}
+
+fn inline_kind(doc: &Document, id: NodeId, styles: &StyleTree) -> InlineKind {
+    let n = doc.get(id);
+    if n.is_text() {
+        let ws = styles.get(&id).map(|s| s.white_space).unwrap_or_default();
+        let blank = n.text.as_deref().is_none_or(|t| t.trim().is_empty());
+        return if blank
+            && !matches!(
+                ws,
+                ferropdf_core::WhiteSpace::Pre | ferropdf_core::WhiteSpace::PreWrap
+            ) {
+            InlineKind::Whitespace
+        } else {
+            InlineKind::Inline
+        };
+    }
+    match styles.get(&id).map(|s| &s.display) {
+        Some(FDisplay::Inline) | Some(FDisplay::InlineBlock) => InlineKind::Inline,
+        _ => InlineKind::Block,
+    }
+}
+
+/// Replace each run of inline children by one anonymous flex-row/wrap node
+/// (the same model ferropdf uses for all-inline containers). Returns the new
+/// child list for the parent.
+fn wrap_inline_runs(
+    kinds: &[(NodeId, InlineKind)],
+    parent_style: &ferropdf_core::ComputedStyle,
+    taffy: &mut TaffyTree<TextContext>,
+    node_map: &HashMap<NodeId, taffy::NodeId>,
+    state: &mut BridgeState,
+    font_system: &mut FontSystem,
+) -> ferropdf_core::Result<Vec<taffy::NodeId>> {
+    let mut out = Vec::new();
+    let mut run: Vec<NodeId> = Vec::new();
+
+    let flush = |run: &mut Vec<NodeId>,
+                 out: &mut Vec<taffy::NodeId>,
+                 taffy: &mut TaffyTree<TextContext>,
+                 state: &mut BridgeState,
+                 font_system: &mut FontSystem|
+     -> ferropdf_core::Result<()> {
+        if run.is_empty() {
+            return Ok(());
+        }
+        let run_kinds: Vec<(NodeId, InlineKind)> = run
+            .iter()
+            .map(|&c| {
+                let blank = taffy
+                    .get_node_context(node_map[&c])
+                    .is_some_and(|ctx| ctx.text.trim().is_empty());
+                let kind = if blank {
+                    InlineKind::Whitespace
+                } else {
+                    InlineKind::Inline
+                };
+                (c, kind)
+            })
+            .collect();
+        size_inner_spaces(&run_kinds, taffy, node_map, font_system)?;
+        let ids: Vec<taffy::NodeId> = run.iter().map(|c| node_map[c]).collect();
+        let wrapper_style = taffy::Style {
+            display: taffy::Display::Flex,
+            flex_direction: taffy::FlexDirection::Row,
+            flex_wrap: taffy::FlexWrap::Wrap,
+            align_items: Some(taffy::AlignItems::FlexStart),
+            justify_content: Some(match parent_style.text_align {
+                ferropdf_core::TextAlign::Center => taffy::JustifyContent::Center,
+                ferropdf_core::TextAlign::Right => taffy::JustifyContent::FlexEnd,
+                _ => taffy::JustifyContent::FlexStart,
+            }),
+            ..Default::default()
+        };
+        let wrapper = taffy.new_with_children(wrapper_style, &ids).map_err(|e| {
+            ferropdf_core::FerroError::Layout(format!("Taffy anonymous box error: {:?}", e))
+        })?;
+        for c in run.drain(..) {
+            state.anon_wrapper.insert(c, wrapper);
+        }
+        out.push(wrapper);
+        Ok(())
+    };
+
+    for &(id, kind) in kinds {
+        match kind {
+            InlineKind::Inline => run.push(id),
+            InlineKind::Whitespace if !run.is_empty() => run.push(id),
+            InlineKind::Whitespace => out.push(node_map[&id]),
+            InlineKind::Block => {
+                flush(&mut run, &mut out, taffy, state, font_system)?;
+                out.push(node_map[&id]);
+            }
+        }
+    }
+    flush(&mut run, &mut out, taffy, state, font_system)?;
+    Ok(out)
+}
+
+/// Collapsed white space between two inline-level boxes of a line renders as
+/// one space; at the start or end of the line it disappears. Whitespace-only
+/// text leaves measure as zero, so give the inner ones a space's width.
+fn size_inner_spaces(
+    kinds: &[(NodeId, InlineKind)],
+    taffy: &mut TaffyTree<TextContext>,
+    node_map: &HashMap<NodeId, taffy::NodeId>,
+    font_system: &mut FontSystem,
+) -> ferropdf_core::Result<()> {
+    let is_inline = |i: usize| kinds.get(i).is_some_and(|(_, k)| *k == InlineKind::Inline);
+    for (i, (id, kind)) in kinds.iter().enumerate() {
+        if *kind != InlineKind::Whitespace || i == 0 || !is_inline(i - 1) {
+            continue;
+        }
+        if !(i + 1..kinds.len()).any(is_inline) {
+            continue;
+        }
+        let tid = node_map[id];
+        let Some(ctx) = taffy.get_node_context(tid).cloned() else {
+            continue;
+        };
+        let w = text::space_width(&ctx, font_system);
+        let mut st = taffy
+            .style(tid)
+            .map_err(|e| ferropdf_core::FerroError::Layout(format!("Taffy style error: {:?}", e)))?
+            .clone();
+        st.min_size.width = taffy::Dimension::Length(w);
+        st.flex_shrink = 0.0;
+        taffy.set_style(tid, st).map_err(|e| {
+            ferropdf_core::FerroError::Layout(format!("Taffy style error: {:?}", e))
+        })?;
+    }
+    Ok(())
 }

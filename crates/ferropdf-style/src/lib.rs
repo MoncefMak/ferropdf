@@ -84,6 +84,12 @@ fn resolve_recursive(
     };
 
     if node.node_type == NodeType::Element {
+        // Tag-specific defaults (<b> bold, <a> underlined, <span> inline…) act
+        // like user-agent rules: applied first, so any author rule or inline
+        // style overrides them (`span { display: inline-block }`,
+        // `a { text-decoration: none }`).
+        compute::apply_tag_defaults(&mut style, node.tag());
+
         // Match stylesheet rules using the selectors crate
         let mut scored = matching::match_node(doc, node_id, rules, nth_cache);
 
@@ -97,9 +103,6 @@ fn resolve_recursive(
                 cascade::apply_inline_declarations(&mut style, &declarations, root_font_size);
             }
         }
-
-        // Apply tag-specific defaults (only if stylesheet didn't override)
-        compute::apply_tag_defaults(&mut style, node.tag());
 
         // Apply HTML dir attribute (lower priority than CSS direction property)
         if let Some(dir) = node.attr("dir") {
@@ -127,5 +130,48 @@ fn resolve_recursive(
             nth_cache,
             depth + 1,
         );
+    }
+}
+
+#[cfg(test)]
+mod tag_default_order_tests {
+    use ferropdf_core::{Display, FontWeight, TextDecoration};
+
+    fn style_of(html: &str, css: &str, tag: &str) -> ferropdf_core::ComputedStyle {
+        let pr = ferropdf_parse::parse(html).unwrap();
+        let sheets = vec![ferropdf_parse::parse_stylesheet(css).unwrap()];
+        let styles =
+            crate::resolve(&pr.document, &sheets, ferropdf_parse::css::UA_CSS, 480.0).unwrap();
+        let (id, _) = pr
+            .document
+            .nodes
+            .iter()
+            .find(|(_, n)| n.tag_name.as_deref() == Some(tag))
+            .unwrap();
+        styles[&id].clone()
+    }
+
+    #[test]
+    fn author_rules_override_tag_defaults() {
+        let html = "<html><body><p><a href='#'>l</a><b>b</b><span>s</span></p></body></html>";
+        let css =
+            "a { text-decoration: none } b { font-weight: normal } span { display: inline-block }";
+        assert_eq!(
+            style_of(html, css, "a").text_decoration,
+            TextDecoration::None
+        );
+        assert_eq!(style_of(html, css, "b").font_weight, FontWeight::Normal);
+        assert_eq!(style_of(html, css, "span").display, Display::InlineBlock);
+    }
+
+    #[test]
+    fn tag_defaults_still_apply_without_author_rules() {
+        let html = "<html><body><p><a href='#'>l</a><b>b</b><span>s</span></p></body></html>";
+        assert_eq!(
+            style_of(html, "", "a").text_decoration,
+            TextDecoration::Underline
+        );
+        assert!(style_of(html, "", "b").font_weight.is_bold());
+        assert_eq!(style_of(html, "", "span").display, Display::Inline);
     }
 }

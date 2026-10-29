@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A shared `Engine` serialised concurrent renders on a global font lock (#53).
 - `from_html()`, `from_file()`, `write_pdf()` and the Django/FastAPI helpers reloaded system fonts on every call (#54).
 - `@font-face` fonts leaked from one document into later renders of the same engine.
+- Tag defaults (`<a>` underline, `<b>` bold, `<span>` inline…) overrode author CSS: `span { display: inline-block }`, `a { text-decoration: none }` had no effect.
+- `inline-block` elements: padding ignored around their label, full width after a block sibling, spaces next to them dropped (#17).
 
 ### Changed
 - System fonts are loaded once per process and shared by all engines; each render uses a pooled font system.

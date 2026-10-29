@@ -186,6 +186,7 @@ every row is a test that renders a snippet and checks the PDF, and every ❌ row
 | Cascade | Custom properties `var()` | ✅ Supported |
 | Cascade | `calc()` | ❌ Not yet ([#52](https://github.com/MoncefMak/ferropdf/issues/52)) |
 | Cascade | `::before` / `::after` with literal `content` | ✅ Supported |
+| Cascade | Author CSS overrides tag defaults (`a`, `b`, `span`) | ✅ Supported |
 | Cascade | CSS counters in `content` | ❌ Not yet ([#31](https://github.com/MoncefMak/ferropdf/issues/31)) |
 | Cascade | `@media print` | ✅ Supported |
 | Cascade | Width media queries (`min-width`) | ❌ Not yet ([#29](https://github.com/MoncefMak/ferropdf/issues/29)) |
@@ -205,7 +206,8 @@ every row is a test that renders a snippet and checks the PDF, and every ❌ row
 | Layout | Flexbox row | ✅ Supported |
 | Layout | `justify-content: space-between` | ✅ Supported |
 | Layout | CSS grid columns | ❌ Not yet ([#18](https://github.com/MoncefMak/ferropdf/issues/18)) |
-| Layout | `inline-block` shrink-to-fit next to text | ❌ Not yet ([#17](https://github.com/MoncefMak/ferropdf/issues/17)) |
+| Layout | `inline-block` shrink-to-fit next to text | ✅ Supported |
+| Layout | `inline-block` padding around its label | ✅ Supported |
 | Layout | Tables with `colspan` | ✅ Supported |
 | Layout | `position: absolute` | ✅ Supported |
 | Layout | `float` | ❌ Not yet ([#35](https://github.com/MoncefMak/ferropdf/issues/35)) |
