@@ -528,10 +528,13 @@ fn read_layout(
     };
 
     // Count thead rows for table pagination
-    let thead_row_count = if style.display == FDisplay::Table {
-        table_layout::count_thead_rows(doc, node_id, styles)
+    let (thead_row_count, tfoot_row_count) = if style.display == FDisplay::Table {
+        (
+            table_layout::count_thead_rows(doc, node_id, styles),
+            table_layout::count_tfoot_rows(doc, node_id, styles),
+        )
     } else {
-        0
+        (0, 0)
     };
 
     // Mark out-of-flow for absolute/fixed positioned elements
@@ -559,6 +562,7 @@ fn read_layout(
         table_cell_pos: None,
         list_item_index: None,
         thead_row_count,
+        tfoot_row_count,
     })
 }
 

@@ -448,17 +448,16 @@ fn fragment_text_box(layout_box: &LayoutBox, ctx: &mut PaginationContext) {
 fn fragment_table(table_box: &LayoutBox, ctx: &mut PaginationContext) {
     use std::collections::BTreeMap;
 
-    let thead_row_count = table_box.thead_row_count;
-
     // Group cells by row index using table_cell_pos
     let mut rows: BTreeMap<usize, Vec<&LayoutBox>> = BTreeMap::new();
+    let mut total_rows = 0usize;
     for child in &table_box.children {
-        if let Some((row, _col, _total_r, _total_c)) = child.table_cell_pos {
+        if let Some((row, _col, total_r, _total_c)) = child.table_cell_pos {
             rows.entry(row).or_default().push(child);
+            total_rows = total_rows.max(total_r);
         }
     }
 
-    // Compute row bounds (min_y, max_bottom) for each row
     struct RowInfo {
         row_idx: usize,
         top: f32,
@@ -468,119 +467,156 @@ fn fragment_table(table_box: &LayoutBox, ctx: &mut PaginationContext) {
 
     let row_infos: Vec<RowInfo> = rows
         .iter()
-        .map(|(&row_idx, cells)| {
-            let top = cells.iter().map(|c| c.rect.y).fold(f32::MAX, f32::min);
-            let bottom = cells
+        .map(|(&row_idx, cells)| RowInfo {
+            row_idx,
+            top: cells.iter().map(|c| c.rect.y).fold(f32::MAX, f32::min),
+            bottom: cells
                 .iter()
                 .map(|c| c.rect.y + c.rect.height)
-                .fold(0.0f32, f32::max);
-            RowInfo {
-                row_idx,
-                top,
-                bottom,
-                cells: cells.iter().map(|c| (*c).clone()).collect(),
-            }
+                .fold(0.0f32, f32::max),
+            cells: cells.iter().map(|c| (*c).clone()).collect(),
         })
         .collect();
 
-    // Separate thead rows and body rows
-    let thead_rows: Vec<&RowInfo> = row_infos
+    // Rows are ordered head → body → foot by the layout.
+    let head_count = table_box.thead_row_count;
+    let foot_start = total_rows
+        .saturating_sub(table_box.tfoot_row_count)
+        .max(head_count);
+    let head_rows: Vec<&RowInfo> = row_infos
         .iter()
-        .filter(|r| r.row_idx < thead_row_count)
+        .filter(|r| r.row_idx < head_count)
+        .collect();
+    let foot_rows: Vec<&RowInfo> = row_infos
+        .iter()
+        .filter(|r| r.row_idx >= foot_start)
         .collect();
     let body_rows: Vec<&RowInfo> = row_infos
         .iter()
-        .filter(|r| r.row_idx >= thead_row_count)
+        .filter(|r| r.row_idx >= head_count && r.row_idx < foot_start)
         .collect();
 
-    let thead_height: f32 = if !thead_rows.is_empty() {
-        let thead_top = thead_rows.iter().map(|r| r.top).fold(f32::MAX, f32::min);
-        let thead_bottom = thead_rows.iter().map(|r| r.bottom).fold(0.0f32, f32::max);
-        thead_bottom - thead_top
+    let span = |rows: &[&RowInfo]| -> (f32, f32) {
+        if rows.is_empty() {
+            return (0.0, 0.0);
+        }
+        let top = rows.iter().map(|r| r.top).fold(f32::MAX, f32::min);
+        let bottom = rows.iter().map(|r| r.bottom).fold(0.0f32, f32::max);
+        (top, bottom - top)
+    };
+    let (head_top, head_height) = span(&head_rows);
+    let (foot_top, foot_height) = span(&foot_rows);
+    // Space between the last body row and the footer (border-spacing).
+    let foot_gap = match (body_rows.last(), foot_rows.is_empty()) {
+        (Some(last), false) => (foot_top - last.bottom).max(0.0),
+        _ => 0.0,
+    };
+    // Repeat the footer on every page unless header + footer would eat the page.
+    let repeat_foot = !foot_rows.is_empty() && head_height + foot_height < ctx.page_height * 0.5;
+    let foot_reserve = if repeat_foot {
+        foot_gap + foot_height
     } else {
         0.0
     };
 
+    // Place `rows` so that the first starts at page y = `at`.
+    let place_group = |rows: &[&RowInfo], group_top: f32, at: f32, out: &mut Vec<LayoutBox>| {
+        for row in rows {
+            for cell in &row.cells {
+                let mut placed = cell.clone();
+                offset_y_recursive(&mut placed, at - group_top);
+                out.push(placed);
+            }
+        }
+    };
+
     let mut current_page_children: Vec<LayoutBox> = Vec::new();
     let mut is_first_page = true;
+    // Extra downward shift of body rows on this page (repeated header height).
+    let mut shift = 0.0f32;
+    let mut body_on_page = false;
+    let mut last_bottom_on_page = 0.0f32;
 
-    // On the first page, thead cells are placed naturally
-    for row in &thead_rows {
-        for cell in &row.cells {
-            let mut placed = cell.clone();
-            offset_y_recursive(&mut placed, -ctx.page_y_offset);
-            current_page_children.push(placed);
-        }
-        let row_bottom_on_page = (row.bottom - ctx.page_y_offset).max(0.0);
-        ctx.used_height = ctx.used_height.max(row_bottom_on_page);
+    // First page: header rows at their natural position.
+    if !head_rows.is_empty() {
+        let at = head_top - ctx.page_y_offset;
+        place_group(&head_rows, head_top, at, &mut current_page_children);
+        last_bottom_on_page = at + head_height;
+        ctx.used_height = ctx.used_height.max(last_bottom_on_page);
     }
 
     for body_row in &body_rows {
-        let row_bottom_on_page =
-            (body_row.bottom - ctx.page_y_offset) + if !is_first_page { thead_height } else { 0.0 };
-        let row_fits = row_bottom_on_page <= ctx.page_height;
+        let row_bottom_on_page = body_row.bottom - ctx.page_y_offset + shift;
+        let fits = row_bottom_on_page + foot_reserve <= ctx.page_height;
+        // A row taller than an (otherwise empty) page is placed anyway.
+        let must_place =
+            !body_on_page && current_page_children.is_empty() && ctx.is_current_page_empty();
 
-        if row_fits {
-            for cell in &body_row.cells {
-                let mut placed = cell.clone();
-                offset_y_recursive(&mut placed, -ctx.page_y_offset);
-                if !is_first_page && thead_height > 0.0 {
-                    offset_y_recursive(&mut placed, thead_height);
-                }
-                current_page_children.push(placed);
-            }
-            ctx.used_height = ctx.used_height.max(row_bottom_on_page);
-        } else {
-            // Flush current page with table wrapper
-            if !current_page_children.is_empty() || !ctx.is_current_page_empty() {
-                if !current_page_children.is_empty() {
-                    let wrapper = make_container_fragment(
-                        table_box,
-                        &current_page_children,
-                        ctx,
-                        is_first_page,
-                        false,
+        if !fits && !must_place {
+            if body_on_page {
+                if repeat_foot {
+                    place_group(
+                        &foot_rows,
+                        foot_top,
+                        last_bottom_on_page + foot_gap,
+                        &mut current_page_children,
                     );
-                    ctx.current_page_boxes.push(wrapper);
-                    current_page_children.clear();
+                    ctx.used_height = ctx
+                        .used_height
+                        .max(last_bottom_on_page + foot_gap + foot_height);
                 }
-                ctx.flush_page(body_row.top);
+                let wrapper = make_container_fragment(
+                    table_box,
+                    &current_page_children,
+                    ctx,
+                    is_first_page,
+                    false,
+                );
+                ctx.current_page_boxes.push(wrapper);
                 is_first_page = false;
             }
+            // A header with no body row under it moves to the next page.
+            current_page_children.clear();
+            ctx.flush_page(body_row.top);
 
-            // On continuation pages, repeat the thead cells
-            if !thead_rows.is_empty() {
-                for thead_row in &thead_rows {
-                    for cell in &thead_row.cells {
-                        let mut repeated = cell.clone();
-                        // Position at Y=0 on the new page
-                        let cell_dy = -repeated.rect.y;
-                        offset_y_recursive(&mut repeated, cell_dy);
-                        current_page_children.push(repeated);
-                    }
-                }
-                ctx.used_height = thead_height;
+            shift = 0.0;
+            if !head_rows.is_empty() {
+                place_group(&head_rows, head_top, 0.0, &mut current_page_children);
+                shift = head_height;
+                ctx.used_height = head_height;
             }
-
-            // Place body row cells, shifted down by thead_height
-            for cell in &body_row.cells {
-                let mut placed = cell.clone();
-                offset_y_recursive(&mut placed, -ctx.page_y_offset);
-                if thead_height > 0.0 {
-                    offset_y_recursive(&mut placed, thead_height);
-                }
-                current_page_children.push(placed);
-            }
-            let row_bottom = (body_row.bottom - ctx.page_y_offset) + thead_height;
-            ctx.used_height = ctx.used_height.max(row_bottom);
         }
+
+        let at = body_row.top - ctx.page_y_offset + shift;
+        for cell in &body_row.cells {
+            let mut placed = cell.clone();
+            offset_y_recursive(&mut placed, at - body_row.top);
+            current_page_children.push(placed);
+        }
+        body_on_page = true;
+        last_bottom_on_page = at + (body_row.bottom - body_row.top);
+        ctx.used_height = ctx.used_height.max(last_bottom_on_page);
     }
 
-    // Flush remaining cells
+    // Final footer, right after the last body row.
+    if !foot_rows.is_empty() {
+        let at = last_bottom_on_page + foot_gap;
+        place_group(&foot_rows, foot_top, at, &mut current_page_children);
+        ctx.used_height = ctx.used_height.max(at + foot_height);
+    }
+
     if !current_page_children.is_empty() {
         let wrapper =
             make_container_fragment(table_box, &current_page_children, ctx, is_first_page, true);
         ctx.current_page_boxes.push(wrapper);
+    }
+
+    // Following siblings are positioned from the ribbon: account for the
+    // repeated header/footer height added on continuation pages.
+    let natural_bottom = table_box.rect.y + table_box.rect.height - ctx.page_y_offset;
+    let placed_bottom = ctx.used_height + table_box.padding.bottom + table_box.border.bottom;
+    if placed_bottom > natural_bottom {
+        ctx.page_y_offset -= placed_bottom - natural_bottom;
     }
 }
 
@@ -659,6 +695,7 @@ fn make_container_fragment(
         table_cell_pos: None,
         list_item_index: None,
         thead_row_count: 0,
+        tfoot_row_count: 0,
     }
 }
 

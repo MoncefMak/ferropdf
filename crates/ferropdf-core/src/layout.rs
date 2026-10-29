@@ -77,6 +77,9 @@ pub struct LayoutBox {
     pub list_item_index: Option<usize>,
     /// For Display::Table boxes: number of rows that came from <thead> (for repeat on pagination).
     pub thead_row_count: usize,
+    /// For Display::Table boxes: number of rows that came from <tfoot> (repeated at the
+    /// bottom of each page fragment).
+    pub tfoot_row_count: usize,
 }
 
 impl Default for LayoutBox {
@@ -100,6 +103,7 @@ impl Default for LayoutBox {
             table_cell_pos: None,
             list_item_index: None,
             thead_row_count: 0,
+            tfoot_row_count: 0,
         }
     }
 }
