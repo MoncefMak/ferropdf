@@ -1,3 +1,4 @@
+pub mod calc;
 mod cascade;
 mod compute;
 mod inherit;

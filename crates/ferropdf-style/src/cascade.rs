@@ -600,6 +600,11 @@ fn parse_length(s: &str) -> Length {
     if s == "none" {
         return Length::None;
     }
+    if s.len() > 5 && s[..5].eq_ignore_ascii_case("calc(") {
+        return crate::calc::parse_calc(s)
+            .map(|c| c.simplify())
+            .unwrap_or(Length::Auto);
+    }
 
     if let Some(v) = s.strip_suffix('%') {
         if let Ok(v) = v.trim().parse::<f32>() {
@@ -613,6 +618,8 @@ fn parse_length(s: &str) -> Length {
         ("mm", Length::Mm),
         ("em", Length::Em),
         ("rem", Length::Rem),
+        ("cm", |v| Length::Mm(v * 10.0)),
+        ("in", |v| Length::Pt(v * 72.0)),
     ] {
         if let Some(v) = s.strip_suffix(suffix) {
             if let Ok(v) = v.trim().parse::<f32>() {
@@ -630,7 +637,32 @@ fn parse_length(s: &str) -> Length {
 }
 
 fn parse_shorthand_lengths(s: &str) -> Vec<Length> {
-    s.split_whitespace().map(parse_length).collect()
+    split_top_level(s).into_iter().map(parse_length).collect()
+}
+
+/// Split on whitespace outside parentheses (`0 calc(100% - 10px)` → 2 parts).
+fn split_top_level(s: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut depth = 0i32;
+    let mut start: Option<usize> = None;
+    for (i, c) in s.char_indices() {
+        match c {
+            '(' => depth += 1,
+            ')' => depth -= 1,
+            _ => {}
+        }
+        if c.is_whitespace() && depth == 0 {
+            if let Some(st) = start.take() {
+                parts.push(&s[st..i]);
+            }
+        } else if start.is_none() {
+            start = Some(i);
+        }
+    }
+    if let Some(st) = start {
+        parts.push(&s[st..]);
+    }
+    parts
 }
 
 /// Parse a CSS length string directly to pt (points typographiques).
@@ -639,6 +671,11 @@ fn parse_length_to_pt(s: &str) -> Option<f32> {
     let s = s.trim();
     if s == "0" || s == "0px" {
         return Some(0.0);
+    }
+    if s.len() > 5 && s[..5].eq_ignore_ascii_case("calc(") {
+        // No font context here: em/rem relative to the 12pt default.
+        let c = crate::calc::parse_calc(s)?;
+        return (c.percent == 0.0).then(|| c.resolve_font_relative(12.0, 12.0).pt);
     }
 
     if let Some(v) = s.strip_suffix("px") {

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Tables sized their columns against the page width instead of their container, overflowing padded or narrower parents.
 - PNG transparency was lost (transparent areas rendered black); alpha is kept as a PDF soft mask.
 - SVG element names lost their case in the HTML parser (`linearGradient`, `clipPath`).
 - `@page { margin }` and `Options(margin=)` accepted a single value only: `margin: 10mm 20mm`, three/four values and unitless `0` all fell back to 20mm.
@@ -37,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PyO3 0.24 → 0.29 (RUSTSEC-2026-0176, RUSTSEC-2026-0177).
 
 ### Added
+- `calc()` in lengths: `+ - * /`, parentheses, nested `calc()`, mixed units (px, pt, pc, mm, cm, in, Q, em, rem, %), with `var()`; `cm` and `in` units in plain lengths (#52).
 - SVG images — `<img src="logo.svg">`, SVG data URIs and inline `<svg>` — embedded as **vector** graphics via `svg2pdf` (gradients, paths, text) (#32).
 - HTML headers/footers: `position: running(name)` + `content: element(name)` in margin boxes (#28).
 - `@page { margin-top | margin-right | margin-bottom | margin-left }`.

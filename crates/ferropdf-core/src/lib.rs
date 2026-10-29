@@ -17,7 +17,7 @@ pub use dom::{Document, Node, NodeId, NodeType};
 pub use error::{FerroError, RenderWarning, Result};
 pub use geometry::{Insets, Point, Rect, Size};
 pub use layout::{InlineSpan, LayoutBox, LayoutTree, ShapedGlyph, ShapedLine, ShapedSegment};
-pub use length::Length;
+pub use length::{CalcLength, Length};
 pub use page::{Orientation, PageConfig, PageMargins, PageSize};
 pub use style::{
     AlignItems, AlignSelf, BorderCollapse, BorderRadius, BorderSide, BorderStyle,

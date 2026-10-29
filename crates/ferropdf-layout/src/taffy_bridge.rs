@@ -89,6 +89,33 @@ pub fn build_layout_from(
         )
         .map_err(|e| ferropdf_core::FerroError::Layout(format!("Taffy layout error: {:?}", e)))?;
 
+    // Mixed `calc(% ± length)` values were laid out with their percentage
+    // only: resolve them against the parent's actual content box and lay
+    // out again (a few rounds for calc() nested inside calc()-sized parents).
+    for _ in 0..3 {
+        if !resolve_calc_nodes(&mut taffy, &table_cell_parent.calc_nodes)? {
+            break;
+        }
+        taffy
+            .compute_layout_with_measure(
+                taffy_root,
+                Size {
+                    width: AvailableSpace::Definite(available_width),
+                    height: AvailableSpace::MaxContent,
+                },
+                |known_dimensions, available_space, _node_id, node_context, _style| {
+                    if let Some(ctx) = node_context {
+                        text::measure_text(ctx, known_dimensions, available_space, font_system)
+                    } else {
+                        Size::ZERO
+                    }
+                },
+            )
+            .map_err(|e| {
+                ferropdf_core::FerroError::Layout(format!("Taffy layout error: {:?}", e))
+            })?;
+    }
+
     // Read results from Taffy and build LayoutBox tree
     let layout_root = read_layout(
         doc,
@@ -217,6 +244,8 @@ fn build_taffy_tree_inner(
 
     // ── Element nodes: recurse into children ──
     let mut child_taffy_ids = Vec::new();
+    // Width available to the children (used to size tables before layout).
+    let child_available = content_width_estimate(&style, available_width);
 
     for &child_id in &node.children {
         build_taffy_tree_inner(
@@ -227,7 +256,7 @@ fn build_taffy_tree_inner(
             node_map,
             table_cell_parent,
             font_system,
-            available_width,
+            child_available,
             depth + 1,
         )?;
         if let Some(&tid) = node_map.get(&child_id) {
@@ -300,6 +329,9 @@ fn build_taffy_tree_inner(
         .new_with_children(taffy_style, &child_taffy_ids)
         .map_err(|e| ferropdf_core::FerroError::Layout(format!("Taffy node error: {:?}", e)))?;
 
+    if let Some(calc) = CalcFields::of(&style) {
+        table_cell_parent.calc_nodes.push((taffy_node, calc));
+    }
     node_map.insert(node_id, taffy_node);
     Ok(())
 }
@@ -658,6 +690,140 @@ pub(crate) struct BridgeState {
     pub anon_wrapper: HashMap<NodeId, taffy::NodeId>,
     /// Root of the subtree being laid out.
     pub layout_root: Option<NodeId>,
+    /// Nodes with mixed `calc()` values, resolved after a first layout.
+    pub calc_nodes: Vec<(taffy::NodeId, CalcFields)>,
+}
+
+/// The `calc(% ± length)` properties of one node (pt already resolved).
+#[derive(Debug, Clone, Default)]
+pub(crate) struct CalcFields {
+    width: Option<ferropdf_core::CalcLength>,
+    min_width: Option<ferropdf_core::CalcLength>,
+    max_width: Option<ferropdf_core::CalcLength>,
+    height: Option<ferropdf_core::CalcLength>,
+    min_height: Option<ferropdf_core::CalcLength>,
+    max_height: Option<ferropdf_core::CalcLength>,
+    margin: [Option<ferropdf_core::CalcLength>; 4],
+    padding: [Option<ferropdf_core::CalcLength>; 4],
+    /// Padding + border added to widths/heights for `box-sizing: content-box`.
+    content_box_extra: (f32, f32),
+}
+
+impl CalcFields {
+    fn of(style: &ferropdf_core::ComputedStyle) -> Option<Self> {
+        let c = |l: &Length| match l {
+            Length::Calc(c) => Some(*c),
+            _ => None,
+        };
+        let f = CalcFields {
+            width: c(&style.width),
+            min_width: c(&style.min_width),
+            max_width: c(&style.max_width),
+            height: c(&style.height),
+            min_height: c(&style.min_height),
+            max_height: c(&style.max_height),
+            margin: style.margin.each_ref().map(c),
+            padding: style.padding.each_ref().map(c),
+            content_box_extra: if style.box_sizing == ferropdf_core::BoxSizing::ContentBox {
+                let pt = |l: &Length| if let Length::Pt(v) = l { *v } else { 0.0 };
+                (
+                    pt(&style.padding[1])
+                        + pt(&style.padding[3])
+                        + style.border_left.width
+                        + style.border_right.width,
+                    pt(&style.padding[0])
+                        + pt(&style.padding[2])
+                        + style.border_top.width
+                        + style.border_bottom.width,
+                )
+            } else {
+                (0.0, 0.0)
+            },
+        };
+        let any = [
+            f.width,
+            f.min_width,
+            f.max_width,
+            f.height,
+            f.min_height,
+            f.max_height,
+        ]
+        .iter()
+        .chain(f.margin.iter())
+        .chain(f.padding.iter())
+        .any(Option::is_some);
+        any.then_some(f)
+    }
+}
+
+/// Set every recorded calc() property to its value against the parent's
+/// current content box. Returns whether any style changed.
+fn resolve_calc_nodes(
+    taffy: &mut TaffyTree<TextContext>,
+    nodes: &[(taffy::NodeId, CalcFields)],
+) -> ferropdf_core::Result<bool> {
+    let err = |e: taffy::TaffyError| {
+        ferropdf_core::FerroError::Layout(format!("Taffy calc error: {:?}", e))
+    };
+    let mut changed = false;
+    for (node, f) in nodes {
+        let Some(parent) = taffy.parent(*node) else {
+            continue;
+        };
+        let pl = *taffy.layout(parent).map_err(err)?;
+        let cw =
+            (pl.size.width - pl.padding.left - pl.padding.right - pl.border.left - pl.border.right)
+                .max(0.0);
+        let ch = (pl.size.height
+            - pl.padding.top
+            - pl.padding.bottom
+            - pl.border.top
+            - pl.border.bottom)
+            .max(0.0);
+        let mut st = taffy.style(*node).map_err(err)?.clone();
+        let before = st.clone();
+        let dim =
+            |c: &Option<ferropdf_core::CalcLength>, basis: f32, extra: f32, d: &mut Dimension| {
+                if let Some(c) = c {
+                    *d = Dimension::Length((c.against(basis) + extra).max(0.0));
+                }
+            };
+        let (ew, eh) = f.content_box_extra;
+        dim(&f.width, cw, ew, &mut st.size.width);
+        dim(&f.min_width, cw, ew, &mut st.min_size.width);
+        dim(&f.max_width, cw, ew, &mut st.max_size.width);
+        dim(&f.height, ch, eh, &mut st.size.height);
+        dim(&f.min_height, ch, eh, &mut st.min_size.height);
+        dim(&f.max_height, ch, eh, &mut st.max_size.height);
+        // Margins and paddings resolve against the containing block *width*.
+        let margins = [
+            &mut st.margin.top,
+            &mut st.margin.right,
+            &mut st.margin.bottom,
+            &mut st.margin.left,
+        ];
+        for (c, m) in f.margin.iter().zip(margins) {
+            if let Some(c) = c {
+                *m = LengthPercentageAuto::Length(c.against(cw));
+            }
+        }
+        let paddings = [
+            &mut st.padding.top,
+            &mut st.padding.right,
+            &mut st.padding.bottom,
+            &mut st.padding.left,
+        ];
+        for (c, p) in f.padding.iter().zip(paddings) {
+            if let Some(c) = c {
+                *p = LengthPercentage::Length(c.against(cw).max(0.0));
+            }
+        }
+        if st != before {
+            taffy.set_style(*node, st).map_err(err)?;
+            changed = true;
+        }
+    }
+    Ok(changed)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -798,4 +964,40 @@ fn size_inner_spaces(
         })?;
     }
     Ok(())
+}
+
+/// Best pre-layout estimate of a block's content width, from the width
+/// available to it: its own definite width, or the available width minus
+/// margins (negative ones widen it, like Bootstrap's `.row`), padding and
+/// borders. Flex/grid items and inline boxes keep the parent's estimate.
+fn content_width_estimate(style: &ComputedStyle, available: f32) -> f32 {
+    if !matches!(
+        style.display,
+        FDisplay::Block | FDisplay::ListItem | FDisplay::TableCell
+    ) {
+        return available;
+    }
+    let pt = |l: &Length, basis: f32| match l {
+        Length::Pt(v) | Length::Px(v) => *v,
+        Length::Percent(p) => basis * p / 100.0,
+        Length::Calc(c) => c.against(basis),
+        _ => 0.0,
+    };
+    let pad = pt(&style.padding[1], available) + pt(&style.padding[3], available);
+    let border = style.border_left.width + style.border_right.width;
+    let width = match style.width {
+        Length::Pt(_) | Length::Px(_) | Length::Percent(_) | Length::Calc(_) => {
+            let w = pt(&style.width, available);
+            if style.box_sizing == ferropdf_core::BoxSizing::BorderBox {
+                w - pad - border
+            } else {
+                w
+            }
+        }
+        _ => {
+            let margin = pt(&style.margin[1], available) + pt(&style.margin[3], available);
+            available - margin - pad - border
+        }
+    };
+    width.max(0.0)
 }
