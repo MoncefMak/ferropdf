@@ -259,7 +259,8 @@ every row is a test that renders a snippet and checks the PDF, and every ❌ row
 | Layout | `position: absolute` | ✅ Supported |
 | Layout | `float` (text beside a floated box) | ✅ Supported |
 | Layout | `float` left/right header + `clear` | ✅ Supported |
-| Layout | `overflow: hidden` | ❌ Not yet ([#36](https://github.com/MoncefMak/ferropdf/issues/36)) |
+| Layout | `overflow: hidden` | ✅ Supported |
+| Visual | `overflow: hidden` with `border-radius` (round clip) | ✅ Supported |
 | Layout | `box-sizing` (content-box default, border-box) | ✅ Supported |
 | Visual | Solid borders | ✅ Supported |
 | Visual | Dashed / dotted borders | ✅ Supported |

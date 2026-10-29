@@ -57,7 +57,11 @@ pub enum DrawOp {
     /// Restore graphics state
     Restore,
     /// Set clip rect
-    ClipRect { rect: Rect },
+    ClipRect {
+        rect: Rect,
+        /// Corner radii [top-left, top-right, bottom-right, bottom-left].
+        border_radius: [f32; 4],
+    },
     /// Set opacity
     SetOpacity(f32),
 }

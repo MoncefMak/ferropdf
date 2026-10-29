@@ -492,7 +492,18 @@ def chk_float_header_and_clear():
 
 def chk_overflow_hidden():
     d = Doc(wrap('<div style="width:60px;height:14px;overflow:hidden">' + "clip " * 40 + "</div>"))
-    assert len(d.words()) < 10
+    pix = d.doc[0].get_pixmap(dpi=72)
+    # Below the 14px (10.5pt) box nothing is painted.
+    assert all(pix.pixel(x, 57 + 20) == (255, 255, 255) for x in range(57, 105))
+
+
+def chk_overflow_rounded_clip():
+    d = Doc(wrap('<div style="width:60px;height:60px;border-radius:30px;overflow:hidden">'
+                 '<div style="width:200px;height:200px;background:#0f0"></div></div>'))
+    pix = d.doc[0].get_pixmap(dpi=72)
+    assert pix.pixel(57 + 22, 57 + 22) == (0, 255, 0), "centre painted"
+    assert pix.pixel(57 + 1, 57 + 1) == (255, 255, 255), "corner clipped by the radius"
+    assert pix.pixel(57 + 60, 57 + 22) == (255, 255, 255), "outside the box clipped"
 
 
 def chk_float():
@@ -626,7 +637,8 @@ FEATURES = [
     Feature("Layout", "`position: absolute`", chk_position_absolute),
     Feature("Layout", "`float` (text beside a floated box)", chk_float),
     Feature("Layout", "`float` left/right header + `clear`", chk_float_header_and_clear),
-    Feature("Layout", "`overflow: hidden`", chk_overflow_hidden, 36),
+    Feature("Layout", "`overflow: hidden`", chk_overflow_hidden),
+    Feature("Visual", "`overflow: hidden` with `border-radius` (round clip)", chk_overflow_rounded_clip),
     Feature("Layout", "`box-sizing` (content-box default, border-box)", chk_box_sizing),
     Feature("Visual", "Solid borders", chk_border_solid),
     Feature("Visual", "Dashed / dotted borders", chk_border_dashed),

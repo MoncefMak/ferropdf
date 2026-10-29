@@ -385,6 +385,10 @@ pub struct ComputedStyle {
     pub grid: GridProps,
     pub float: Float,
     pub clear: Clear,
+    /// `overflow-x` / `overflow-y` other than `visible`: content is clipped to
+    /// the padding box (in print, `auto` and `scroll` clip like `hidden`).
+    pub overflow_clip_x: bool,
+    pub overflow_clip_y: bool,
     pub direction: Direction,
     pub visibility: bool,
 
@@ -474,6 +478,8 @@ impl Default for ComputedStyle {
             grid: GridProps::default(),
             float: Float::None,
             clear: Clear::None,
+            overflow_clip_x: false,
+            overflow_clip_y: false,
             direction: Direction::Ltr,
             visibility: true,
             width: Length::Auto,

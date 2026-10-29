@@ -726,6 +726,22 @@ pub fn write_pdf(
                         content.set_parameters(Name(gs_name.as_bytes()));
                     }
                 }
+                DrawOp::ClipRect {
+                    rect,
+                    border_radius,
+                } => {
+                    let pr = to_pdf_rect(rect.x, rect.y, rect.width, rect.height, page_h);
+                    rounded_rect_path(
+                        &mut content,
+                        pr.x,
+                        pr.y,
+                        pr.width,
+                        pr.height,
+                        *border_radius,
+                    );
+                    content.clip_nonzero();
+                    content.end_path();
+                }
                 DrawOp::Save => {
                     content.save_state();
                 }
@@ -742,7 +758,6 @@ pub fn write_pdf(
                         content.restore_state();
                     }
                 }
-                _ => {}
             }
         }
 

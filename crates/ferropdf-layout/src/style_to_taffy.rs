@@ -133,6 +133,20 @@ pub fn convert(style: &ComputedStyle) -> taffy::Style {
         },
 
         aspect_ratio: style.aspect_ratio,
+        // Clipping boxes get a zero automatic minimum size in flex/grid
+        // (CSS Flexbox §4.5), so long content no longer stretches them.
+        overflow: taffy::Point {
+            x: if style.overflow_clip_x {
+                taffy::Overflow::Hidden
+            } else {
+                taffy::Overflow::Visible
+            },
+            y: if style.overflow_clip_y {
+                taffy::Overflow::Hidden
+            } else {
+                taffy::Overflow::Visible
+            },
+        },
         ..Default::default()
     };
     apply_grid(style, &mut out);

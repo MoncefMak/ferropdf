@@ -83,6 +83,44 @@ fn paint_box(
     // Borders
     paint_borders(layout_box, ops, rect);
 
+    // overflow: hidden — clip content and descendants to the padding box,
+    // following the inner border radius.
+    let clips = style.overflow_clip_x || style.overflow_clip_y;
+    if clips {
+        let b = &layout_box.border;
+        let pad = Rect::new(
+            rect.x + b.left,
+            rect.y + b.top,
+            (rect.width - b.left - b.right).max(0.0),
+            (rect.height - b.top - b.bottom).max(0.0),
+        );
+        // An axis that is not clipped extends far beyond the box.
+        const FAR: f32 = 100_000.0;
+        let (cx, cw) = if style.overflow_clip_x {
+            (pad.x, pad.width)
+        } else {
+            (pad.x - FAR, pad.width + 2.0 * FAR)
+        };
+        let (cy, ch) = if style.overflow_clip_y {
+            (pad.y, pad.height)
+        } else {
+            (pad.y - FAR, pad.height + 2.0 * FAR)
+        };
+        let r = style.border_radius.to_array();
+        let inner = [
+            (r[0] - b.left.max(b.top)).max(0.0),
+            (r[1] - b.right.max(b.top)).max(0.0),
+            (r[2] - b.right.max(b.bottom)).max(0.0),
+            (r[3] - b.left.max(b.bottom)).max(0.0),
+        ];
+        let both = style.overflow_clip_x && style.overflow_clip_y;
+        ops.push(DrawOp::Save);
+        ops.push(DrawOp::ClipRect {
+            rect: Rect::new(cx, cy, cw, ch),
+            border_radius: if both { inner } else { [0.0; 4] },
+        });
+    }
+
     // Merged inline text — render with per-segment styling
     if !layout_box.inline_spans.is_empty() && !layout_box.shaped_lines.is_empty() {
         let text_x = layout_box.content.x + eff_x;
@@ -260,6 +298,9 @@ fn paint_box(
         paint_box(child, ops, eff_x, eff_y, my_content_width, depth + 1);
     }
 
+    if clips {
+        ops.push(DrawOp::Restore);
+    }
     if has_opacity {
         ops.push(DrawOp::Restore);
     }
