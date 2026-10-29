@@ -19,18 +19,22 @@ pub struct TextContext {
 }
 
 // =============================================================================
-// FontDatabase — Wrapper around cosmic_text::FontSystem
+// FontDatabase — pool of cosmic_text::FontSystem sharing one font database
 // =============================================================================
-// cosmic_text::FontSystem is not Send → must be confined to the Rust thread
-// or protected by a Mutex for multi-thread access.
-// This wrapper provides measure() and get_layout_runs() methods used
-// by the Taffy callback and by pagination for line extraction.
+// System fonts are discovered once (the expensive part). Each render checks
+// out its own FontSystem from a pool, so renders on different threads never
+// wait for each other. A FontSystem into which a document loaded @font-face
+// data is dropped instead of being returned, so custom fonts never leak from
+// one document into the next.
 // =============================================================================
 
-/// Thread-safe wrapper around cosmic_text::FontSystem.
-/// Centralizes font access and typographic shaping.
+/// Thread-safe font database shared by all renders of an `Engine`.
 pub struct FontDatabase {
-    inner: Mutex<FontSystem>,
+    /// System fonts, loaded once. Cloning shares the font data (`Arc`).
+    base: fontdb::Database,
+    locale: String,
+    /// Idle font systems, ready to be checked out.
+    pool: Mutex<Vec<FontSystem>>,
 }
 
 impl Default for FontDatabase {
@@ -42,15 +46,33 @@ impl Default for FontDatabase {
 impl FontDatabase {
     /// Create a new FontDatabase with system fonts loaded.
     pub fn new() -> Self {
+        let first = FontSystem::new();
+        let base = first.db().clone();
+        let locale = first.locale().to_string();
         Self {
-            inner: Mutex::new(FontSystem::new()),
+            base,
+            locale,
+            pool: Mutex::new(vec![first]),
         }
     }
 
-    /// Load custom font data (TTF/OTF bytes) into the font database.
-    pub fn load_font_data(&self, data: Vec<u8>) {
-        let mut fs = self.inner.lock().unwrap();
-        fs.db_mut().load_font_data(data);
+    /// Check out a font system for one render. It goes back to the pool when
+    /// the session is dropped (unless custom fonts were loaded into it).
+    pub fn session(&self) -> FontSession<'_> {
+        let pooled = self.pool.lock().unwrap_or_else(|e| e.into_inner()).pop();
+        let fs = pooled.unwrap_or_else(|| {
+            FontSystem::new_with_locale_and_db(self.locale.clone(), self.base.clone())
+        });
+        FontSession {
+            owner: self,
+            fs: Some(fs),
+            tainted: false,
+        }
+    }
+
+    /// Number of idle font systems (for tests and diagnostics).
+    pub fn idle_count(&self) -> usize {
+        self.pool.lock().unwrap_or_else(|e| e.into_inner()).len()
     }
 
     /// Measure a text block with wrapping at the given width.
@@ -66,10 +88,11 @@ impl FontDatabase {
         italic: bool,
         max_width: Option<f32>,
     ) -> (f32, f32) {
-        let mut fs = self.inner.lock().unwrap();
+        let mut session = self.session();
+        let fs = session.font_system();
         let metrics = Metrics::new(font_size, line_height);
-        let mut buffer = Buffer::new(&mut fs, metrics);
-        buffer.set_size(&mut fs, max_width, None);
+        let mut buffer = Buffer::new(fs, metrics);
+        buffer.set_size(fs, max_width, None);
 
         let family = if font_family.is_empty() {
             Family::SansSerif
@@ -85,8 +108,8 @@ impl FontDatabase {
             attrs = attrs.style(cosmic_text::Style::Italic);
         }
 
-        buffer.set_text(&mut fs, text, attrs, Shaping::Advanced);
-        buffer.shape_until_scroll(&mut fs, false);
+        buffer.set_text(fs, text, attrs, Shaping::Advanced);
+        buffer.shape_until_scroll(fs, false);
 
         let mut w: f32 = 0.0;
         let mut h: f32 = 0.0;
@@ -99,30 +122,49 @@ impl FontDatabase {
         }
         (w.ceil(), h.ceil())
     }
-
-    /// Access the internal FontSystem (needed for Taffy calls
-    /// that require &mut FontSystem directly).
-    pub fn font_system_mut(&self) -> std::sync::MutexGuard<'_, FontSystem> {
-        self.inner.lock().unwrap()
-    }
-
-    /// Access the internal cosmic-text fontdb::Database (read-only).
-    /// Allows reusing the same font database for PDF writing.
-    pub fn fontdb(&self) -> FontDbGuard<'_> {
-        FontDbGuard {
-            guard: self.inner.lock().unwrap(),
-        }
-    }
 }
 
-/// RAII guard that provides read access to the inner fontdb::Database.
-pub struct FontDbGuard<'a> {
-    guard: std::sync::MutexGuard<'a, FontSystem>,
+/// A font system checked out of a [`FontDatabase`] for the duration of one render.
+pub struct FontSession<'a> {
+    owner: &'a FontDatabase,
+    fs: Option<FontSystem>,
+    tainted: bool,
 }
 
-impl<'a> FontDbGuard<'a> {
+impl FontSession<'_> {
+    /// The font system for shaping and layout.
+    pub fn font_system(&mut self) -> &mut FontSystem {
+        self.fs.as_mut().expect("font system present until drop")
+    }
+
+    /// The font database (system fonts + any @font-face loaded in this session).
     pub fn db(&self) -> &fontdb::Database {
-        self.guard.db()
+        self.fs
+            .as_ref()
+            .expect("font system present until drop")
+            .db()
+    }
+
+    /// Load document-specific font data (`@font-face`). The font is visible
+    /// to this session only; the font system is discarded afterwards.
+    pub fn load_font_data(&mut self, data: Vec<u8>) {
+        self.tainted = true;
+        self.font_system().db_mut().load_font_data(data);
+    }
+}
+
+impl Drop for FontSession<'_> {
+    fn drop(&mut self) {
+        if self.tainted {
+            return;
+        }
+        if let Some(fs) = self.fs.take() {
+            self.owner
+                .pool
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .push(fs);
+        }
     }
 }
 
@@ -440,4 +482,47 @@ pub fn shape_rich_text_lines(
     }
 
     lines
+}
+
+#[cfg(test)]
+mod pool_tests {
+    use super::FontDatabase;
+
+    #[test]
+    fn sessions_are_pooled_and_reused() {
+        let db = FontDatabase::new();
+        assert_eq!(db.idle_count(), 1);
+        {
+            let _a = db.session();
+            let _b = db.session(); // pool empty → a second system is created
+            assert_eq!(db.idle_count(), 0);
+        }
+        assert_eq!(db.idle_count(), 2, "both systems go back to the pool");
+    }
+
+    #[test]
+    fn font_face_sessions_are_discarded() {
+        let db = FontDatabase::new();
+        {
+            let mut s = db.session();
+            s.load_font_data(Vec::new()); // even an invalid font taints the session
+        }
+        assert_eq!(
+            db.idle_count(),
+            0,
+            "a session with @font-face data must not be reused"
+        );
+        let s = db.session();
+        assert_eq!(
+            s.db().len(),
+            db.base.len(),
+            "fresh systems only see system fonts"
+        );
+    }
+
+    #[test]
+    fn font_database_is_send_and_sync() {
+        fn assert_send_sync<T: Send + Sync>() {}
+        assert_send_sync::<FontDatabase>();
+    }
 }

@@ -15,7 +15,7 @@
 
 ## Why ferropdf?
 
-A native Rust HTML-to-PDF engine exposed as a Python package via PyO3. Releases the GIL during render so it composes cleanly with FastAPI, Django async views, and threadpools. The font cache lives on the `Engine` instance — the first render bootstraps system fonts, subsequent ones are fast.
+A native Rust HTML-to-PDF engine exposed as a Python package via PyO3. Releases the GIL during render so it composes cleanly with FastAPI, Django async views, and threadpools. System fonts are discovered once per process and shared by every `Engine` and by `from_html()`; each render checks out its own font system from a pool, so threads sharing an `Engine` render in parallel.
 
 | Feature | ferropdf | WeasyPrint |
 |---|---|---|
@@ -69,7 +69,7 @@ from ferropdf import Engine, Options
 
 engine = Engine(Options(page_size="A4", margin="20mm"))
 
-# Font database is cached — subsequent renders are faster
+# System fonts are loaded once per process — later renders are fast
 pdf1 = engine.render("<h1>Invoice #1</h1>")
 pdf2 = engine.render("<h1>Invoice #2</h1>")
 ```
@@ -263,7 +263,7 @@ Python bindings are via [PyO3](https://pyo3.rs) + [maturin](https://www.maturin.
 
 ## Performance
 
-The `Engine` class amortizes font scan cost across renders — first render bootstraps the system font cache (~100 ms), subsequent renders complete in single-digit to low-double-digit milliseconds for typical invoice/report-sized documents. PDFs stay small because only used glyphs are embedded.
+System fonts are scanned once per process — the first render bootstraps the font cache (~100 ms, with the GIL released), subsequent renders (from any `Engine`, any thread) complete in single-digit to low-double-digit milliseconds for typical invoice/report-sized documents. PDFs stay small because only used glyphs are embedded. `@font-face` fonts are private to the document that declares them.
 
 [`bench/engines.py`](bench/engines.py) benchmarks ferropdf, WeasyPrint, PlutoPrint and Chromium (Playwright) on the
 [template corpus](tests/corpus/) — warm and cold render time, peak memory, threaded throughput and install

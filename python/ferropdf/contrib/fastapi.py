@@ -10,7 +10,9 @@ async def pdf_response(
 ) -> Response:
     """
     Retourne une Response FastAPI avec le PDF.
-    Non-bloquant : le GIL est libéré côté Rust.
+    Non-bloquant : le rendu tourne dans le thread pool par défaut avec le GIL
+    libéré côté Rust. Les polices système sont chargées une seule fois par
+    processus, donc créer un Engine par requête ne coûte rien.
 
     Usage :
         @router.get("/invoice/{id}/pdf")
@@ -19,7 +21,7 @@ async def pdf_response(
             return await pdf_response(html, filename=f"invoice-{id}.pdf")
     """
     engine = ferropdf.Engine(options or ferropdf.Options())
-    loop   = asyncio.get_event_loop()
+    loop   = asyncio.get_running_loop()
     pdf    = await loop.run_in_executor(None, engine.render, html)
     d      = "inline" if inline else "attachment"
     return Response(

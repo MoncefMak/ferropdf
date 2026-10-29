@@ -1,6 +1,18 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyList, PyTuple};
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
+
+/// System fonts are discovered once per process and shared by every `Engine`
+/// and by the one-shot functions (`from_html`, `from_file`, `write_pdf`).
+/// Each render checks out its own font system from the pool inside, so
+/// sharing does not serialise threads, and `@font-face` stays per document.
+static SHARED_FONTS: OnceLock<Arc<ferropdf_render::FontDatabase>> = OnceLock::new();
+
+fn shared_fonts() -> Arc<ferropdf_render::FontDatabase> {
+    SHARED_FONTS
+        .get_or_init(|| Arc::new(ferropdf_render::FontDatabase::new()))
+        .clone()
+}
 
 pyo3::create_exception!(ferropdf, FerroError, pyo3::exceptions::PyRuntimeError);
 pyo3::create_exception!(ferropdf, ParseError, FerroError);
@@ -87,7 +99,6 @@ fn warnings_to_strings(ws: &[ferropdf_core::RenderWarning]) -> Vec<String> {
 #[pyclass(name = "Engine")]
 pub struct PyEngine {
     options: PyOptions,
-    font_db: OnceLock<ferropdf_render::FontDatabase>,
 }
 
 #[pymethods]
@@ -97,7 +108,6 @@ impl PyEngine {
     fn new(options: Option<PyOptions>) -> Self {
         Self {
             options: options.unwrap_or_else(default_options),
-            font_db: OnceLock::new(),
         }
     }
 
@@ -137,10 +147,11 @@ impl PyEngine {
         let html = html.to_string();
         let opts = self.options.clone();
 
-        let font_db = self.font_db.get_or_init(ferropdf_render::FontDatabase::new);
-
-        let result =
-            py.detach(move || ferropdf_render::render_with_warnings(&html, &opts.into(), font_db));
+        // The first call loads system fonts (~100 ms): do it with the GIL released too.
+        let result = py.detach(move || {
+            let font_db = shared_fonts();
+            ferropdf_render::render_with_warnings(&html, &opts.into(), &font_db)
+        });
 
         match result {
             Ok(r) => Ok((r.pdf_bytes, warnings_to_strings(&r.warnings))),
