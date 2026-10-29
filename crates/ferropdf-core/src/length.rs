@@ -17,6 +17,46 @@ pub enum Length {
     Auto,
     Zero,
     None,
+    /// `calc()` reduced to a linear combination (see [`CalcLength`]).
+    Calc(CalcLength),
+}
+
+/// A `calc()` value as `percent% + pt + em·font-size + rem·root-font-size`.
+/// Every valid `calc()` of lengths and percentages reduces to this form.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct CalcLength {
+    pub percent: f32,
+    pub pt: f32,
+    pub em: f32,
+    pub rem: f32,
+}
+
+impl CalcLength {
+    /// The simplest `Length` for this value (`Pt`, `Percent` or `Calc`).
+    pub fn simplify(self) -> Length {
+        let has_rel = self.em != 0.0 || self.rem != 0.0;
+        match (self.percent != 0.0, self.pt != 0.0 || has_rel) {
+            (false, false) => Length::Zero,
+            (false, true) if !has_rel => Length::Pt(self.pt),
+            (true, false) => Length::Percent(self.percent),
+            _ => Length::Calc(self),
+        }
+    }
+
+    /// Resolve `em` / `rem` into `pt`.
+    pub fn resolve_font_relative(self, font_size_pt: f32, root_font_size_pt: f32) -> Self {
+        Self {
+            percent: self.percent,
+            pt: self.pt + self.em * font_size_pt + self.rem * root_font_size_pt,
+            em: 0.0,
+            rem: 0.0,
+        }
+    }
+
+    /// Value in pt against a percentage basis (in pt).
+    pub fn against(self, basis_pt: f32) -> f32 {
+        self.percent / 100.0 * basis_pt + self.pt
+    }
 }
 
 impl Length {
@@ -49,6 +89,10 @@ impl Length {
             Length::Percent(_) => None,
             Length::Auto => None,
             Length::None => None,
+            Length::Calc(c) if c.percent == 0.0 => {
+                Some(c.resolve_font_relative(font_size_pt, root_font_size_pt).pt)
+            }
+            Length::Calc(_) => None,
         }
     }
 }

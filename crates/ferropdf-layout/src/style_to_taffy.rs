@@ -254,6 +254,9 @@ fn length_to_dim(l: &Length) -> Dimension {
         Length::Pt(v) => Dimension::Length(*v), // pt is the internal unit
         Length::Px(v) => Dimension::Length(*v * 0.75), // fallback: shouldn't appear after resolution
         Length::Percent(v) => Dimension::Percent(v / 100.0),
+        // Mixed calc(): provisional percentage, fixed by the second layout
+        // pass in taffy_bridge (Taffy 0.5 has no calc()).
+        Length::Calc(c) => Dimension::Percent(c.percent / 100.0),
         Length::Auto => Dimension::Auto,
         Length::Zero => Dimension::Length(0.0),
         Length::None => Dimension::Auto,
@@ -269,6 +272,7 @@ fn lp(l: &Length) -> LengthPercentage {
         Length::Pt(v) => LengthPercentage::Length(*v),
         Length::Px(v) => LengthPercentage::Length(*v * 0.75),
         Length::Percent(v) => LengthPercentage::Percent(v / 100.0),
+        Length::Calc(c) => LengthPercentage::Percent(c.percent / 100.0),
         Length::Zero => LengthPercentage::Length(0.0),
         _ => LengthPercentage::Length(0.0),
     }
@@ -279,6 +283,7 @@ fn lpa(l: &Length) -> LengthPercentageAuto {
         Length::Pt(v) => LengthPercentageAuto::Length(*v),
         Length::Px(v) => LengthPercentageAuto::Length(*v * 0.75),
         Length::Percent(v) => LengthPercentageAuto::Percent(v / 100.0),
+        Length::Calc(c) => LengthPercentageAuto::Percent(c.percent / 100.0),
         Length::Auto => LengthPercentageAuto::Auto,
         Length::Zero => LengthPercentageAuto::Length(0.0),
         _ => LengthPercentageAuto::Auto,

@@ -226,7 +226,8 @@ every row is a test that renders a snippet and checks the PDF, and every ❌ row
 | Fragmentation | Multi-row `<thead>` repeated without overlap | ✅ Supported |
 | Fragmentation | `<tfoot>` repeated at the bottom of each page | ✅ Supported |
 | Cascade | Custom properties `var()` | ✅ Supported |
-| Cascade | `calc()` | ❌ Not yet ([#52](https://github.com/MoncefMak/ferropdf/issues/52)) |
+| Cascade | `calc()` | ✅ Supported |
+| Cascade | `calc()` mixing `%` and lengths, with `var()` | ✅ Supported |
 | Cascade | `::before` / `::after` with literal `content` | ✅ Supported |
 | Cascade | Author CSS overrides tag defaults (`a`, `b`, `span`) | ✅ Supported |
 | Cascade | CSS counters in `content` | ❌ Not yet ([#31](https://github.com/MoncefMak/ferropdf/issues/31)) |

@@ -250,6 +250,12 @@ def chk_calc():
     assert any(abs(w - 150) < 1 for w in widths)  # 200px = 150pt
 
 
+def chk_calc_mixed():
+    d = Doc(wrap('<div style="--g:20px;width:calc(100% - 2 * var(--g));height:10px;background:#f00"></div>'))
+    widths = [dr["rect"].width for dr in d.drawings() if dr.get("fill")]
+    assert any(abs(w - (d.page_width() - 2 * 56.69 - 30)) < 1 for w in widths), widths
+
+
 def chk_before_after_literal():
     d = Doc(wrap('<p class="x">mid</p>', '.x::before{content:"BEFORE"}.x::after{content:"AFTER"}'))
     assert "BEFOREmidAFTER" in d.text().replace(" ", "")
@@ -550,7 +556,8 @@ FEATURES = [
     Feature("Fragmentation", "Multi-row `<thead>` repeated without overlap", chk_multi_row_thead),
     Feature("Fragmentation", "`<tfoot>` repeated at the bottom of each page", chk_tfoot_repeat),
     Feature("Cascade", "Custom properties `var()`", chk_custom_properties),
-    Feature("Cascade", "`calc()`", chk_calc, 52),
+    Feature("Cascade", "`calc()`", chk_calc),
+    Feature("Cascade", "`calc()` mixing `%` and lengths, with `var()`", chk_calc_mixed),
     Feature("Cascade", "`::before` / `::after` with literal `content`", chk_before_after_literal),
     Feature("Cascade", "Author CSS overrides tag defaults (`a`, `b`, `span`)", chk_author_overrides_tag_defaults),
     Feature("Cascade", "CSS counters in `content`", chk_css_counters, 31),

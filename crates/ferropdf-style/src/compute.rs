@@ -40,6 +40,8 @@ pub fn resolve_units(
     for m in &mut style.margin {
         if let Some(pt) = m.to_pt(font_size, root_font_size) {
             *m = Length::Pt(pt);
+        } else {
+            resolve_length_em_rem(m, font_size, root_font_size);
         }
     }
 
@@ -47,7 +49,17 @@ pub fn resolve_units(
     for p in &mut style.padding {
         if let Some(pt) = p.to_pt(font_size, root_font_size) {
             *p = Length::Pt(pt);
+        } else {
+            resolve_length_em_rem(p, font_size, root_font_size);
         }
+    }
+    for inset in [
+        &mut style.top,
+        &mut style.right,
+        &mut style.bottom,
+        &mut style.left,
+    ] {
+        resolve_length_em_rem(inset, font_size, root_font_size);
     }
 
     // Resolve dimensions (only em/rem, keep percent/auto for Taffy)
@@ -77,6 +89,11 @@ fn resolve_length_em_rem(length: &mut Length, font_size: f32, root_font_size: f3
         Length::Rem(v) => *length = Length::Pt(*v * root_font_size),
         Length::Px(v) => *length = Length::Pt(*v * 0.75), // 1px = 72/96 pt
         Length::Mm(v) => *length = Length::Pt(*v * 2.834_646),
+        Length::Calc(c) => {
+            *length = c
+                .resolve_font_relative(font_size, root_font_size)
+                .simplify()
+        }
         _ => {} // Pt, Percent, Auto, Zero, None — keep as is
     }
 }
