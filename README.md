@@ -176,6 +176,19 @@ Running headers and footers use standard CSS Paged Media margin boxes:
 @page :left  { @bottom-left { content: counter(page, lower-roman) } }
 ```
 
+For a header with HTML — a logo next to an address — take an element out of the flow with
+`position: running(name)` and place it with `content: element(name)`:
+
+```html
+<style>
+  .page-header { position: running(pageHeader); display: flex; justify-content: space-between }
+  @page { margin-top: 30mm; @top-center { content: element(pageHeader) } }
+</style>
+<div class="page-header"><img src="logo.png" height="24"> <span>12 rue des Lilas, Paris</span></div>
+```
+
+The running element is laid out at the content width and shown on every page.
+
 Supported boxes: `@top-left`, `@top-center`, `@top-right`, `@bottom-left`, `@bottom-center`,
 `@bottom-right`; `content` accepts strings, `counter(page)` and `counter(pages)` with
 `decimal`, `decimal-leading-zero`, `lower-/upper-roman` and `lower-/upper-alpha` styles; the
@@ -198,9 +211,11 @@ every row is a test that renders a snippet and checks the PDF, and every ❌ row
 | Page | `@page` size | ✅ Supported |
 | Page | `@page` size with `landscape` | ✅ Supported |
 | Page | `@page` margin | ✅ Supported |
+| Page | `@page` margin shorthand (2–4 values) | ✅ Supported |
 | Page | `Options(page_size=...)` | ✅ Supported |
 | Page | `@page` margin boxes (headers / footers) | ✅ Supported |
 | Page | `counter(page)` / `counter(pages)` | ✅ Supported |
+| Page | HTML headers/footers: `position: running()` + `element()` | ✅ Supported |
 | Page | `@page :first / :left / :right` margin boxes | ✅ Supported |
 | Fragmentation | Automatic pagination of many blocks | ✅ Supported |
 | Fragmentation | `page-break-before: always` (legacy) | ✅ Supported |
@@ -232,6 +247,7 @@ every row is a test that renders a snippet and checks the PDF, and every ❌ row
 | Text | Lists (disc, decimal, roman) | ✅ Supported |
 | Layout | Flexbox row | ✅ Supported |
 | Layout | `justify-content: space-between` | ✅ Supported |
+| Layout | Inline elements as flex items | ✅ Supported |
 | Layout | CSS grid columns | ❌ Not yet ([#18](https://github.com/MoncefMak/ferropdf/issues/18)) |
 | Layout | `inline-block` shrink-to-fit next to text | ✅ Supported |
 | Layout | `inline-block` padding around its label | ✅ Supported |
@@ -250,6 +266,8 @@ every row is a test that renders a snippet and checks the PDF, and every ❌ row
 | Visual | Gradients | ❌ Not yet ([#37](https://github.com/MoncefMak/ferropdf/issues/37)) |
 | Visual | `transform` | ❌ Not yet ([#38](https://github.com/MoncefMak/ferropdf/issues/38)) |
 | Images | PNG / JPEG `<img>` | ✅ Supported |
+| Images | `<img width height>` attributes | ✅ Supported |
+| Images | Intrinsic image size and aspect ratio | ✅ Supported |
 | Images | SVG `<img>` | ❌ Not yet ([#32](https://github.com/MoncefMak/ferropdf/issues/32)) |
 | Images | Inline `<svg>` | ❌ Not yet ([#32](https://github.com/MoncefMak/ferropdf/issues/32)) |
 | PDF | Title / author metadata | ✅ Supported |

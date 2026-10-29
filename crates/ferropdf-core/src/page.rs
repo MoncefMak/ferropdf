@@ -154,14 +154,43 @@ impl PageMargins {
             left: v,
         }
     }
+    /// Parse the `margin` shorthand: 1 to 4 lengths (top right bottom left,
+    /// CSS order). Invalid input falls back to 20mm on every side.
     pub fn from_css_str(s: &str) -> Self {
-        let v = parse_css_length_to_pt(s).unwrap_or(56.69); // 20mm par défaut
-        Self::uniform_pt(v)
+        let vals: Option<Vec<f32>> = s.split_whitespace().map(parse_css_length_to_pt).collect();
+        let [top, right, bottom, left] = match vals.as_deref() {
+            Some([a]) => [*a, *a, *a, *a],
+            Some([v, h]) => [*v, *h, *v, *h],
+            Some([t, h, b]) => [*t, *h, *b, *h],
+            Some([t, r, b, l]) => [*t, *r, *b, *l],
+            _ => [56.69; 4], // 20mm par défaut
+        };
+        Self {
+            top,
+            right,
+            bottom,
+            left,
+        }
+    }
+
+    /// Apply a single side (`margin-top: 3cm`); invalid values are ignored.
+    pub fn set_side(&mut self, side: usize, value: &str) {
+        if let Some(v) = parse_css_length_to_pt(value) {
+            match side {
+                0 => self.top = v,
+                1 => self.right = v,
+                2 => self.bottom = v,
+                _ => self.left = v,
+            }
+        }
     }
 }
 
 fn parse_css_length_to_pt(s: &str) -> Option<f32> {
     let s = s.trim();
+    if s == "0" {
+        return Some(0.0);
+    }
     if let Some(v) = s.strip_suffix("mm") {
         v.trim().parse::<f32>().ok().map(|v| v * MM_TO_PT)
     } else if let Some(v) = s.strip_suffix("cm") {
@@ -246,5 +275,33 @@ mod orientation_tests {
         assert_eq!(dims("297mm 210mm portrait"), (595, 842));
         assert_eq!(dims("10cm"), (283, 283));
         assert_eq!(dims("auto"), (595, 842));
+    }
+}
+
+#[cfg(test)]
+mod margin_tests {
+    use super::*;
+
+    fn mm(m: &PageMargins) -> [i32; 4] {
+        [m.top, m.right, m.bottom, m.left].map(|v| (v / MM_TO_PT).round() as i32)
+    }
+
+    #[test]
+    fn margin_shorthand() {
+        assert_eq!(mm(&PageMargins::from_css_str("15mm")), [15, 15, 15, 15]);
+        assert_eq!(
+            mm(&PageMargins::from_css_str("10mm 20mm")),
+            [10, 20, 10, 20]
+        );
+        assert_eq!(
+            mm(&PageMargins::from_css_str("30mm 18mm 20mm")),
+            [30, 18, 20, 18]
+        );
+        assert_eq!(
+            mm(&PageMargins::from_css_str("1cm 2cm 3cm 4cm")),
+            [10, 20, 30, 40]
+        );
+        assert_eq!(mm(&PageMargins::from_css_str("0")), [0, 0, 0, 0]);
+        assert_eq!(mm(&PageMargins::from_css_str("bogus")), [20, 20, 20, 20]);
     }
 }

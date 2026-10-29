@@ -197,6 +197,23 @@ def chk_multi_row_thead():
     assert len(rows) == len(set(rows)) == 100
 
 
+def chk_page_margin_shorthand():
+    d = Doc(wrap("<div>Start</div>", "@page{margin:40mm 10mm 20mm}"))
+    w = d.word("Start")
+    assert abs(w[0] - 28.3) < 2 and abs(w[1] - 113.4) < 4
+
+
+def chk_running_element():
+    css = ("@page{margin:30mm 20mm;@top-center{content:element(hdr)}}"
+           ".h{position:running(hdr);display:flex;justify-content:space-between}")
+    d = Doc(wrap('<div class="h"><span>LEFTH</span><span>RIGHTH</span></div>'
+                 '<p>a</p><p style="break-before:page">b</p>', css))
+    for i in range(2):
+        left, right = d.word("LEFTH", i), d.word("RIGHTH", i)
+        assert left[1] < 85 and right[2] > d.page_width() - 70
+    assert d.word("a")[1] > 80, "running element is out of the flow"
+
+
 def chk_margin_boxes():
     d = Doc(wrap("<p>body</p>", '@page{@bottom-center{content:"FOOTERTEXT"}}'))
     assert "FOOTERTEXT" in d.text(0)
@@ -326,6 +343,11 @@ def chk_flex_row():
     assert abs(left[1] - right[1]) < 1 and right[0] > left[2]
 
 
+def chk_flex_inline_items():
+    d = Doc(wrap('<div style="display:flex;justify-content:space-between"><span>LEFTI</span><span>RIGHTI</span></div>'))
+    assert d.word("RIGHTI")[2] > d.page_width() - 70, "spans in a flex container are separate items"
+
+
 def chk_flex_justify_between():
     d = Doc(wrap('<div style="display:flex;justify-content:space-between"><div>L</div><div>R</div></div>'))
     assert d.word("R")[2] > d.page_width() - 80
@@ -438,6 +460,24 @@ def chk_png_image():
     assert len(d.doc[0].get_images()) == 1
 
 
+def _img_boxes(html: str):
+    d = Doc(wrap(html))
+    return [tuple(round(v) for v in i["bbox"]) for i in d.doc[0].get_image_info()]
+
+
+def chk_img_size_attributes():
+    (x0, y0, x1, y1), = _img_boxes(f'<img src="{_png_data_uri(4, 4)}" width="80" height="40">')
+    assert (x1 - x0, y1 - y0) == (60, 30)  # 80×40 px
+
+
+def chk_img_intrinsic_size_and_ratio():
+    uri = _png_data_uri(40, 20)
+    (a, b, c, e), = _img_boxes(f'<img src="{uri}">')
+    assert (c - a, e - b) == (30, 15), "intrinsic 40×20 px"
+    (a, b, c, e), = _img_boxes(f'<img src="{uri}" width="80">')
+    assert (c - a, e - b) == (60, 30), "height from intrinsic ratio"
+
+
 def chk_svg_image():
     d = Doc(wrap(f'<img src="{SVG_URI}" width="40" height="40">'))
     assert len(d.doc[0].get_images()) == 1 or len(d.drawings()) >= 1
@@ -484,9 +524,11 @@ FEATURES = [
     Feature("Page", "`@page` size", chk_page_size),
     Feature("Page", "`@page` size with `landscape`", chk_page_landscape),
     Feature("Page", "`@page` margin", chk_page_margin),
+    Feature("Page", "`@page` margin shorthand (2–4 values)", chk_page_margin_shorthand),
     Feature("Page", "`Options(page_size=...)`", chk_options_page_size),
     Feature("Page", "`@page` margin boxes (headers / footers)", chk_margin_boxes),
     Feature("Page", "`counter(page)` / `counter(pages)`", chk_page_counters),
+    Feature("Page", "HTML headers/footers: `position: running()` + `element()`", chk_running_element),
     Feature("Page", "`@page :first / :left / :right` margin boxes", chk_page_selectors_margin_boxes),
     Feature("Fragmentation", "Automatic pagination of many blocks", chk_many_blocks_paginate),
     Feature("Fragmentation", "`page-break-before: always` (legacy)", chk_legacy_page_break),
@@ -518,6 +560,7 @@ FEATURES = [
     Feature("Text", "Lists (disc, decimal, roman)", chk_lists),
     Feature("Layout", "Flexbox row", chk_flex_row),
     Feature("Layout", "`justify-content: space-between`", chk_flex_justify_between),
+    Feature("Layout", "Inline elements as flex items", chk_flex_inline_items),
     Feature("Layout", "CSS grid columns", chk_grid_columns, 18),
     Feature("Layout", "`inline-block` shrink-to-fit next to text", chk_inline_block_shrink),
     Feature("Layout", "`inline-block` padding around its label", chk_inline_block_padding),
@@ -536,6 +579,8 @@ FEATURES = [
     Feature("Visual", "Gradients", chk_gradient, 37),
     Feature("Visual", "`transform`", chk_transform, 38),
     Feature("Images", "PNG / JPEG `<img>`", chk_png_image),
+    Feature("Images", "`<img width height>` attributes", chk_img_size_attributes),
+    Feature("Images", "Intrinsic image size and aspect ratio", chk_img_intrinsic_size_and_ratio),
     Feature("Images", "SVG `<img>`", chk_svg_image, 32),
     Feature("Images", "Inline `<svg>`", chk_inline_svg, 32),
     Feature("PDF", "Title / author metadata", chk_metadata),

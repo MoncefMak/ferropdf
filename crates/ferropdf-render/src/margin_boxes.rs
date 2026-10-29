@@ -10,6 +10,9 @@
 //!    `LayoutBox` in the page's content-area coordinates (negative `y` for
 //!    the top margin), so the normal painter draws it.
 //!
+//! `content: element(name)` places a running element (`position:
+//! running(name)`, laid out separately at the content width) in the box.
+//!
 //! Supported boxes: `top-left`, `top-center`, `top-right`, `bottom-left`,
 //! `bottom-center`, `bottom-right`. Each spans the content width, aligned
 //! left / centre / right (overridable with `text-align`), and is vertically
@@ -19,6 +22,7 @@ use cosmic_text::FontSystem;
 use ferropdf_core::layout::Page;
 use ferropdf_core::{ComputedStyle, LayoutBox, PageConfig, Rect, TextAlign};
 use ferropdf_parse::{CssProperty, Declaration, PageRule, PageSelector};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CounterStyle {
@@ -35,6 +39,8 @@ pub(crate) enum Part {
     Text(String),
     Page(CounterStyle),
     Pages(CounterStyle),
+    /// `element(name)`: a running element (`position: running(name)`).
+    Element(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -60,6 +66,7 @@ pub(crate) fn add_margin_boxes(
     rules: &[&PageRule],
     config: &PageConfig,
     root: &ComputedStyle,
+    running: &HashMap<String, LayoutBox>,
     fs: &mut FontSystem,
 ) {
     if rules.iter().all(|r| r.margin_boxes.is_empty()) {
@@ -96,6 +103,29 @@ pub(crate) fn add_margin_boxes(
             let Some(parts) = parse_content(&raw_content) else {
                 continue; // `content: none` / `normal`
             };
+            let (area_y, area_h) = match side {
+                Side::Top => (-config.margins.top, config.margins.top),
+                Side::Bottom => (content_h, config.margins.bottom),
+            };
+
+            // `element(name)`: place the pre-laid-out running element.
+            if let Some(element) = parts.iter().find_map(|p| match p {
+                Part::Element(name) => running.get(name),
+                _ => None,
+            }) {
+                let mut placed = element.clone();
+                let w = placed.rect.width.min(content_w);
+                let dx = match default_align {
+                    TextAlign::Center => (content_w - w) / 2.0,
+                    TextAlign::Right => content_w - w,
+                    _ => 0.0,
+                } - placed.rect.x;
+                let dy = area_y + ((area_h - placed.rect.height) / 2.0).max(0.0) - placed.rect.y;
+                translate(&mut placed, dx, dy);
+                page.content.push(placed);
+                continue;
+            }
+
             let text = render_parts(&parts, n, total);
             if text.trim().is_empty() {
                 continue;
@@ -108,10 +138,6 @@ pub(crate) fn add_margin_boxes(
             {
                 style.text_align = default_align;
             }
-            let (area_y, area_h) = match side {
-                Side::Top => (-config.margins.top, config.margins.top),
-                Side::Bottom => (content_h, config.margins.bottom),
-            };
             let family = style.font_family.first().map(|s| s.as_str()).unwrap_or("");
             let lines = ferropdf_layout::text::shape_text_lines(
                 &text,
@@ -143,6 +169,16 @@ pub(crate) fn add_margin_boxes(
     }
 }
 
+fn translate(b: &mut LayoutBox, dx: f32, dy: f32) {
+    b.rect.x += dx;
+    b.rect.y += dy;
+    b.content.x += dx;
+    b.content.y += dy;
+    for c in &mut b.children {
+        translate(c, dx, dy);
+    }
+}
+
 fn selector_matches(selector: PageSelector, page_number: u32) -> bool {
     match selector {
         PageSelector::All => true,
@@ -164,6 +200,7 @@ fn render_parts(parts: &[Part], page: u32, pages: u32) -> String {
             Part::Text(t) => t.clone(),
             Part::Page(style) => format_counter(page, *style),
             Part::Pages(style) => format_counter(pages, *style),
+            Part::Element(_) => String::new(),
         })
         .collect()
 }
@@ -234,7 +271,12 @@ pub(crate) fn parse_content(raw: &str) -> Option<Vec<Part>> {
                 }
                 let args: String = chars[args_start..i.min(chars.len())].iter().collect();
                 i += 1;
-                if ident == "counter" {
+                if ident == "element" {
+                    let name = args.split(',').next().unwrap_or("").trim();
+                    if !name.is_empty() {
+                        parts.push(Part::Element(name.to_string()));
+                    }
+                } else if ident == "counter" {
                     let mut it = args.split(',').map(|a| a.trim().to_ascii_lowercase());
                     let name = it.next().unwrap_or_default();
                     let style = counter_style(it.next().as_deref().unwrap_or("decimal"));
@@ -341,7 +383,7 @@ mod tests {
         assert_eq!(parse_content("none"), None);
         assert_eq!(
             parse_content(r#"string(title) "x" element(h)"#).unwrap(),
-            vec![Part::Text("x".into())]
+            vec![Part::Text("x".into()), Part::Element("h".into())]
         );
         assert_eq!(
             parse_content(r#"'it\'s'"#).unwrap(),

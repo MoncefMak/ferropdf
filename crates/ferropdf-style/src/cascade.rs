@@ -229,6 +229,12 @@ fn apply_single(
                 _ => Display::Block,
             };
         }
+        CssProperty::Position if raw.starts_with("running(") => {
+            let name = raw["running(".len()..].trim_end_matches(')').trim();
+            if !name.is_empty() {
+                style.running = Some(name.to_string());
+            }
+        }
         CssProperty::Position => {
             style.position = match raw {
                 "relative" => Position::Relative,

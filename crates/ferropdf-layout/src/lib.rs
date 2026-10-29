@@ -43,6 +43,23 @@ pub fn layout_with_fonts(
     )
 }
 
+/// Lay out one element on its own at `width` (used for running elements,
+/// `position: running(name)`, drawn in page margin boxes). Returns the box
+/// with its border box at the origin.
+pub fn layout_element(
+    document: &Document,
+    styles: &StyleTree,
+    node: ferropdf_core::NodeId,
+    width: f32,
+    font_system: &mut cosmic_text::FontSystem,
+) -> ferropdf_core::Result<Option<LayoutBox>> {
+    let mut tree = taffy_bridge::build_layout_from(document, styles, font_system, node, width)?;
+    if let Some(ref mut root) = tree.root {
+        populate_shaped_lines(root, font_system);
+    }
+    Ok(tree.root)
+}
+
 /// Layout with an already checked-out font system (see [`FontDatabase::session`]).
 pub fn layout_with_font_system(
     document: &Document,
@@ -159,6 +176,11 @@ fn should_merge_inline_children(lb: &LayoutBox) -> bool {
         return false;
     }
     if lb.children.is_empty() {
+        return false;
+    }
+    // Children of a flex or grid container are blockified items laid out by
+    // Taffy: never merge them into one paragraph.
+    if matches!(lb.style.display, Display::Flex | Display::Grid) {
         return false;
     }
     // All children must be inline-mergeable

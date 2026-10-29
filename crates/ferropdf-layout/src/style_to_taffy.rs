@@ -131,6 +131,7 @@ pub fn convert(style: &ComputedStyle) -> taffy::Style {
             height: lp(&style.row_gap),
         },
 
+        aspect_ratio: style.aspect_ratio,
         ..Default::default()
     };
     if style.box_sizing == ferropdf_core::BoxSizing::ContentBox
