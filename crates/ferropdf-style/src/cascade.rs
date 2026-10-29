@@ -416,6 +416,12 @@ fn apply_single(
                 _ => ferropdf_core::style::TextDecoration::None,
             };
         }
+        CssProperty::BoxSizing => {
+            style.box_sizing = match raw {
+                "border-box" => BoxSizing::BorderBox,
+                _ => BoxSizing::ContentBox,
+            };
+        }
         CssProperty::WhiteSpace => {
             style.white_space = match raw {
                 "nowrap" => WhiteSpace::Nowrap,

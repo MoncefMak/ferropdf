@@ -18,9 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `from_html()`, `from_file()`, `write_pdf()` and the Django/FastAPI helpers reloaded system fonts on every call (#54).
 - `@font-face` fonts leaked from one document into later renders of the same engine.
 - Tag defaults (`<a>` underline, `<b>` bold, `<span>` inline…) overrode author CSS: `span { display: inline-block }`, `a { text-decoration: none }` had no effect.
+- `border-radius` is painted (backgrounds, uniform borders, shadows), radii clamped so `9999px` pills work (#49).
+- `dashed`, `dotted` and `double` borders (#19).
+- Outer `box-shadow` was also painted under the box, showing through transparent backgrounds.
 - `inline-block` elements: padding ignored around their label, full width after a block sibling, spaces next to them dropped (#17).
 
 ### Changed
+- **`box-sizing` is now implemented and defaults to `content-box`, like browsers** (the UA sheet used to declare `* { box-sizing: border-box }`, and the property itself was ignored). Documents that relied on the old behaviour should add `* { box-sizing: border-box }` (#50).
 - System fonts are loaded once per process and shared by all engines; each render uses a pooled font system.
 - PyO3 0.24 → 0.29 (RUSTSEC-2026-0176, RUSTSEC-2026-0177).
 

@@ -83,6 +83,14 @@ pub enum TextAlign {
     Justify,
 }
 
+/// CSS `box-sizing`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum BoxSizing {
+    #[default]
+    ContentBox,
+    BorderBox,
+}
+
 /// CSS `white-space` (CSS Text 3 §3).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum WhiteSpace {
@@ -369,6 +377,7 @@ pub struct ComputedStyle {
     pub text_decoration: TextDecoration,
     pub letter_spacing: f32,
     pub white_space: WhiteSpace,
+    pub box_sizing: BoxSizing,
 
     // Flexbox
     pub flex_direction: FlexDirection,
@@ -442,6 +451,7 @@ impl Default for ComputedStyle {
             text_decoration: TextDecoration::None,
             letter_spacing: 0.0,
             white_space: WhiteSpace::Normal,
+            box_sizing: BoxSizing::ContentBox,
             flex_direction: FlexDirection::Row,
             flex_wrap: FlexWrap::NoWrap,
             justify_content: JustifyContent::FlexStart,
