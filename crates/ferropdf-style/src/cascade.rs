@@ -461,7 +461,7 @@ fn apply_single(
         CssProperty::JustifyContent => {
             style.justify_content = match raw {
                 "center" => JustifyContent::Center,
-                "flex-end" => JustifyContent::FlexEnd,
+                "flex-end" | "end" | "right" => JustifyContent::FlexEnd,
                 "space-between" => JustifyContent::SpaceBetween,
                 "space-around" => JustifyContent::SpaceAround,
                 "space-evenly" => JustifyContent::SpaceEvenly,
@@ -471,8 +471,8 @@ fn apply_single(
         CssProperty::AlignItems => {
             style.align_items = match raw {
                 "center" => AlignItems::Center,
-                "flex-start" => AlignItems::FlexStart,
-                "flex-end" => AlignItems::FlexEnd,
+                "flex-start" | "start" | "self-start" => AlignItems::FlexStart,
+                "flex-end" | "end" | "self-end" => AlignItems::FlexEnd,
                 "baseline" => AlignItems::Baseline,
                 _ => AlignItems::Stretch,
             };
@@ -480,8 +480,8 @@ fn apply_single(
         CssProperty::AlignSelf => {
             style.align_self = match raw {
                 "center" => AlignSelf::Center,
-                "flex-start" => AlignSelf::FlexStart,
-                "flex-end" => AlignSelf::FlexEnd,
+                "flex-start" | "start" | "self-start" => AlignSelf::FlexStart,
+                "flex-end" | "end" | "self-end" => AlignSelf::FlexEnd,
                 "stretch" => AlignSelf::Stretch,
                 "baseline" => AlignSelf::Baseline,
                 _ => AlignSelf::Auto,
@@ -511,9 +511,11 @@ fn apply_single(
         }
         CssProperty::FlexBasis => style.flex_basis = parse_length(raw),
         CssProperty::Gap => {
-            let l = parse_length(raw);
-            style.column_gap = l;
-            style.row_gap = l;
+            // `gap: <row> [<column>]`
+            let parts = parse_shorthand_lengths(raw);
+            let row = parts.first().copied().unwrap_or(Length::Zero);
+            style.row_gap = row;
+            style.column_gap = parts.get(1).copied().unwrap_or(row);
         }
         CssProperty::ColumnGap => style.column_gap = parse_length(raw),
         CssProperty::RowGap => style.row_gap = parse_length(raw),
@@ -554,6 +556,7 @@ fn apply_single(
                 style.widows = v;
             }
         }
+        CssProperty::Unknown(ref name) if apply_grid_property(style, name, raw) => {}
         CssProperty::Unknown(ref name) if name == "box-decoration-break" => {
             style.box_decoration_break = match raw {
                 "clone" => ferropdf_core::BoxDecorationBreak::Clone,
@@ -634,6 +637,74 @@ fn parse_length(s: &str) -> Length {
     }
 
     Length::Auto
+}
+
+/// Grid properties (stored raw, converted by the layout crate). Returns
+/// whether `name` was a grid property.
+fn apply_grid_property(style: &mut ComputedStyle, name: &str, raw: &str) -> bool {
+    let g = &mut style.grid;
+    let v = || Some(raw.trim().to_string());
+    let pair = |s: &str| -> (Option<String>, Option<String>) {
+        let mut it = s.splitn(2, '/').map(|p| p.trim().to_string());
+        (it.next(), it.next())
+    };
+    match name {
+        "grid-template-columns" => g.template_columns = v(),
+        "grid-template-rows" => g.template_rows = v(),
+        "grid-auto-columns" => g.auto_columns = v(),
+        "grid-auto-rows" => g.auto_rows = v(),
+        "grid-auto-flow" => g.auto_flow = v(),
+        "grid-column-start" => g.column_start = v(),
+        "grid-column-end" => g.column_end = v(),
+        "grid-row-start" => g.row_start = v(),
+        "grid-row-end" => g.row_end = v(),
+        "grid-column" => (g.column_start, g.column_end) = pair(raw),
+        "grid-row" => (g.row_start, g.row_end) = pair(raw),
+        "grid-area" => {
+            let parts: Vec<String> = raw.split('/').map(|p| p.trim().to_string()).collect();
+            g.row_start = parts.first().cloned();
+            g.column_start = parts.get(1).cloned();
+            g.row_end = parts.get(2).cloned();
+            g.column_end = parts.get(3).cloned();
+        }
+        "justify-items" => g.justify_items = v(),
+        "justify-self" => g.justify_self = v(),
+        "place-items" | "place-self" => {
+            let mut it = raw.split_whitespace();
+            let align = it.next().unwrap_or("").to_string();
+            let justify = it
+                .next()
+                .map(str::to_string)
+                .unwrap_or_else(|| align.clone());
+            if name == "place-items" {
+                apply_single(
+                    style,
+                    &CssProperty::AlignItems,
+                    &CssValue::Keyword(align),
+                    12.0,
+                );
+                style.grid.justify_items = Some(justify);
+            } else {
+                apply_single(
+                    style,
+                    &CssProperty::AlignSelf,
+                    &CssValue::Keyword(align),
+                    12.0,
+                );
+                style.grid.justify_self = Some(justify);
+            }
+        }
+        // Legacy aliases of the gap properties.
+        "grid-gap" => {
+            let parts = parse_shorthand_lengths(raw);
+            style.row_gap = parts.first().copied().unwrap_or(Length::Zero);
+            style.column_gap = parts.get(1).copied().unwrap_or(style.row_gap);
+        }
+        "grid-row-gap" => style.row_gap = parse_length(raw),
+        "grid-column-gap" => style.column_gap = parse_length(raw),
+        _ => return false,
+    }
+    true
 }
 
 fn parse_shorthand_lengths(s: &str) -> Vec<Length> {

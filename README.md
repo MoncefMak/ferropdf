@@ -249,7 +249,10 @@ every row is a test that renders a snippet and checks the PDF, and every ❌ row
 | Layout | Flexbox row | ✅ Supported |
 | Layout | `justify-content: space-between` | ✅ Supported |
 | Layout | Inline elements as flex items | ✅ Supported |
-| Layout | CSS grid columns | ❌ Not yet ([#18](https://github.com/MoncefMak/ferropdf/issues/18)) |
+| Layout | CSS grid columns | ✅ Supported |
+| Layout | Grid placement (`span`, `grid-area`, row/column gaps) | ✅ Supported |
+| Layout | Grid `repeat(auto-fill, minmax())` | ✅ Supported |
+| Layout | White space between flex items ignored | ✅ Supported |
 | Layout | `inline-block` shrink-to-fit next to text | ✅ Supported |
 | Layout | `inline-block` padding around its label | ✅ Supported |
 | Layout | Tables with `colspan` | ✅ Supported |

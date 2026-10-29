@@ -39,7 +39,34 @@ pub fn render(html: &str, opts: &RenderOptions) -> ferropdf_core::Result<Vec<u8>
 }
 
 /// Render HTML to PDF with warnings, reusing a cached FontDatabase.
+///
+/// A panic anywhere in the pipeline (a bug in ferropdf or a dependency) is
+/// turned into an error instead of unwinding into the caller — in Python a
+/// Rust panic surfaces as `PanicException`, which `except Exception` does not
+/// catch and which can take down a web worker.
 pub fn render_with_warnings(
+    html: &str,
+    opts: &RenderOptions,
+    font_db: &FontDatabase,
+) -> ferropdf_core::Result<RenderResult> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        render_with_warnings_inner(html, opts, font_db)
+    })) {
+        Ok(result) => result,
+        Err(payload) => {
+            let msg = payload
+                .downcast_ref::<&str>()
+                .map(|s| s.to_string())
+                .or_else(|| payload.downcast_ref::<String>().cloned())
+                .unwrap_or_else(|| "unknown panic".to_string());
+            Err(ferropdf_core::FerroError::Layout(format!(
+                "internal error while rendering (please report it): {msg}"
+            )))
+        }
+    }
+}
+
+fn render_with_warnings_inner(
     html: &str,
     opts: &RenderOptions,
     font_db: &FontDatabase,
