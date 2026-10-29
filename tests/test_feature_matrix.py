@@ -186,6 +186,14 @@ def chk_page_counters():
     assert "P2of2" in d.text(1).replace(" ", "")
 
 
+def chk_page_selectors_margin_boxes():
+    css = ('@page{@top-center{content:"ALL"}} @page :first{@top-center{content:none}}'
+           '@page :left{@bottom-left{content:"EVEN" counter(page, upper-roman)}}')
+    d = Doc(wrap('<p>a</p><p style="break-before:page">b</p>', css))
+    assert "ALL" not in d.text(0) and "ALL" in d.text(1)
+    assert "EVEN" not in d.text(0) and "EVENII" in d.text(1).replace(" ", "")
+
+
 def chk_custom_properties():
     d = Doc(wrap('<div style="background:var(--c);height:20px"></div>', ":root{--c:#00ff00}"))
     assert any(dr.get("fill") and tuple(round(c, 2) for c in dr["fill"]) == (0, 1, 0) for dr in d.drawings())
@@ -451,8 +459,9 @@ FEATURES = [
     Feature("Page", "`@page` size with `landscape`", chk_page_landscape),
     Feature("Page", "`@page` margin", chk_page_margin),
     Feature("Page", "`Options(page_size=...)`", chk_options_page_size),
-    Feature("Page", "`@page` margin boxes (headers / footers)", chk_margin_boxes, 25),
-    Feature("Page", "`counter(page)` / `counter(pages)`", chk_page_counters, 26),
+    Feature("Page", "`@page` margin boxes (headers / footers)", chk_margin_boxes),
+    Feature("Page", "`counter(page)` / `counter(pages)`", chk_page_counters),
+    Feature("Page", "`@page :first / :left / :right` margin boxes", chk_page_selectors_margin_boxes),
     Feature("Fragmentation", "Automatic pagination of many blocks", chk_many_blocks_paginate),
     Feature("Fragmentation", "`page-break-before: always` (legacy)", chk_legacy_page_break),
     Feature("Fragmentation", "`break-before: page`", chk_break_before),

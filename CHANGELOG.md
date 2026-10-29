@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PyO3 0.24 → 0.29 (RUSTSEC-2026-0176, RUSTSEC-2026-0177).
 
 ### Added
+- `@page` margin boxes (`@top-left|center|right`, `@bottom-left|center|right`) with `counter(page)` / `counter(pages)` and counter styles (#25, #26).
+- `@page :first`, `:left`, `:right` selectors for margin boxes.
 - Template corpus, feature-matrix tests (README table generated from them), visual regression tests, multi-engine benchmark (`bench/engines.py`).
 
 ## [0.2.9] - 2026-04

@@ -161,6 +161,30 @@ async def invoice_pdf(id: int):
 
 ---
 
+## Headers, footers and page numbers
+
+Running headers and footers use standard CSS Paged Media margin boxes:
+
+```css
+@page {
+  size: A4;
+  margin: 22mm 18mm;
+  @top-right     { content: "Q3 2026 Business Review"; font-size: 8pt; color: #888 }
+  @bottom-center { content: "Page " counter(page) " of " counter(pages) }
+}
+@page :first { @top-right { content: none } }          /* no header on the cover */
+@page :left  { @bottom-left { content: counter(page, lower-roman) } }
+```
+
+Supported boxes: `@top-left`, `@top-center`, `@top-right`, `@bottom-left`, `@bottom-center`,
+`@bottom-right`; `content` accepts strings, `counter(page)` and `counter(pages)` with
+`decimal`, `decimal-leading-zero`, `lower-/upper-roman` and `lower-/upper-alpha` styles; the
+boxes take `font-*`, `color` and `text-align`, and inherit from the `<html>` element.
+`:first`, `:left` and `:right` select pages for margin boxes (page size and margins are
+document-wide).
+
+---
+
 ## CSS support
 
 ferropdf uses industry-standard libraries for parsing and layout — not a hand-rolled engine.
@@ -175,8 +199,9 @@ every row is a test that renders a snippet and checks the PDF, and every ❌ row
 | Page | `@page` size with `landscape` | ✅ Supported |
 | Page | `@page` margin | ✅ Supported |
 | Page | `Options(page_size=...)` | ✅ Supported |
-| Page | `@page` margin boxes (headers / footers) | ❌ Not yet ([#25](https://github.com/MoncefMak/ferropdf/issues/25)) |
-| Page | `counter(page)` / `counter(pages)` | ❌ Not yet ([#26](https://github.com/MoncefMak/ferropdf/issues/26)) |
+| Page | `@page` margin boxes (headers / footers) | ✅ Supported |
+| Page | `counter(page)` / `counter(pages)` | ✅ Supported |
+| Page | `@page :first / :left / :right` margin boxes | ✅ Supported |
 | Fragmentation | Automatic pagination of many blocks | ✅ Supported |
 | Fragmentation | `page-break-before: always` (legacy) | ✅ Supported |
 | Fragmentation | `break-before: page` | ✅ Supported |

@@ -2,7 +2,7 @@ mod parser;
 
 pub use parser::{
     parse_inline_declarations, parse_stylesheet, CssProperty, CssValue, Declaration, FontFaceRule,
-    PageRule, StyleRule, Stylesheet,
+    MarginBoxRule, PageRule, PageSelector, StyleRule, Stylesheet,
 };
 
 /// User-agent stylesheet embarqué
