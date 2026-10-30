@@ -70,6 +70,9 @@ pub enum DrawOp {
     },
     /// Set opacity
     SetOpacity(f32),
+    /// Concatenate an affine matrix `[a, b, c, d, e, f]` expressed in page
+    /// coordinates (top-left origin, y down) to the current transform.
+    Transform([f32; 6]),
 }
 
 /// A display list for one page.

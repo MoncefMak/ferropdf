@@ -31,7 +31,7 @@ pub(crate) fn split_top_level(s: &str, sep: impl Fn(char) -> bool) -> Vec<&str> 
     out
 }
 
-fn words(s: &str) -> Vec<&str> {
+pub(crate) fn words(s: &str) -> Vec<&str> {
     split_top_level(s, char::is_whitespace)
 }
 
@@ -139,7 +139,7 @@ fn parse_direction(s: &str) -> Option<GradientDirection> {
     None
 }
 
-fn parse_angle(s: &str) -> Option<f32> {
+pub(crate) fn parse_angle(s: &str) -> Option<f32> {
     let num = |suffix: &str| s.strip_suffix(suffix)?.parse::<f32>().ok();
     if let Some(v) = num("deg") {
         Some(v)
@@ -156,7 +156,7 @@ fn parse_angle(s: &str) -> Option<f32> {
     }
 }
 
-fn parse_length_pct(s: &str) -> Option<GradientLength> {
+pub(crate) fn parse_length_pct(s: &str) -> Option<GradientLength> {
     if let Some(p) = s.strip_suffix('%') {
         return p.trim().parse::<f32>().ok().map(GradientLength::Percent);
     }
@@ -269,7 +269,7 @@ fn parse_radial(args: &[&str], repeating: bool) -> Option<Gradient> {
 }
 
 /// `<position>` with one or two values (keywords, lengths, percentages).
-fn parse_position(w: &[&str]) -> Option<(GradientLength, GradientLength)> {
+pub(crate) fn parse_position(w: &[&str]) -> Option<(GradientLength, GradientLength)> {
     let kw = |t: &str| -> Option<(GradientLength, Option<bool>)> {
         // (value, Some(true) = horizontal-only, Some(false) = vertical-only)
         let p = GradientLength::Percent;

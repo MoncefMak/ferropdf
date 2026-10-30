@@ -416,6 +416,12 @@ pub struct ComputedStyle {
     pub background_color: Color,
     /// `background-image` gradient layers, first = topmost.
     pub background_gradients: Vec<crate::Gradient>,
+    /// `transform` function list (applied right to left).
+    pub transform: Vec<crate::TransformFunction>,
+    /// Individual `translate`, `rotate`, `scale` properties, in that order.
+    pub transform_individual: [Option<crate::TransformFunction>; 3],
+    /// `transform-origin`, relative to the border box.
+    pub transform_origin: (crate::GradientLength, crate::GradientLength),
     pub opacity: f32,
     pub box_shadow: Vec<BoxShadow>,
 
@@ -500,6 +506,12 @@ impl Default for ComputedStyle {
             color: Color::black(),
             background_color: Color::transparent(),
             background_gradients: Vec::new(),
+            transform: Vec::new(),
+            transform_individual: [None; 3],
+            transform_origin: (
+                crate::GradientLength::Percent(50.0),
+                crate::GradientLength::Percent(50.0),
+            ),
             opacity: 1.0,
             box_shadow: Vec::new(),
             font_family: vec!["sans-serif".to_string()],

@@ -509,9 +509,36 @@ def chk_gradient_alpha():
     assert pix.pixel(57 + 75, 57 + 28)[0] < 40, "opaque bottom"
 
 
+# The 200x40px test box spans x 57..207pt, y 57..87pt; its centre is (132, 72).
+RED = (255, 0, 0)
+WHITE = (255, 255, 255)
+
+
 def chk_transform():
-    d = Doc(wrap('<div style="margin:40px;width:100px;height:40px;background:#f00;transform:rotate(30deg)"></div>'))
-    assert any(not dr["rect"].is_empty and abs(dr["rect"].height - 30) > 5 for dr in d.drawings() if dr.get("fill"))
+    pix = _box_pixmap("background:#f00;transform:rotate(90deg)")
+    assert pix.pixel(132, 72 + 60) == RED, "now extends below the box"
+    assert pix.pixel(57 + 5, 72) == WHITE, "left end rotated away"
+
+
+def chk_transform_translate_percent():
+    pix = _box_pixmap("background:#f00;transform:translate(50%, 0)")
+    assert pix.pixel(57 + 5, 72) == WHITE and pix.pixel(207 + 70, 72) == RED
+
+
+def chk_transform_scale_origin():
+    pix = _box_pixmap("background:#f00;transform:scale(.5);transform-origin:top left")
+    assert pix.pixel(57 + 70, 57 + 5) == RED, "kept at the top-left origin"
+    assert pix.pixel(57 + 100, 57 + 5) == WHITE and pix.pixel(57 + 70, 57 + 22) == WHITE, "halved"
+
+
+def chk_transform_individual():
+    pix = _box_pixmap("background:#f00;rotate:90deg")
+    assert pix.pixel(132, 72 + 60) == RED and pix.pixel(57 + 5, 72) == WHITE
+
+
+def chk_transform_text():
+    d = Doc(wrap('<p style="transform:translateX(100px)">MOVED</p><p>STAY</p>'))
+    assert abs(d.word("MOVED")[0] - d.word("STAY")[0] - 75) < 1, "text follows the transform"
 
 
 def chk_float_header_and_clear():
@@ -684,7 +711,11 @@ FEATURES = [
     Feature("Visual", "Radial gradients", chk_radial_gradient),
     Feature("Visual", "Repeating gradients", chk_repeating_gradient),
     Feature("Visual", "Translucent gradient stops over `background-color`", chk_gradient_alpha),
-    Feature("Visual", "`transform`", chk_transform, 38),
+    Feature("Visual", "`transform: rotate()`", chk_transform),
+    Feature("Visual", "`transform: translate()` with percentages", chk_transform_translate_percent),
+    Feature("Visual", "`transform: scale()` with `transform-origin`", chk_transform_scale_origin),
+    Feature("Visual", "Individual `translate` / `rotate` / `scale` properties", chk_transform_individual),
+    Feature("Visual", "Transformed text stays selectable", chk_transform_text),
     Feature("Images", "PNG / JPEG `<img>`", chk_png_image),
     Feature("Images", "`<img width height>` attributes", chk_img_size_attributes),
     Feature("Images", "Intrinsic image size and aspect ratio", chk_img_intrinsic_size_and_ratio),

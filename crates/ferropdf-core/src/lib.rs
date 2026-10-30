@@ -7,6 +7,7 @@ pub mod layout;
 pub mod length;
 pub mod page;
 pub mod style;
+pub mod transform;
 
 /// Maximum DOM nesting depth before recursive functions bail out.
 /// Prevents stack overflow from maliciously deep HTML documents.
@@ -29,3 +30,4 @@ pub use style::{
     FlexDirection, FlexWrap, Float, FontStyle, FontWeight, GridProps, JustifyContent,
     ListStyleType, PageBreak, PageBreakInside, Position, TextAlign, TextDecoration, WhiteSpace,
 };
+pub use transform::{Matrix, TransformFunction};

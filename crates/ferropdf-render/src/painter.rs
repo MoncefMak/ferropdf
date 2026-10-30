@@ -43,13 +43,6 @@ fn paint_box(
         return;
     }
 
-    // Opacity: wrap entire box output in Save/SetOpacity/Restore
-    let has_opacity = style.opacity < 1.0 - f32::EPSILON;
-    if has_opacity {
-        ops.push(DrawOp::Save);
-        ops.push(DrawOp::SetOpacity(style.opacity));
-    }
-
     // Accumulate position:relative visual offset into effective offsets.
     // This shifts this box, its text, and all descendants.
     let eff_x = offset_x + layout_box.visual_offset_x;
@@ -59,6 +52,28 @@ fn paint_box(
     let x = border_box.x + eff_x;
     let y = border_box.y + eff_y;
     let rect = Rect::new(x, y, border_box.width, border_box.height);
+
+    // transform: wraps everything the box paints, descendants included.
+    // The origin is relative to the border box.
+    let matrix = ferropdf_core::transform::box_matrix(
+        &style.transform_individual,
+        &style.transform,
+        rect.width,
+        rect.height,
+        rect.x + style.transform_origin.0.resolve(rect.width),
+        rect.y + style.transform_origin.1.resolve(rect.height),
+    );
+    if let Some(m) = matrix {
+        ops.push(DrawOp::Save);
+        ops.push(DrawOp::Transform(m));
+    }
+
+    // Opacity: wrap entire box output in Save/SetOpacity/Restore
+    let has_opacity = style.opacity < 1.0 - f32::EPSILON;
+    if has_opacity {
+        ops.push(DrawOp::Save);
+        ops.push(DrawOp::SetOpacity(style.opacity));
+    }
 
     // Box shadows (rendered before background, behind the element)
     for shadow in &style.box_shadow {
@@ -323,6 +338,9 @@ fn paint_box(
         ops.push(DrawOp::Restore);
     }
     if has_opacity {
+        ops.push(DrawOp::Restore);
+    }
+    if matrix.is_some() {
         ops.push(DrawOp::Restore);
     }
 }

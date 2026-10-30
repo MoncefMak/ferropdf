@@ -273,7 +273,11 @@ every row is a test that renders a snippet and checks the PDF, and every ❌ row
 | Visual | Radial gradients | ✅ Supported |
 | Visual | Repeating gradients | ✅ Supported |
 | Visual | Translucent gradient stops over `background-color` | ✅ Supported |
-| Visual | `transform` | ❌ Not yet ([#38](https://github.com/MoncefMak/ferropdf/issues/38)) |
+| Visual | `transform: rotate()` | ✅ Supported |
+| Visual | `transform: translate()` with percentages | ✅ Supported |
+| Visual | `transform: scale()` with `transform-origin` | ✅ Supported |
+| Visual | Individual `translate` / `rotate` / `scale` properties | ✅ Supported |
+| Visual | Transformed text stays selectable | ✅ Supported |
 | Images | PNG / JPEG `<img>` | ✅ Supported |
 | Images | `<img width height>` attributes | ✅ Supported |
 | Images | Intrinsic image size and aspect ratio | ✅ Supported |
@@ -341,7 +345,7 @@ To compare *output quality* side by side, render the corpus with every engine:
 python tests/corpus/report.py /tmp/report && open /tmp/report/index.html
 ```
 
-ferropdf is significantly faster on simple-layout documents because its CSS surface is much smaller than WeasyPrint's. The gap narrows as you exercise CSS features ferropdf doesn't yet implement (transforms, advanced selectors). For honest comparisons, time **your** workload on **your** hardware.
+ferropdf is significantly faster on simple-layout documents because its CSS surface is much smaller than WeasyPrint's. The gap narrows as you exercise CSS features ferropdf doesn't yet implement (CSS counters, advanced selectors). For honest comparisons, time **your** workload on **your** hardware.
 
 ---
 
