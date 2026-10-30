@@ -46,6 +46,12 @@ pub enum DrawOp {
     },
     /// Draw an image
     DrawImage { src: String, rect: Rect },
+    /// Fill `rect` (rounded by `border_radius`) with a resolved gradient.
+    FillGradient {
+        rect: Rect,
+        border_radius: [f32; 4],
+        gradient: crate::gradient::ResolvedGradient,
+    },
     /// Draw a box shadow (approximated as offset semi-transparent filled rects)
     DrawBoxShadow {
         rect: Rect,

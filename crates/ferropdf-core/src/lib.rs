@@ -2,6 +2,7 @@ pub mod color;
 pub mod dom;
 pub mod error;
 pub mod geometry;
+pub mod gradient;
 pub mod layout;
 pub mod length;
 pub mod page;
@@ -16,6 +17,9 @@ pub use color::Color;
 pub use dom::{Document, Node, NodeId, NodeType};
 pub use error::{FerroError, RenderWarning, Result};
 pub use geometry::{Insets, Point, Rect, Size};
+pub use gradient::{
+    ColorStop, Gradient, GradientDirection, GradientLength, RadialShape, RadialSize,
+};
 pub use layout::{InlineSpan, LayoutBox, LayoutTree, ShapedGlyph, ShapedLine, ShapedSegment};
 pub use length::{CalcLength, Length};
 pub use page::{Orientation, PageConfig, PageMargins, PageSize};

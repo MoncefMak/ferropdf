@@ -471,9 +471,42 @@ def chk_opacity():
     assert b"/ca" in d.pdf or b"/CA" in d.pdf
 
 
+def _box_pixmap(style: str):
+    """A 200x40px box at (57pt, 57pt) rendered at 72 dpi (1px = 1pt)."""
+    d = Doc(wrap(f'<div style="width:200px;height:40px;{style}"></div>'))
+    return d.doc[0].get_pixmap(dpi=72)
+
+
+def _near(px, rgb, tol=40):
+    return all(abs(a - b) <= tol for a, b in zip(px, rgb))
+
+
 def chk_gradient():
-    d = Doc(wrap('<div style="height:40px;background:linear-gradient(to right,#f00,#00f)"></div>'))
-    assert b"/Shading" in d.pdf or len(d.drawings()) > 0
+    pix = _box_pixmap("background:linear-gradient(to right,#f00,#00f)")
+    assert _near(pix.pixel(57 + 2, 57 + 15), (255, 0, 0)), "starts red"
+    assert _near(pix.pixel(57 + 148, 57 + 15), (0, 0, 255)), "ends blue"
+    assert _near(pix.pixel(57 + 75, 57 + 15), (128, 0, 128)), "purple halfway"
+    pix = _box_pixmap("background:linear-gradient(0deg,#000,#fff)")
+    assert pix.pixel(57 + 75, 57 + 28)[0] < 40 and pix.pixel(57 + 75, 57 + 2)[0] > 215, "0deg points up"
+
+
+def chk_radial_gradient():
+    pix = _box_pixmap("background:radial-gradient(circle closest-side,#0f0,#fff)")
+    assert _near(pix.pixel(57 + 75, 57 + 15), (0, 255, 0)), "centre colour"
+    assert pix.pixel(57 + 2, 57 + 2) == (255, 255, 255), "last colour outside the circle"
+
+
+def chk_repeating_gradient():
+    pix = _box_pixmap("background:repeating-linear-gradient(to right,#000 0 10px,#fff 10px 20px)")
+    # 10px = 7.5pt per band: black, white, black, white.
+    row = [pix.pixel(57 + x, 57 + 15)[0] for x in (3, 11, 18, 26)]
+    assert row[0] < 60 and row[1] > 200 and row[2] < 60 and row[3] > 200, row
+
+
+def chk_gradient_alpha():
+    pix = _box_pixmap("background:#f00 linear-gradient(to bottom,transparent,#000)")
+    assert _near(pix.pixel(57 + 75, 57 + 1), (255, 0, 0)), "transparent top shows the colour"
+    assert pix.pixel(57 + 75, 57 + 28)[0] < 40, "opaque bottom"
 
 
 def chk_transform():
@@ -647,7 +680,10 @@ FEATURES = [
     Feature("Visual", "`box-shadow`", chk_box_shadow),
     Feature("Visual", "`box-shadow` not painted under the box", chk_box_shadow_outside_only),
     Feature("Visual", "`opacity`", chk_opacity),
-    Feature("Visual", "Gradients", chk_gradient, 37),
+    Feature("Visual", "Linear gradients (angles, `to <side>` / `to <corner>`)", chk_gradient),
+    Feature("Visual", "Radial gradients", chk_radial_gradient),
+    Feature("Visual", "Repeating gradients", chk_repeating_gradient),
+    Feature("Visual", "Translucent gradient stops over `background-color`", chk_gradient_alpha),
     Feature("Visual", "`transform`", chk_transform, 38),
     Feature("Images", "PNG / JPEG `<img>`", chk_png_image),
     Feature("Images", "`<img width height>` attributes", chk_img_size_attributes),

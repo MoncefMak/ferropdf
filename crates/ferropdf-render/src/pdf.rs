@@ -316,6 +316,27 @@ pub fn write_pdf(
         }
     }
 
+    // ── Gradients: shadings (and alpha soft masks), per page in op order ──
+    let mut page_gradients: Vec<Vec<crate::gradient::GradientResources>> = Vec::new();
+    let mut gradient_index = 0usize;
+    for display_list in pages {
+        let mut list = Vec::new();
+        for op in &display_list.ops {
+            if let DrawOp::FillGradient { rect, gradient, .. } = op {
+                list.push(crate::gradient::write_gradient(
+                    &mut pdf,
+                    &mut next_ref,
+                    gradient,
+                    *rect,
+                    gradient_index,
+                    page_h,
+                ));
+                gradient_index += 1;
+            }
+        }
+        page_gradients.push(list);
+    }
+
     // Write catalog
     pdf.catalog(catalog_ref).pages(page_tree_ref);
 
@@ -352,12 +373,24 @@ pub fn write_pdf(
             }
             xobjects.finish();
         }
-        if !opacity_states.is_empty() {
+        let gradients = &page_gradients[i];
+        let has_masks = gradients.iter().any(|g| g.mask_state.is_some());
+        if !opacity_states.is_empty() || has_masks {
             let mut ext_g_states = resources.ext_g_states();
             for (gs_ref, gs_name) in opacity_states.values() {
                 ext_g_states.pair(Name(gs_name.as_bytes()), *gs_ref);
             }
+            for (gs_name, gs_ref) in gradients.iter().filter_map(|g| g.mask_state.as_ref()) {
+                ext_g_states.pair(Name(gs_name.as_bytes()), *gs_ref);
+            }
             ext_g_states.finish();
+        }
+        if !gradients.is_empty() {
+            let mut shadings = resources.shadings();
+            for g in gradients {
+                shadings.pair(Name(g.shading_name.as_bytes()), g.shading_ref);
+            }
+            shadings.finish();
         }
         resources.finish();
 
@@ -366,6 +399,7 @@ pub fn write_pdf(
 
         // Content stream
         let mut content = Content::new();
+        let mut next_gradient = gradients.iter();
 
         for op in &display_list.ops {
             match op {
@@ -391,6 +425,32 @@ pub fn write_pdf(
                     content.fill_nonzero();
                 }
                 DrawOp::FillRect { .. } => {}
+                DrawOp::FillGradient {
+                    rect,
+                    border_radius,
+                    gradient,
+                } => {
+                    let Some(res) = next_gradient.next() else {
+                        continue;
+                    };
+                    content.save_state();
+                    if let Some((gs_name, _)) = &res.mask_state {
+                        content.set_parameters(Name(gs_name.as_bytes()));
+                    }
+                    let pr = to_pdf_rect(rect.x, rect.y, rect.width, rect.height, page_h);
+                    rounded_rect_path(
+                        &mut content,
+                        pr.x,
+                        pr.y,
+                        pr.width,
+                        pr.height,
+                        *border_radius,
+                    );
+                    content.clip_nonzero();
+                    content.end_path();
+                    crate::gradient::paint_gradient(&mut content, res, gradient, page_h);
+                    content.restore_state();
+                }
                 DrawOp::StrokeRoundedRect {
                     rect,
                     color,

@@ -1,6 +1,7 @@
 pub mod calc;
 mod cascade;
 mod compute;
+mod gradient;
 mod inherit;
 pub mod matching;
 pub mod pseudo_elements;
