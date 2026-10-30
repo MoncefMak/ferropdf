@@ -330,9 +330,21 @@ fn apply_single(
                 style.color = c;
             }
         }
-        CssProperty::BackgroundColor | CssProperty::Background => {
+        CssProperty::BackgroundColor => {
             if let Some(c) = parse_color(raw) {
                 style.background_color = c;
+            }
+        }
+        CssProperty::Background => {
+            // The shorthand resets the colour and the image layers.
+            if let Some(bg) = crate::gradient::parse_background(raw) {
+                style.background_color = bg.color;
+                style.background_gradients = bg.gradients;
+            }
+        }
+        CssProperty::Unknown(ref name) if name == "background-image" => {
+            if let Some(g) = crate::gradient::parse_background_image(raw) {
+                style.background_gradients = g;
             }
         }
         CssProperty::Opacity => {
@@ -769,7 +781,7 @@ fn split_top_level(s: &str) -> Vec<&str> {
 
 /// Parse a CSS length string directly to pt (points typographiques).
 /// Used for properties stored as f32 (border widths, border-radius, etc.)
-fn parse_length_to_pt(s: &str) -> Option<f32> {
+pub(crate) fn parse_length_to_pt(s: &str) -> Option<f32> {
     let s = s.trim();
     if s == "0" || s == "0px" {
         return Some(0.0);
@@ -794,7 +806,7 @@ fn parse_length_to_pt(s: &str) -> Option<f32> {
     s.parse::<f32>().ok().map(|v| v * 0.75)
 }
 
-fn parse_color(s: &str) -> Option<Color> {
+pub(crate) fn parse_color(s: &str) -> Option<Color> {
     let s = s.trim();
     match s {
         "transparent" => Some(Color::transparent()),

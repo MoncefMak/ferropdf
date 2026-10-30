@@ -414,6 +414,8 @@ pub struct ComputedStyle {
     // Colors and background
     pub color: Color,
     pub background_color: Color,
+    /// `background-image` gradient layers, first = topmost.
+    pub background_gradients: Vec<crate::Gradient>,
     pub opacity: f32,
     pub box_shadow: Vec<BoxShadow>,
 
@@ -497,6 +499,7 @@ impl Default for ComputedStyle {
             border_radius: BorderRadius::default(),
             color: Color::black(),
             background_color: Color::transparent(),
+            background_gradients: Vec::new(),
             opacity: 1.0,
             box_shadow: Vec::new(),
             font_family: vec!["sans-serif".to_string()],

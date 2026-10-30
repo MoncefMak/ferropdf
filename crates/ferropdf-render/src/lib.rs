@@ -1,5 +1,6 @@
 mod display_list;
 mod font_subsetter;
+mod gradient;
 mod images;
 mod margin_boxes;
 mod painter;

@@ -80,6 +80,27 @@ fn paint_box(
         });
     }
 
+    // Gradient layers, bottom-most first. They are sized to the padding box
+    // (background-origin) and painted over the border box (background-clip).
+    if !style.background_gradients.is_empty() {
+        let b = &layout_box.border;
+        let pad = Rect::new(
+            rect.x + b.left,
+            rect.y + b.top,
+            (rect.width - b.left - b.right).max(0.0),
+            (rect.height - b.top - b.bottom).max(0.0),
+        );
+        for g in style.background_gradients.iter().rev() {
+            if let Some(gradient) = crate::gradient::resolve(g, pad) {
+                ops.push(DrawOp::FillGradient {
+                    rect,
+                    border_radius: style.border_radius.to_array(),
+                    gradient,
+                });
+            }
+        }
+    }
+
     // Borders
     paint_borders(layout_box, ops, rect);
 
