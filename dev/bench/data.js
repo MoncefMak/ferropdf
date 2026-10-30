@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793284963363,
+  "lastUpdate": 1793371137546,
   "repoUrl": "https://github.com/MoncefMak/ferropdf",
   "entries": {
     "FastPDF Criterion Benchmarks": [
@@ -2407,6 +2407,54 @@ window.BENCHMARK_DATA = {
             "name": "render_invoice_cached",
             "value": 2217216,
             "range": "± 69395",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "72460183+MoncefMak@users.noreply.github.com",
+            "name": "MoncefMak",
+            "username": "MoncefMak"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b2318c6d4ace723b310e8f6b672f08562cc0e0e7",
+          "message": "Merge pull request #73 from MoncefMak/feat/gradients\n\nLinear and radial gradients (native PDF shadings)",
+          "timestamp": "2026-10-30T15:36:16+01:00",
+          "tree_id": "8a51f2bcd08c8d4b1d38393975bf99e54fe07441",
+          "url": "https://github.com/MoncefMak/ferropdf/commit/b2318c6d4ace723b310e8f6b672f08562cc0e0e7"
+        },
+        "date": 1793371137212,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "render_simple",
+            "value": 6705372,
+            "range": "± 352419",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice",
+            "value": 7651946,
+            "range": "± 301008",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_simple_cached",
+            "value": 3173000,
+            "range": "± 80406",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice_cached",
+            "value": 4118943,
+            "range": "± 14167",
             "unit": "ns/iter"
           }
         ]
