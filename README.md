@@ -245,6 +245,9 @@ every row is a test that renders a snippet and checks the PDF, and every ❌ row
 | Text | `text-transform` | ❌ Not yet ([#34](https://github.com/MoncefMak/ferropdf/issues/34)) |
 | Text | `text-indent` | ❌ Not yet ([#34](https://github.com/MoncefMak/ferropdf/issues/34)) |
 | Text | Arabic shaping + RTL alignment | ✅ Supported |
+| Layout | `direction: rtl` mirrors flex rows | ✅ Supported |
+| Layout | `direction: rtl` mirrors table / grid columns | ✅ Supported |
+| Text | `text-align: start` follows `direction` | ✅ Supported |
 | Text | Lists (disc, decimal, roman) | ✅ Supported |
 | Layout | Flexbox row | ✅ Supported |
 | Layout | `justify-content: space-between` | ✅ Supported |

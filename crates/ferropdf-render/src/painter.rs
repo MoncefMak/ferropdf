@@ -276,7 +276,7 @@ fn paint_box(
                     font_family: style.font_family.clone(),
                     bold: style.font_weight.is_bold(),
                     italic: style.font_style == ferropdf_core::FontStyle::Italic,
-                    text_align: style.text_align,
+                    text_align: style.text_align.physical(style.direction),
                     container_width: layout_box.content.width,
                     shaped_glyphs: Vec::new(),
                 });

@@ -618,6 +618,23 @@ def chk_rtl_arabic():
     assert d.text() != "" and d.words()[0][0] > d.page_width() / 2
 
 
+def chk_rtl_flex_mirrored():
+    d = Doc(wrap('<div dir="rtl" style="display:flex;gap:10px"><span>FIRST</span><span>SECOND</span></div>'))
+    first, second = d.word("FIRST"), d.word("SECOND")
+    assert first[0] > second[0], "first item on the right"
+    assert first[2] > d.page_width() - 70, "packed against the right edge"
+
+
+def chk_rtl_table_mirrored():
+    d = Doc(wrap('<table dir="rtl" style="width:100%"><tr><td>CELLA</td><td>CELLB</td></tr></table>'))
+    assert d.word("CELLA")[0] > d.word("CELLB")[0], "first column on the right"
+
+
+def chk_text_align_start_rtl():
+    d = Doc(wrap('<div dir="rtl"><p>LATIN</p></div>'))
+    assert d.word("LATIN")[2] > d.page_width() - 70, "start = right in RTL, even for Latin text"
+
+
 def chk_links():
     d = Doc(wrap('<a href="https://example.com">link</a>'))
     assert any(l.get("uri") == "https://example.com" for l in d.doc[0].get_links())
@@ -683,6 +700,9 @@ FEATURES = [
     Feature("Text", "`text-transform`", chk_text_transform, 34),
     Feature("Text", "`text-indent`", chk_text_indent, 34),
     Feature("Text", "Arabic shaping + RTL alignment", chk_rtl_arabic, needs_fonts=True),
+    Feature("Layout", "`direction: rtl` mirrors flex rows", chk_rtl_flex_mirrored),
+    Feature("Layout", "`direction: rtl` mirrors table / grid columns", chk_rtl_table_mirrored),
+    Feature("Text", "`text-align: start` follows `direction`", chk_text_align_start_rtl),
     Feature("Text", "Lists (disc, decimal, roman)", chk_lists),
     Feature("Layout", "Flexbox row", chk_flex_row),
     Feature("Layout", "`justify-content: space-between`", chk_flex_justify_between),

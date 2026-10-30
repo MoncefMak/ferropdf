@@ -341,7 +341,7 @@ fn build_taffy_tree_inner(
             taffy_style.flex_direction = taffy::FlexDirection::Row;
             taffy_style.flex_wrap = taffy::FlexWrap::Wrap;
             // text-align on parent maps to justify-content for inline-block children
-            taffy_style.justify_content = Some(match style.text_align {
+            taffy_style.justify_content = Some(match style.text_align.physical(style.direction) {
                 ferropdf_core::TextAlign::Center => taffy::JustifyContent::Center,
                 ferropdf_core::TextAlign::Right => taffy::JustifyContent::FlexEnd,
                 _ => taffy::JustifyContent::FlexStart,
@@ -358,6 +358,15 @@ fn build_taffy_tree_inner(
     }
     node_map.insert(node_id, taffy_node);
     Ok(())
+}
+
+/// Move a laid-out box and its descendants horizontally by `dx`.
+fn translate_box(b: &mut LayoutBox, dx: f32) {
+    b.rect.x += dx;
+    b.content.x += dx;
+    for c in &mut b.children {
+        translate_box(c, dx);
+    }
 }
 
 /// Build a `<table>` element as a CSS Grid in Taffy.
@@ -555,7 +564,14 @@ fn read_layout(
                         x,
                         y,
                     )?;
-                    child_box.table_cell_pos = Some((row_idx, col_idx, total_rows, total_cols));
+                    // Right to left, the first column is the rightmost one:
+                    // number columns visually so collapsed borders stay right.
+                    let visual_col = if style.direction == ferropdf_core::Direction::Rtl {
+                        total_cols.saturating_sub(col_idx + cell.colspan)
+                    } else {
+                        col_idx
+                    };
+                    child_box.table_cell_pos = Some((row_idx, visual_col, total_rows, total_cols));
                     children.push(child_box);
                 }
                 col_idx += cell.colspan;
@@ -591,6 +607,19 @@ fn read_layout(
                 )?;
                 children.push(child_box);
             }
+        }
+    }
+
+    // Taffy has no `direction`: mirror the items of a right-to-left grid
+    // (tables are grids) across the content box, so the first column is on
+    // the right. Flex containers are handled in `style_to_taffy`.
+    if style.direction == ferropdf_core::Direction::Rtl
+        && matches!(style.display, FDisplay::Grid | FDisplay::Table)
+    {
+        let (left, right) = (content.x, content.x + content.width);
+        for child in children.iter_mut().filter(|c| !c.out_of_flow) {
+            let mirrored_x = left + right - (child.rect.x + child.rect.width);
+            translate_box(child, mirrored_x - child.rect.x);
         }
     }
 
@@ -928,11 +957,13 @@ fn wrap_inline_runs(
             flex_direction: taffy::FlexDirection::Row,
             flex_wrap: taffy::FlexWrap::Wrap,
             align_items: Some(taffy::AlignItems::FlexStart),
-            justify_content: Some(match parent_style.text_align {
-                ferropdf_core::TextAlign::Center => taffy::JustifyContent::Center,
-                ferropdf_core::TextAlign::Right => taffy::JustifyContent::FlexEnd,
-                _ => taffy::JustifyContent::FlexStart,
-            }),
+            justify_content: Some(
+                match parent_style.text_align.physical(parent_style.direction) {
+                    ferropdf_core::TextAlign::Center => taffy::JustifyContent::Center,
+                    ferropdf_core::TextAlign::Right => taffy::JustifyContent::FlexEnd,
+                    _ => taffy::JustifyContent::FlexStart,
+                },
+            ),
             ..Default::default()
         };
         let wrapper = taffy.new_with_children(wrapper_style, &ids).map_err(|e| {

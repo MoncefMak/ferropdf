@@ -277,9 +277,13 @@ pub fn measure_text(
 /// paragraphs keep their natural right alignment, matching `text-align: start`.
 /// With an explicit alignment, cosmic-text bakes the offset into every
 /// `glyph.x`, so painters must not add their own offset.
+/// cosmic-text alignment for a *physical* `text-align` (see
+/// `TextAlign::physical`). `Left` keeps cosmic-text's default, which follows
+/// each paragraph's base direction.
 pub fn css_align(align: ferropdf_core::TextAlign) -> Option<Align> {
     match align {
-        ferropdf_core::TextAlign::Left => None,
+        ferropdf_core::TextAlign::Left | ferropdf_core::TextAlign::Start => None,
+        ferropdf_core::TextAlign::End => Some(Align::Right),
         ferropdf_core::TextAlign::Right => Some(Align::Right),
         ferropdf_core::TextAlign::Center => Some(Align::Center),
         ferropdf_core::TextAlign::Justify => Some(Align::Justified),

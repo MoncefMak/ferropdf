@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Right-to-left layout is mirrored like in browsers: in a `direction: rtl` flex row the first item is on the right and `flex-start` packs to the right, and grid / table columns run right to left (#51).
+- `text-align` now defaults to `start` and accepts `start` / `end`: right-to-left blocks align right even for Latin text, as in browsers.
 - White space between flex/grid items (indented HTML) created invisible items: extra gaps, wrong `space-between`/`flex: 1` distribution, shifted grid cells.
 - `gap: <row> <column>` with two values was ignored; `align-items`/`align-self: start | end` fell back to `stretch`.
 - A panic inside the engine now raises `LayoutError` instead of a `PanicException` that escapes `except Exception`.

@@ -76,11 +76,30 @@ pub enum FontStyle {
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum TextAlign {
+    /// `start` (the initial value): left in LTR, right in RTL.
     #[default]
+    Start,
+    /// `end`: right in LTR, left in RTL.
+    End,
     Left,
     Right,
     Center,
     Justify,
+}
+
+impl TextAlign {
+    /// The physical alignment for a box of direction `dir`: `start` and
+    /// `end` are inherited as keywords and resolved per box (CSS Text §7.1).
+    pub fn physical(self, dir: Direction) -> TextAlign {
+        let rtl = dir == Direction::Rtl;
+        match self {
+            TextAlign::Start if rtl => TextAlign::Right,
+            TextAlign::Start => TextAlign::Left,
+            TextAlign::End if rtl => TextAlign::Left,
+            TextAlign::End => TextAlign::Right,
+            other => other,
+        }
+    }
 }
 
 /// CSS Grid properties, kept as raw CSS and converted to Taffy's track /
@@ -519,7 +538,7 @@ impl Default for ComputedStyle {
             font_weight: FontWeight::Normal,
             font_style: FontStyle::Normal,
             line_height: 14.4, // 12pt × 1.2 = 14.4pt
-            text_align: TextAlign::Left,
+            text_align: TextAlign::Start,
             text_decoration: TextDecoration::None,
             letter_spacing: 0.0,
             white_space: WhiteSpace::Normal,
@@ -582,5 +601,22 @@ mod white_space_tests {
         assert!(WhiteSpace::PreWrap.wraps());
         assert!(!WhiteSpace::Nowrap.wraps());
         assert!(!WhiteSpace::Pre.wraps());
+    }
+}
+
+#[cfg(test)]
+mod text_align_tests {
+    use super::{Direction, TextAlign};
+
+    #[test]
+    fn logical_values_resolve_per_direction() {
+        assert_eq!(TextAlign::Start.physical(Direction::Ltr), TextAlign::Left);
+        assert_eq!(TextAlign::Start.physical(Direction::Rtl), TextAlign::Right);
+        assert_eq!(TextAlign::End.physical(Direction::Rtl), TextAlign::Left);
+        assert_eq!(
+            TextAlign::Center.physical(Direction::Rtl),
+            TextAlign::Center
+        );
+        assert_eq!(TextAlign::default(), TextAlign::Start);
     }
 }
