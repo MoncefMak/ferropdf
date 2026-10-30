@@ -35,6 +35,10 @@ pub struct ShapedGlyph {
     pub y: f32,
     pub advance: f32,
     pub metadata: usize,
+    /// Source text of the glyph's cluster (`"ffi"` for an ffi ligature).
+    /// Empty for the second and later glyphs of a multi-glyph cluster, so
+    /// the text is only attributed once. Used for the PDF ToUnicode map.
+    pub text: String,
 }
 
 #[derive(Debug, Clone)]

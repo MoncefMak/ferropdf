@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Fonts from `.ttc` / `.otc` collections (macOS system fonts, Noto CJK) embedded face 0 of the file whatever face was used, so text from any other face drew wrong glyphs and could not be extracted. The face index is now kept through glyph lookup, subsetting, metrics and ToUnicode (#59).
+- CFF-flavoured OpenType fonts (`.otf`, most CJK and macOS faces) were embedded as TrueType (`FontFile2` / `CIDFontType2`); they are now embedded as `FontFile3 /OpenType` with a `CIDFontType0`.
+- Text extraction: the ToUnicode map is built from the shaped text, so ligatures extract as their letters (`office`, not `oﬃce`) and glyphs shared by several code points map to the code point actually written (`日`, not the Kangxi radical `⽇`). Destination strings outside the BMP are now encoded as UTF-16 surrogate pairs.
+- `@font-face` ignored an unquoted `src: url(data:…)`.
 - White space between flex/grid items (indented HTML) created invisible items: extra gaps, wrong `space-between`/`flex: 1` distribution, shifted grid cells.
 - `gap: <row> <column>` with two values was ignored; `align-items`/`align-self: start | end` fell back to `stretch`.
 - A panic inside the engine now raises `LayoutError` instead of a `PanicException` that escapes `except Exception`.
@@ -41,6 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PyO3 0.24 → 0.29 (RUSTSEC-2026-0176, RUSTSEC-2026-0177).
 
 ### Added
+- Subset fonts carry the `ABCDEF+Name` subset tag in their PDF font name (PDF 32000 §9.6.4).
 - 2D transforms: `transform` (`translate*`, `scale*`, `rotate`, `skew*`, `matrix`; 3D functions flattened onto the page), the individual `translate` / `rotate` / `scale` properties and `transform-origin`. Applied as a PDF transformation matrix around the box and its descendants, so text stays vector and selectable (#38).
 - Gradients: `linear-gradient()`, `radial-gradient()` and their `repeating-` variants in `background` / `background-image` — angles, `to <side>` / `to <corner>`, circle / ellipse with size keywords and `at <position>`, multi-position and hard stops, translucent stops (soft mask), stacked layers, `border-radius` clipping. Encoded as native PDF axial / radial shadings (#37).
 - `overflow`, `overflow-x`, `overflow-y` (`hidden`, `clip`; `auto`/`scroll` clip as in print): content is clipped to the padding box, following the inner `border-radius` (#36).

@@ -618,6 +618,47 @@ def chk_rtl_arabic():
     assert d.text() != "" and d.words()[0][0] > d.page_width() / 2
 
 
+FONTS = __import__("pathlib").Path(__file__).parent / "fixtures" / "fonts"
+
+
+def _font_face(family: str, file: str) -> str:
+    data = base64.b64encode((FONTS / file).read_bytes()).decode()
+    return f"@font-face{{font-family:'{family}';src:url(data:font/otf;base64,{data})}}"
+
+
+def _embedded_fonts(d: Doc):
+    """[(base name without subset tag, extension)] of the embedded fonts."""
+    return [(f[3].split("+")[-1], f[1]) for f in d.doc[0].get_fonts() if f[1] != "n/a"]
+
+
+def chk_font_collection_face():
+    # The second face of a .ttc: the right face is embedded and its text
+    # extracts (macOS ships its Arabic and CJK fonts as collections).
+    css = _font_face("Ferro TTC Second", "ferro-collection.ttc")
+    d = Doc(wrap("<p style=\"font-family:'Ferro TTC Second'\">Collection face</p>", css))
+    assert "Collection face" in d.text(), d.text()
+    assert ("FerroTTCSecond-Regular", "ttf") in _embedded_fonts(d), _embedded_fonts(d)
+
+
+def chk_font_cff_embedding():
+    css = _font_face("Ferro CFF", "ferro-cff.otf")
+    d = Doc(wrap("<p style=\"font-family:'Ferro CFF'\">Compact outlines</p>", css))
+    assert "Compact outlines" in d.text(), d.text()
+    assert ("FerroCFF-Regular", "otf") in _embedded_fonts(d), "embedded as OpenType/CFF (FontFile3)"
+
+
+def chk_ligature_text_extraction():
+    css = _font_face("Ferro CFF", "ferro-cff.otf")
+    d = Doc(wrap("<p style=\"font-family:'Ferro CFF'\">office affluent</p>", css))
+    assert "office affluent" in d.text(), d.text()
+
+
+def chk_subset_font_tag():
+    d = Doc(wrap("<p>tagged</p>"))
+    names = [f[3] for f in d.doc[0].get_fonts() if f[1] != "n/a"]
+    assert names and all(len(n.split("+")[0]) == 6 and "+" in n for n in names), names
+
+
 def chk_links():
     d = Doc(wrap('<a href="https://example.com">link</a>'))
     assert any(l.get("uri") == "https://example.com" for l in d.doc[0].get_links())
@@ -682,7 +723,7 @@ FEATURES = [
     Feature("Text", "`letter-spacing`", chk_letter_spacing, 34),
     Feature("Text", "`text-transform`", chk_text_transform, 34),
     Feature("Text", "`text-indent`", chk_text_indent, 34),
-    Feature("Text", "Arabic shaping + RTL alignment", chk_rtl_arabic, needs_fonts=True),
+    Feature("Text", "Arabic shaping + RTL alignment", chk_rtl_arabic),
     Feature("Text", "Lists (disc, decimal, roman)", chk_lists),
     Feature("Layout", "Flexbox row", chk_flex_row),
     Feature("Layout", "`justify-content: space-between`", chk_flex_justify_between),
@@ -723,6 +764,10 @@ FEATURES = [
     Feature("Images", "SVG `<img>` (vector)", chk_svg_image),
     Feature("Images", "Inline `<svg>` (vector)", chk_inline_svg),
     Feature("PDF", "Title / author metadata", chk_metadata),
+    Feature("PDF", "Fonts from a `.ttc` collection (any face)", chk_font_collection_face),
+    Feature("PDF", "CFF / `.otf` fonts embedded as OpenType (FontFile3)", chk_font_cff_embedding),
+    Feature("PDF", "Ligatures extract as their letters", chk_ligature_text_extraction),
+    Feature("PDF", "Subset fonts carry a subset tag (`ABCDEF+Name`)", chk_subset_font_tag),
     Feature("PDF", "Clickable links", chk_links, 40),
     Feature("PDF", "Outline / bookmarks", chk_outline, 41),
 ]
