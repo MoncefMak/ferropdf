@@ -5,6 +5,7 @@ mod gradient;
 mod inherit;
 pub mod matching;
 pub mod pseudo_elements;
+mod transform;
 
 use ferropdf_core::{ComputedStyle, Document, NodeId, NodeType};
 use ferropdf_parse::Stylesheet;

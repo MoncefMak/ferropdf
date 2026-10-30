@@ -805,6 +805,12 @@ pub fn write_pdf(
                 DrawOp::Save => {
                     content.save_state();
                 }
+                DrawOp::Transform([a, b, c, d, e, f]) => {
+                    // Conjugate by the y flip (x, y) → (x, H − y) to move the
+                    // page-space matrix into PDF space.
+                    let h = page_h;
+                    content.transform([*a, -*b, -*c, *d, *c * h + *e, h - *d * h - *f]);
+                }
                 DrawOp::Restore => {
                     content.restore_state();
                 }

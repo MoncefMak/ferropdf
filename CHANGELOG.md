@@ -41,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PyO3 0.24 → 0.29 (RUSTSEC-2026-0176, RUSTSEC-2026-0177).
 
 ### Added
+- 2D transforms: `transform` (`translate*`, `scale*`, `rotate`, `skew*`, `matrix`; 3D functions flattened onto the page), the individual `translate` / `rotate` / `scale` properties and `transform-origin`. Applied as a PDF transformation matrix around the box and its descendants, so text stays vector and selectable (#38).
 - Gradients: `linear-gradient()`, `radial-gradient()` and their `repeating-` variants in `background` / `background-image` — angles, `to <side>` / `to <corner>`, circle / ellipse with size keywords and `at <position>`, multi-position and hard stops, translucent stops (soft mask), stacked layers, `border-radius` clipping. Encoded as native PDF axial / radial shadings (#37).
 - `overflow`, `overflow-x`, `overflow-y` (`hidden`, `clip`; `auto`/`scroll` clip as in print): content is clipped to the padding box, following the inner `border-radius` (#36).
 - `float: left | right` and `clear` (emulated: floats are placed on lines in source order; content beside a float stays in a column next to it rather than wrapping underneath) (#35).

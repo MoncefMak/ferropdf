@@ -342,6 +342,41 @@ fn apply_single(
                 style.background_gradients = bg.gradients;
             }
         }
+        CssProperty::Unknown(ref name)
+            if matches!(
+                name.as_str(),
+                "transform" | "translate" | "rotate" | "scale" | "transform-origin"
+            ) =>
+        {
+            use crate::transform as t;
+            match name.as_str() {
+                "transform" => {
+                    if let Some(v) = t::parse_transform(raw) {
+                        style.transform = v;
+                    }
+                }
+                "translate" => {
+                    if let Some(v) = t::parse_translate(raw) {
+                        style.transform_individual[0] = v;
+                    }
+                }
+                "rotate" => {
+                    if let Some(v) = t::parse_rotate(raw) {
+                        style.transform_individual[1] = v;
+                    }
+                }
+                "scale" => {
+                    if let Some(v) = t::parse_scale(raw) {
+                        style.transform_individual[2] = v;
+                    }
+                }
+                _ => {
+                    if let Some(v) = t::parse_transform_origin(raw) {
+                        style.transform_origin = v;
+                    }
+                }
+            }
+        }
         CssProperty::Unknown(ref name) if name == "background-image" => {
             if let Some(g) = crate::gradient::parse_background_image(raw) {
                 style.background_gradients = g;
