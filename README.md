@@ -266,6 +266,8 @@ every row is a test that renders a snippet and checks the PDF, and every ❌ row
 | Visual | Dashed / dotted borders | ✅ Supported |
 | Visual | Double borders | ✅ Supported |
 | Visual | `border-radius` | ✅ Supported |
+| Visual | `border-radius` percentages (circles, ellipses) | ✅ Supported |
+| Visual | Per-corner and elliptical `border-radius` | ✅ Supported |
 | Visual | `box-shadow` | ✅ Supported |
 | Visual | `box-shadow` not painted under the box | ✅ Supported |
 | Visual | `opacity` | ✅ Supported |

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- `border-radius` percentages (`50%` circles and ellipses), `em` / `rem` radii (Bootstrap's `.375rem`), the 2–4 value and `/` elliptical forms, and the `border-*-radius` longhands were dropped; corners are now elliptical, resolved against the border box and scaled down when they overlap. Box-shadow spread and `overflow` clips follow the same radii (#64).
 - White space between flex/grid items (indented HTML) created invisible items: extra gaps, wrong `space-between`/`flex: 1` distribution, shifted grid cells.
 - `gap: <row> <column>` with two values was ignored; `align-items`/`align-self: start | end` fell back to `stretch`.
 - A panic inside the engine now raises `LayoutError` instead of a `PanicException` that escapes `except Exception`.

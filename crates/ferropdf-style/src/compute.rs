@@ -62,6 +62,13 @@ pub fn resolve_units(
         resolve_length_em_rem(inset, font_size, root_font_size);
     }
 
+    // Border radii: absolute units to pt; percentages are resolved against
+    // the border box at paint time.
+    for (x, y) in &mut style.border_radius.corners {
+        resolve_length_em_rem(x, font_size, root_font_size);
+        resolve_length_em_rem(y, font_size, root_font_size);
+    }
+
     // Resolve dimensions (only em/rem, keep percent/auto for Taffy)
     resolve_length_em_rem(&mut style.width, font_size, root_font_size);
     resolve_length_em_rem(&mut style.height, font_size, root_font_size);
