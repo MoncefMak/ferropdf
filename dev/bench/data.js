@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793371137546,
+  "lastUpdate": 1793375220116,
   "repoUrl": "https://github.com/MoncefMak/ferropdf",
   "entries": {
     "FastPDF Criterion Benchmarks": [
@@ -2455,6 +2455,54 @@ window.BENCHMARK_DATA = {
             "name": "render_invoice_cached",
             "value": 4118943,
             "range": "± 14167",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "72460183+MoncefMak@users.noreply.github.com",
+            "name": "MoncefMak",
+            "username": "MoncefMak"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "ca0649d07ca99a44bfa28817659dfab9abe3d3de",
+          "message": "Merge pull request #74 from MoncefMak/feat/transform\n\n2D CSS transforms with transform-origin",
+          "timestamp": "2026-10-30T16:44:30+01:00",
+          "tree_id": "6408f27aec9514b4603819c3abc2f28f3840dbe3",
+          "url": "https://github.com/MoncefMak/ferropdf/commit/ca0649d07ca99a44bfa28817659dfab9abe3d3de"
+        },
+        "date": 1793375219465,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "render_simple",
+            "value": 5944169,
+            "range": "± 141286",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice",
+            "value": 6702347,
+            "range": "± 221688",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_simple_cached",
+            "value": 2674565,
+            "range": "± 30249",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice_cached",
+            "value": 3480112,
+            "range": "± 55611",
             "unit": "ns/iter"
           }
         ]
