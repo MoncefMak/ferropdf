@@ -282,17 +282,16 @@ def chk_nested_counters():
 
 
 def chk_pseudo_own_style():
-    # The generated "TAG" is red and bold; the element's own "TAG" is not.
-    d = Doc(wrap('<p class="x">TAG</p>', '.x::before{content:"TAG";color:#ff0000;font-weight:bold;margin-right:4px}'))
+    # The generated "TAG" takes its own colour and size; the element's own
+    # "TAG" keeps the inherited ones. (Font size rather than weight: the
+    # macOS runners have no bold fallback face.)
+    d = Doc(wrap('<p class="x">TAG</p>', '.x::before{content:"TAG";color:#ff0000;font-size:20px;margin-right:4px}'))
     spans = [s for b in d.doc[0].get_text("dict")["blocks"] for l in b.get("lines", []) for s in l["spans"]]
     tags = [s for s in spans if s["text"].strip() == "TAG"]
     assert len(tags) == 2, spans
     gen, own = sorted(tags, key=lambda s: s["bbox"][0])
     assert gen["color"] == 0xFF0000 and own["color"] == 0, (gen, own)
-    # Font names differ across platforms ("CustomFont" on macOS): compare
-    # widths instead: bold glyphs are wider.
-    width = lambda s: s["bbox"][2] - s["bbox"][0]
-    assert width(gen) > width(own) * 1.03, (width(gen), width(own))
+    assert abs(gen["size"] - 15) < 0.1 and abs(own["size"] - 12) < 0.1, (gen["size"], own["size"])
 
 
 def chk_content_attr_quotes():
