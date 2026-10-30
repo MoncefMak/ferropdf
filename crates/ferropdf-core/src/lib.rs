@@ -23,7 +23,7 @@ pub use gradient::{
 };
 pub use layout::{InlineSpan, LayoutBox, LayoutTree, ShapedGlyph, ShapedLine, ShapedSegment};
 pub use length::{CalcLength, Length};
-pub use page::{Orientation, PageConfig, PageMargins, PageSize};
+pub use page::{Orientation, PageConfig, PageMarginOverrides, PageMargins, PageSize};
 pub use style::{
     AlignItems, AlignSelf, BorderCollapse, BorderRadius, BorderSide, BorderStyle,
     BoxDecorationBreak, BoxShadow, BoxSizing, Clear, ComputedStyle, Direction, Display,

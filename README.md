@@ -215,6 +215,9 @@ every row is a test that renders a snippet and checks the PDF, and every ❌ row
 | Page | `Options(page_size=...)` | ✅ Supported |
 | Page | `@page` margin boxes (headers / footers) | ✅ Supported |
 | Page | `counter(page)` / `counter(pages)` | ✅ Supported |
+| Page | `@page :first` margins (cover page) | ✅ Supported |
+| Page | `@page :left` / `:right` margins (binding) | ✅ Supported |
+| Page | Per-page margins change how much fits on a page | ✅ Supported |
 | Page | HTML headers/footers: `position: running()` + `element()` | ✅ Supported |
 | Page | `@page :first / :left / :right` margin boxes | ✅ Supported |
 | Fragmentation | Automatic pagination of many blocks | ✅ Supported |

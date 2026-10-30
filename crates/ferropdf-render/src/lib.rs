@@ -145,13 +145,32 @@ fn render_with_warnings_inner(
         size: PageSize::from_str(&opts.page_size),
         margins: PageMargins::from_css_str(&opts.margin),
         orientation: ferropdf_core::Orientation::Portrait,
+        margin_overrides: Default::default(),
     };
     // Applied in source order, so `margin` then `margin-top` behaves as in CSS.
     for sheet in &stylesheets {
         for pr in &sheet.page_rules {
-            // Page size and margins are document-wide here: per-page values
-            // from `:first` / `:left` / `:right` are not supported yet.
-            if pr.selector != ferropdf_parse::PageSelector::All {
+            // `:first` / `:left` / `:right` margins apply to their pages only
+            // (`PageConfig::margins_for`); the page size stays document-wide.
+            let sides = match pr.selector {
+                ferropdf_parse::PageSelector::All => None,
+                ferropdf_parse::PageSelector::First => {
+                    Some(&mut page_config.margin_overrides.first)
+                }
+                ferropdf_parse::PageSelector::Left => Some(&mut page_config.margin_overrides.left),
+                ferropdf_parse::PageSelector::Right => {
+                    Some(&mut page_config.margin_overrides.right)
+                }
+            };
+            if let Some(sides) = sides {
+                if let Some(all) = pr.margin.as_deref().and_then(PageMargins::parse_shorthand) {
+                    *sides = all.map(Some);
+                }
+                for (side, value) in pr.margin_sides.iter().enumerate() {
+                    if let Some(v) = value.as_deref().and_then(PageMargins::parse_side) {
+                        sides[side] = Some(v);
+                    }
+                }
                 continue;
             }
             if let Some(s) = &pr.size {

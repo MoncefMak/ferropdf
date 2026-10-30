@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- `@page :first`, `:left` and `:right` margins were ignored. They now apply to their pages: pagination uses each page's content height, and content and margin boxes use each page's margins. Content is laid out once at the base `@page` width, so a per-page left margin shifts it rather than re-flowing it (#27).
 - White space between flex/grid items (indented HTML) created invisible items: extra gaps, wrong `space-between`/`flex: 1` distribution, shifted grid cells.
 - `gap: <row> <column>` with two values was ignored; `align-items`/`align-self: start | end` fell back to `stretch`.
 - A panic inside the engine now raises `LayoutError` instead of a `PanicException` that escapes `except Exception`.

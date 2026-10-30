@@ -43,18 +43,21 @@ struct PaginationContext {
     current_page_boxes: Vec<LayoutBox>,
     /// Already completed pages.
     finished_pages: Vec<Page>,
-    /// Height of a page (content area, in CSS pixels).
+    /// Content height of the page being built, in pt (it varies with
+    /// `@page :first` / `:left` / `:right` margins).
     page_height: f32,
+    config: PageConfig,
 }
 
 impl PaginationContext {
-    fn new(page_height: f32) -> Self {
+    fn new(config: &PageConfig) -> Self {
         Self {
             page_y_offset: 0.0,
             used_height: 0.0,
             current_page_boxes: Vec::new(),
             finished_pages: Vec::new(),
-            page_height,
+            page_height: config.content_height_for(1),
+            config: config.clone(),
         }
     }
 
@@ -70,6 +73,9 @@ impl PaginationContext {
                 content: std::mem::take(&mut self.current_page_boxes),
                 margin_boxes: Vec::new(),
             });
+            self.page_height = self
+                .config
+                .content_height_for(self.finished_pages.len() as u32 + 1);
         }
         self.page_y_offset = next_y;
         self.used_height = 0.0;
@@ -87,8 +93,7 @@ impl PaginationContext {
 /// Fragments a LayoutTree root into PDF pages.
 /// All coordinates are in typographic points (pt).
 pub fn paginate(root: &LayoutBox, config: &PageConfig) -> Vec<Page> {
-    let page_height = config.content_height_pt();
-    let mut ctx = PaginationContext::new(page_height);
+    let mut ctx = PaginationContext::new(config);
 
     // Process the root's direct children
     for child in &root.children {
@@ -766,7 +771,29 @@ mod tests {
                 left: 50.0,
             },
             orientation: Orientation::Portrait,
+            margin_overrides: Default::default(),
         }
+    }
+
+    #[test]
+    fn first_page_margins_shorten_the_first_page_only() {
+        let mut config = make_config(200.0);
+        // `@page :first { margin-top }` 100pt larger: page 1 holds 100pt.
+        config.margin_overrides.first[0] = Some(150.0);
+        let mut root = make_box(0.0, 180.0);
+        root.children = vec![
+            make_box(0.0, 60.0),
+            make_box(60.0, 60.0),
+            make_box(120.0, 60.0),
+        ];
+        let pages = paginate(&root, &config);
+        assert_eq!(pages.len(), 2);
+        assert_eq!(pages[0].content.len(), 1, "only one 60pt box fits in 100pt");
+        assert_eq!(
+            pages[1].content.len(),
+            2,
+            "the next page has the full 200pt"
+        );
     }
 
     fn make_box(y: f32, height: f32) -> LayoutBox {

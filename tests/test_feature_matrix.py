@@ -239,6 +239,30 @@ def chk_page_selectors_margin_boxes():
     assert "EVEN" not in d.text(0) and "EVENII" in d.text(1).replace(" ", "")
 
 
+def chk_page_first_margins():
+    css = "p{margin:0} @page{margin:20mm} @page :first{margin-top:80mm}"
+    d = Doc(wrap('<p>COVER</p><p style="break-before:page">NEXT</p>', css))
+    assert abs(d.word("COVER")[1] - 226.8) < 6, "first page starts 80mm down"
+    assert abs(d.word("NEXT", 1)[1] - 56.7) < 6, "other pages keep the base margin"
+
+
+def chk_page_left_right_margins():
+    css = "p{margin:0} @page{margin:20mm} @page :left{margin-left:10mm} @page :right{margin-left:35mm}"
+    d = Doc(wrap('<p>ONE</p><p style="break-before:page">TWO</p><p style="break-before:page">THREE</p>', css))
+    one, two, three = d.word("ONE", 0), d.word("TWO", 1), d.word("THREE", 2)
+    assert abs(one[0] - 99.2) < 3 and abs(three[0] - 99.2) < 3, "right pages: 35mm"
+    assert abs(two[0] - 28.3) < 3, "left page: 10mm"
+
+
+def chk_page_first_margin_fills_less():
+    # A taller :first top margin leaves less room: the cover holds fewer lines.
+    css = "@page{margin:20mm} @page :first{margin-top:150mm}"
+    d = Doc(wrap("".join(f"<p style='margin:0'>L{i}</p>" for i in range(60)), css))
+    first = sum(1 for w in d.words(0) if w[4].startswith("L"))
+    second = sum(1 for w in d.words(1) if w[4].startswith("L"))
+    assert first < second, (first, second)
+
+
 def chk_custom_properties():
     d = Doc(wrap('<div style="background:var(--c);height:20px"></div>', ":root{--c:#00ff00}"))
     assert any(dr.get("fill") and tuple(round(c, 2) for c in dr["fill"]) == (0, 1, 0) for dr in d.drawings())
@@ -653,6 +677,9 @@ FEATURES = [
     Feature("Page", "`Options(page_size=...)`", chk_options_page_size),
     Feature("Page", "`@page` margin boxes (headers / footers)", chk_margin_boxes),
     Feature("Page", "`counter(page)` / `counter(pages)`", chk_page_counters),
+    Feature("Page", "`@page :first` margins (cover page)", chk_page_first_margins),
+    Feature("Page", "`@page :left` / `:right` margins (binding)", chk_page_left_right_margins),
+    Feature("Page", "Per-page margins change how much fits on a page", chk_page_first_margin_fills_less),
     Feature("Page", "HTML headers/footers: `position: running()` + `element()`", chk_running_element),
     Feature("Page", "`@page :first / :left / :right` margin boxes", chk_page_selectors_margin_boxes),
     Feature("Fragmentation", "Automatic pagination of many blocks", chk_many_blocks_paginate),

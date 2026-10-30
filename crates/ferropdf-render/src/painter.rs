@@ -10,8 +10,9 @@ pub fn paint_page(page: &Page, config: &PageConfig) -> PageDisplayList {
     let mut ops = Vec::new();
 
     // Offsets and container width in points (pt)
-    let offset_x = config.margins.left;
-    let offset_y = config.margins.top;
+    let margins = config.margins_for(page.page_number);
+    let offset_x = margins.left;
+    let offset_y = margins.top;
     let container_width = config.content_width_pt();
 
     for layout_box in &page.content {
