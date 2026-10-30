@@ -602,8 +602,10 @@ mod tests {
                 "td" | "th" => FDisplay::TableCell,
                 _ => FDisplay::Block,
             };
-            let mut style = ComputedStyle::default();
-            style.display = display;
+            let style = ComputedStyle {
+                display,
+                ..Default::default()
+            };
             styles.insert(id, style);
         }
     }

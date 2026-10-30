@@ -128,17 +128,21 @@ mod tests {
 
     #[test]
     fn tag_defaults_span_inline() {
-        let mut style = ComputedStyle::default();
-        style.display = Display::Block;
+        let mut style = ComputedStyle {
+            display: Display::Block,
+            ..Default::default()
+        };
         apply_tag_defaults(&mut style, Some("span"));
         assert_eq!(style.display, Display::Inline);
     }
 
     #[test]
     fn resolve_units_em_margin() {
-        let mut style = ComputedStyle::default();
-        style.font_size = 16.0; // 16pt
-        style.margin = [Length::Em(2.0); 4];
+        let mut style = ComputedStyle {
+            font_size: 16.0, // 16pt
+            margin: [Length::Em(2.0); 4],
+            ..Default::default()
+        };
         resolve_units(&mut style, None, 12.0);
         // 2em * 16pt = 32pt
         assert_eq!(style.margin[0], Length::Pt(32.0));
@@ -146,9 +150,11 @@ mod tests {
 
     #[test]
     fn resolve_units_px_padding() {
-        let mut style = ComputedStyle::default();
-        style.font_size = 12.0;
-        style.padding = [Length::Px(20.0); 4];
+        let mut style = ComputedStyle {
+            font_size: 12.0,
+            padding: [Length::Px(20.0); 4],
+            ..Default::default()
+        };
         resolve_units(&mut style, None, 12.0);
         // 20px * 0.75 = 15pt
         assert_eq!(style.padding[0], Length::Pt(15.0));
@@ -156,24 +162,30 @@ mod tests {
 
     #[test]
     fn resolve_units_preserves_percent() {
-        let mut style = ComputedStyle::default();
-        style.width = Length::Percent(50.0);
+        let mut style = ComputedStyle {
+            width: Length::Percent(50.0),
+            ..Default::default()
+        };
         resolve_units(&mut style, None, 12.0);
         assert_eq!(style.width, Length::Percent(50.0));
     }
 
     #[test]
     fn resolve_units_preserves_auto() {
-        let mut style = ComputedStyle::default();
-        style.width = Length::Auto;
+        let mut style = ComputedStyle {
+            width: Length::Auto,
+            ..Default::default()
+        };
         resolve_units(&mut style, None, 12.0);
         assert_eq!(style.width, Length::Auto);
     }
 
     #[test]
     fn resolve_units_fixes_stale_line_height() {
-        let mut style = ComputedStyle::default();
-        style.font_size = 24.0;
+        let mut style = ComputedStyle {
+            font_size: 24.0,
+            ..Default::default()
+        };
         style.line_height = 14.4; // inherited from smaller parent
         resolve_units(&mut style, None, 12.0);
         // line_height < font_size → recalculated to 1.2 × font_size
