@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793425031763,
+  "lastUpdate": 1793426475028,
   "repoUrl": "https://github.com/MoncefMak/ferropdf",
   "entries": {
     "FastPDF Criterion Benchmarks": [
@@ -2599,6 +2599,54 @@ window.BENCHMARK_DATA = {
             "name": "render_invoice_cached",
             "value": 3499309,
             "range": "± 31288",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "72460183+MoncefMak@users.noreply.github.com",
+            "name": "MoncefMak",
+            "username": "MoncefMak"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "6c8b263af5d5a13ea0063ad849ea1be982be80dd",
+          "message": "Merge pull request #77 from MoncefMak/fix/per-page-margins\n\nfix: honour @page :first / :left / :right margins",
+          "timestamp": "2026-10-31T06:58:01+01:00",
+          "tree_id": "5eedea0381e58c4d0fa55470f1cbd9521ba079bd",
+          "url": "https://github.com/MoncefMak/ferropdf/commit/6c8b263af5d5a13ea0063ad849ea1be982be80dd"
+        },
+        "date": 1793426474671,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "render_simple",
+            "value": 6811608,
+            "range": "± 335165",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice",
+            "value": 7870642,
+            "range": "± 209389",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_simple_cached",
+            "value": 3202561,
+            "range": "± 44236",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice_cached",
+            "value": 4200309,
+            "range": "± 44738",
             "unit": "ns/iter"
           }
         ]
