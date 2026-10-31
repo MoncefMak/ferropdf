@@ -28,6 +28,7 @@ pub use style::{
     AlignItems, AlignSelf, BorderCollapse, BorderRadius, BorderSide, BorderStyle,
     BoxDecorationBreak, BoxShadow, BoxSizing, Clear, ComputedStyle, Direction, Display,
     FlexDirection, FlexWrap, Float, FontStyle, FontWeight, GridProps, JustifyContent,
-    ListStyleType, PageBreak, PageBreakInside, Position, TextAlign, TextDecoration, WhiteSpace,
+    ListStyleType, PageBreak, PageBreakInside, Position, Radii, TextAlign, TextDecoration,
+    WhiteSpace,
 };
 pub use transform::{Matrix, TransformFunction};

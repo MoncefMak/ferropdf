@@ -410,7 +410,7 @@ pub fn write_pdf(
                 } if !color.is_transparent() => {
                     content.set_fill_rgb(color.r, color.g, color.b);
                     let pr = to_pdf_rect(rect.x, rect.y, rect.width, rect.height, page_h);
-                    if border_radius.iter().any(|r| *r > 0.0) {
+                    if !border_radius.is_zero() {
                         rounded_rect_path(
                             &mut content,
                             pr.x,
@@ -469,7 +469,7 @@ pub fn write_pdf(
                     for (line_w, inset) in paths {
                         content.set_line_width(line_w);
                         set_border_dash(&mut content, *style, *width);
-                        let radii = border_radius.map(|r| (r - inset).max(0.0));
+                        let radii = border_radius.inset([inset; 4]);
                         rounded_rect_path(
                             &mut content,
                             pr.x + inset,
@@ -749,7 +749,7 @@ pub fn write_pdf(
                             pr.y,
                             pr.width,
                             pr.height,
-                            *border_radius,
+                            border_radius.grow(spread),
                         );
                         content.fill_nonzero();
                         content.restore_state();
@@ -772,7 +772,7 @@ pub fn write_pdf(
                                 content.set_parameters(Name(gs_name.as_bytes()));
                             }
                             content.set_fill_rgb(shadow.color.r, shadow.color.g, shadow.color.b);
-                            let radii = border_radius.map(|r| r + expand);
+                            let radii = border_radius.grow(spread + expand);
                             rounded_rect_path(&mut content, pr.x, pr.y, pr.width, pr.height, radii);
                             content.fill_nonzero();
                         }
@@ -1129,67 +1129,69 @@ mod tests {
 /// Radii are scaled down together when adjacent ones exceed a side
 /// (CSS Backgrounds 3 §5.5), which is what turns `border-radius: 9999px`
 /// into a pill rather than a broken shape.
+/// Append a rectangle with elliptical corners to the path (PDF space:
+/// `(x, y)` is the bottom-left corner). Radii are scaled down to fit.
 pub(crate) fn rounded_rect_path(
     content: &mut Content,
     x: f32,
     y: f32,
     w: f32,
     h: f32,
-    radii: [f32; 4],
+    radii: ferropdf_core::Radii,
 ) {
-    let [tl, tr, br, bl] = clamp_radii(w, h, radii);
-    // Bézier control-point distance for a quarter circle.
+    // A corner with a zero radius on either axis is square.
+    let corner = |(rx, ry): (f32, f32)| {
+        if rx <= 0.0 || ry <= 0.0 {
+            (0.0, 0.0)
+        } else {
+            (rx, ry)
+        }
+    };
+    let ferropdf_core::Radii([tl, tr, br, bl]) = radii.clamped(w, h);
+    let (tl, tr, br, bl) = (corner(tl), corner(tr), corner(br), corner(bl));
+    // Bézier control-point distance for a quarter ellipse.
     const K: f32 = 0.552_284_8;
     let top = y + h;
     let right = x + w;
-    content.move_to(x + tl, top);
-    content.line_to(right - tr, top);
-    if tr > 0.0 {
+    content.move_to(x + tl.0, top);
+    content.line_to(right - tr.0, top);
+    if tr.0 > 0.0 {
         content.cubic_to(
-            right - tr + tr * K,
+            right - tr.0 + tr.0 * K,
             top,
             right,
-            top - tr + tr * K,
+            top - tr.1 + tr.1 * K,
             right,
-            top - tr,
+            top - tr.1,
         );
     }
-    content.line_to(right, y + br);
-    if br > 0.0 {
+    content.line_to(right, y + br.1);
+    if br.0 > 0.0 {
         content.cubic_to(
             right,
-            y + br - br * K,
-            right - br + br * K,
+            y + br.1 - br.1 * K,
+            right - br.0 + br.0 * K,
             y,
-            right - br,
+            right - br.0,
             y,
         );
     }
-    content.line_to(x + bl, y);
-    if bl > 0.0 {
-        content.cubic_to(x + bl - bl * K, y, x, y + bl - bl * K, x, y + bl);
+    content.line_to(x + bl.0, y);
+    if bl.0 > 0.0 {
+        content.cubic_to(x + bl.0 - bl.0 * K, y, x, y + bl.1 - bl.1 * K, x, y + bl.1);
     }
-    content.line_to(x, top - tl);
-    if tl > 0.0 {
-        content.cubic_to(x, top - tl + tl * K, x + tl - tl * K, top, x + tl, top);
+    content.line_to(x, top - tl.1);
+    if tl.0 > 0.0 {
+        content.cubic_to(
+            x,
+            top - tl.1 + tl.1 * K,
+            x + tl.0 - tl.0 * K,
+            top,
+            x + tl.0,
+            top,
+        );
     }
     content.close_path();
-}
-
-pub(crate) fn clamp_radii(w: f32, h: f32, radii: [f32; 4]) -> [f32; 4] {
-    let [tl, tr, br, bl] = radii.map(|r| r.max(0.0));
-    let ratio = |side: f32, a: f32, b: f32| {
-        if a + b > side && a + b > 0.0 {
-            side / (a + b)
-        } else {
-            1.0
-        }
-    };
-    let f = ratio(w, tl, tr)
-        .min(ratio(w, bl, br))
-        .min(ratio(h, tl, bl))
-        .min(ratio(h, tr, br));
-    [tl * f, tr * f, br * f, bl * f]
 }
 
 /// Dash pattern for `dashed` / `dotted` borders (approximating browsers:
@@ -1210,25 +1212,4 @@ fn set_border_dash(content: &mut Content, style: ferropdf_core::BorderStyle, wid
 fn reset_border_dash(content: &mut Content) {
     content.set_dash_pattern([], 0.0);
     content.set_line_cap(LineCapStyle::ButtCap);
-}
-
-#[cfg(test)]
-mod radius_tests {
-    use super::clamp_radii;
-
-    #[test]
-    fn pill_radii_are_clamped_to_half_the_height() {
-        let r = clamp_radii(200.0, 40.0, [9999.0; 4]);
-        for v in r {
-            assert!((v - 20.0).abs() < 0.01, "{r:?}");
-        }
-    }
-
-    #[test]
-    fn small_radii_are_untouched() {
-        assert_eq!(
-            clamp_radii(100.0, 50.0, [5.0, 6.0, 7.0, 8.0]),
-            [5.0, 6.0, 7.0, 8.0]
-        );
-    }
 }
