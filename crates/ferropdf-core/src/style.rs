@@ -588,7 +588,17 @@ pub struct ComputedStyle {
     /// CSS custom properties (`--name: value`) declared on or inherited
     /// by this element. Used to substitute `var(--name)` references in
     /// other declarations during cascade application.
-    pub custom_properties: std::collections::HashMap<String, String>,
+    /// Shared with the parent until an element declares its own (`--x`):
+    /// inheriting is a pointer copy (copy-on-write via `Arc::make_mut`).
+    pub custom_properties: std::sync::Arc<std::collections::HashMap<String, String>>,
+}
+
+impl ComputedStyle {
+    /// The initial style, shared (for nodes without a computed style).
+    pub fn initial() -> &'static ComputedStyle {
+        static INITIAL: std::sync::OnceLock<ComputedStyle> = std::sync::OnceLock::new();
+        INITIAL.get_or_init(ComputedStyle::default)
+    }
 }
 
 impl Default for ComputedStyle {
@@ -669,7 +679,7 @@ impl Default for ComputedStyle {
             box_decoration_break: BoxDecorationBreak::Slice,
             orphans: 2,
             widows: 2,
-            custom_properties: std::collections::HashMap::new(),
+            custom_properties: std::sync::Arc::default(),
         }
     }
 }

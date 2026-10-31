@@ -335,7 +335,9 @@ fn cell_content_widths(
     styles: &StyleTree,
     font_system: &mut FontSystem,
 ) -> (f32, f32) {
-    let style = styles.get(&cell_id).cloned().unwrap_or_default();
+    let style = styles
+        .get(&cell_id)
+        .unwrap_or(ferropdf_core::ComputedStyle::initial());
     let pad_h = resolve_px(&style.padding[1]) + resolve_px(&style.padding[3]);
     let fixed = widest_fixed_descendant(doc, cell_id, styles);
     let text = collect_text_content(doc, cell_id);
@@ -443,7 +445,9 @@ pub fn collect_table_cell_infos(
     let table_node = doc.get(table_id);
 
     for &child_id in &table_node.children {
-        let child_style = styles.get(&child_id).cloned().unwrap_or_default();
+        let child_style = styles
+            .get(&child_id)
+            .unwrap_or(ferropdf_core::ComputedStyle::initial());
         let target = match child_style.display {
             FDisplay::TableRow => {
                 body.push(collect_cell_infos(doc, child_id, styles));
@@ -456,7 +460,9 @@ pub fn collect_table_cell_infos(
         };
         let group_node = doc.get(child_id);
         for &row_id in &group_node.children {
-            let row_style = styles.get(&row_id).cloned().unwrap_or_default();
+            let row_style = styles
+                .get(&row_id)
+                .unwrap_or(ferropdf_core::ComputedStyle::initial());
             if row_style.display == FDisplay::TableRow {
                 target.push(collect_cell_infos(doc, row_id, styles));
             }
@@ -480,10 +486,14 @@ fn count_group_rows(
 ) -> usize {
     let mut count = 0;
     for &child_id in &doc.get(table_id).children {
-        let child_style = styles.get(&child_id).cloned().unwrap_or_default();
+        let child_style = styles
+            .get(&child_id)
+            .unwrap_or(ferropdf_core::ComputedStyle::initial());
         if child_style.display == group {
             for &row_id in &doc.get(child_id).children {
-                let row_style = styles.get(&row_id).cloned().unwrap_or_default();
+                let row_style = styles
+                    .get(&row_id)
+                    .unwrap_or(ferropdf_core::ComputedStyle::initial());
                 if row_style.display == FDisplay::TableRow {
                     count += 1;
                 }
@@ -498,11 +508,15 @@ pub fn count_thead_rows(doc: &Document, table_id: NodeId, styles: &StyleTree) ->
     let mut count = 0;
     let table_node = doc.get(table_id);
     for &child_id in &table_node.children {
-        let child_style = styles.get(&child_id).cloned().unwrap_or_default();
+        let child_style = styles
+            .get(&child_id)
+            .unwrap_or(ferropdf_core::ComputedStyle::initial());
         if child_style.display == FDisplay::TableHeaderGroup {
             let group_node = doc.get(child_id);
             for &row_id in &group_node.children {
-                let row_style = styles.get(&row_id).cloned().unwrap_or_default();
+                let row_style = styles
+                    .get(&row_id)
+                    .unwrap_or(ferropdf_core::ComputedStyle::initial());
                 if row_style.display == FDisplay::TableRow {
                     count += 1;
                 }
@@ -518,7 +532,9 @@ fn collect_cell_infos(doc: &Document, row_id: NodeId, styles: &StyleTree) -> Vec
         .children
         .iter()
         .filter(|&&child_id| {
-            let s = styles.get(&child_id).cloned().unwrap_or_default();
+            let s = styles
+                .get(&child_id)
+                .unwrap_or(ferropdf_core::ComputedStyle::initial());
             s.display == FDisplay::TableCell
         })
         .map(|&child_id| {
@@ -623,7 +639,7 @@ mod tests {
         let _ = elem(&mut doc, r1, "td");
         let _ = elem(&mut doc, r2, "td");
         let _ = elem(&mut doc, r2, "td");
-        let mut styles = StyleTree::new();
+        let mut styles = StyleTree::default();
         apply_table_display_defaults(&doc, &mut styles);
         (doc, table, styles)
     }
@@ -659,7 +675,7 @@ mod tests {
         let r1 = elem(&mut doc, tbody, "tr");
         let _ = elem_attr(&mut doc, r1, "td", "colspan", "2");
         let _ = elem(&mut doc, r1, "td");
-        let mut styles = StyleTree::new();
+        let mut styles = StyleTree::default();
         apply_table_display_defaults(&doc, &mut styles);
         let infos = collect_table_cell_infos(&doc, table, &styles);
         assert_eq!(infos.len(), 1);

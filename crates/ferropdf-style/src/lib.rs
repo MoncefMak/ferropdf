@@ -10,9 +10,9 @@ mod transform;
 
 use ferropdf_core::{ComputedStyle, Document, NodeId, NodeType};
 use ferropdf_parse::Stylesheet;
-use std::collections::HashMap;
 
-pub type StyleTree = HashMap<NodeId, ComputedStyle>;
+/// Computed style per node (FxHash: node ids are internal, not attacker-chosen).
+pub type StyleTree = rustc_hash::FxHashMap<NodeId, ComputedStyle>;
 
 /// Resolve all styles for a document given stylesheets.
 ///
@@ -48,7 +48,7 @@ pub fn resolve_with_media(
     media: &ferropdf_parse::css::MediaContext,
 ) -> ferropdf_core::Result<StyleTree> {
     // Parse UA stylesheet
-    let ua_sheet = ferropdf_parse::parse_stylesheet(ua_css)?;
+    let ua_sheet = ferropdf_parse::css::parse_ua(ua_css)?;
 
     // All sheets: UA first, then author sheets (by reference — no cloning)
     let mut all_sheets: Vec<&Stylesheet> = Vec::with_capacity(1 + stylesheets.len());
@@ -60,7 +60,7 @@ pub fn resolve_with_media(
     let rules = matching::parse_rules(&all_sheets, 1, media);
 
     let root = document.root();
-    let mut style_tree = StyleTree::new();
+    let mut style_tree = StyleTree::default();
     let root_font_size = 12.0_f32; // 16px × 0.75 = 12pt
     let mut nth_cache = selectors::NthIndexCache::default();
 
