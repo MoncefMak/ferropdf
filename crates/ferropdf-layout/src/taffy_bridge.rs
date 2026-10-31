@@ -320,8 +320,17 @@ fn build_taffy_tree_inner(
     // If this is a block container whose children are all inline/text,
     // switch to flex-row + wrap so that inline elements flow horizontally.
     // Map text-align to justify-content for inline-block centering (CSS spec).
-    if matches!(style.display, FDisplay::Block) && !node.children.is_empty() {
-        let all_inline = node.children.iter().all(|&cid| {
+    // Children that produce no box (display: none, running elements) do
+    // not count. An inline-block shrink-wraps its inline content the same
+    // way, so its width is the sum of its pieces rather than the widest.
+    let rendered: Vec<NodeId> = node
+        .children
+        .iter()
+        .copied()
+        .filter(|cid| node_map.contains_key(cid))
+        .collect();
+    if matches!(style.display, FDisplay::Block | FDisplay::InlineBlock) && !rendered.is_empty() {
+        let all_inline = rendered.iter().all(|&cid| {
             let child_node = doc.get(cid);
             if child_node.is_text() {
                 return true;

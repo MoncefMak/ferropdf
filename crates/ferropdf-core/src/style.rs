@@ -435,6 +435,12 @@ pub struct ComputedStyle {
     pub background_color: Color,
     /// `background-image` gradient layers, first = topmost.
     pub background_gradients: Vec<crate::Gradient>,
+    /// Raw `content` value (used by `::before` / `::after`).
+    pub content: Option<String>,
+    /// `counter-reset`, `counter-increment`, `counter-set`: (name, value).
+    pub counter_reset: Vec<(String, i32)>,
+    pub counter_increment: Vec<(String, i32)>,
+    pub counter_set: Vec<(String, i32)>,
     /// `transform` function list (applied right to left).
     pub transform: Vec<crate::TransformFunction>,
     /// Individual `translate`, `rotate`, `scale` properties, in that order.
@@ -525,6 +531,10 @@ impl Default for ComputedStyle {
             color: Color::black(),
             background_color: Color::transparent(),
             background_gradients: Vec::new(),
+            content: None,
+            counter_reset: Vec::new(),
+            counter_increment: Vec::new(),
+            counter_set: Vec::new(),
             transform: Vec::new(),
             transform_individual: [None; 3],
             transform_origin: (
