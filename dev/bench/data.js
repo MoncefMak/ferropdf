@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793427477385,
+  "lastUpdate": 1793427481109,
   "repoUrl": "https://github.com/MoncefMak/ferropdf",
   "entries": {
     "FastPDF Criterion Benchmarks": [
@@ -2743,6 +2743,54 @@ window.BENCHMARK_DATA = {
             "name": "render_invoice_cached",
             "value": 4263157,
             "range": "± 22076",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "72460183+MoncefMak@users.noreply.github.com",
+            "name": "MoncefMak",
+            "username": "MoncefMak"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "cdfd3ba7d3a18200ad8f013e8a072af6ba7ed2ee",
+          "message": "Merge pull request #80 from MoncefMak/ci/lint-and-bench\n\nci: lint all targets and stop benchmark job failing on PRs",
+          "timestamp": "2026-10-31T07:12:36+01:00",
+          "tree_id": "bbabb067506fdf4952987069974b3eee3b31905c",
+          "url": "https://github.com/MoncefMak/ferropdf/commit/cdfd3ba7d3a18200ad8f013e8a072af6ba7ed2ee"
+        },
+        "date": 1793427480733,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "render_simple",
+            "value": 6722427,
+            "range": "± 130386",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice",
+            "value": 7790736,
+            "range": "± 133387",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_simple_cached",
+            "value": 3229415,
+            "range": "± 54261",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice_cached",
+            "value": 4275744,
+            "range": "± 98825",
             "unit": "ns/iter"
           }
         ]
