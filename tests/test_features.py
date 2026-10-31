@@ -342,14 +342,26 @@ class TestMediaQueries:
         pdf = render(html)
         assert count_color_op(pdf, 1, 0, 0) >= 1
 
-    def test_media_min_width_query_skipped(self):
-        # We only flatten @media print/all today. Width-based queries are
-        # silently ignored — better than misbehaving with stale defaults.
+    def test_width_queries_use_the_page_area(self):
+        # A4 with 20mm margins: the page area is ~643 CSS px wide.
+        css = "@media (min-width: 800px) { p { color: red; } }"
+        html = f"<html><head><style>{css}</style></head><body><p>hi</p></body></html>"
+        assert count_color_op(render(html), 1, 0, 0) == 0
+        html = html.replace("800px", "600px")
+        assert count_color_op(render(html), 1, 0, 0) >= 1
+
+    def test_viewport_width_option(self):
         html = """<html><head><style>
-@media (min-width: 800px) { p { color: red; } }
+@media (min-width: 992px) { p { color: red; } }
 </style></head><body><p>hi</p></body></html>"""
-        pdf = render(html)
-        assert count_color_op(pdf, 1, 0, 0) == 0
+        assert count_color_op(render(html), 1, 0, 0) == 0
+        assert count_color_op(render(html, viewport_width=1200), 1, 0, 0) >= 1
+
+    def test_screen_and_width_is_still_screen(self):
+        html = """<html><head><style>
+@media screen and (min-width: 1px) { p { color: red; } }
+</style></head><body><p>hi</p></body></html>"""
+        assert count_color_op(render(html, viewport_width=1200), 1, 0, 0) == 0
 
 
 # ---------------------------------------------------------------------------

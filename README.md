@@ -87,8 +87,15 @@ ferropdf.Options(
     base_url=None,          # Resolve relative paths in CSS
     title=None,             # PDF metadata
     author=None,            # PDF metadata
+    viewport_width=None,    # CSS px for @media width queries (None = page area)
 )
 ```
+
+`@media` queries are evaluated for print: the media type is `print`, and width
+features (`min-width`, `max-width`, `width >= …`) are measured against the page
+area in CSS px — about 643px for A4 with 20mm margins, which selects the narrow
+layout of responsive frameworks. Pass `viewport_width=1200` to get their desktop
+breakpoints (`.col-md-6`, `lg:flex`); the page itself keeps its size.
 
 ### `Engine`
 
@@ -239,7 +246,10 @@ every row is a test that renders a snippet and checks the PDF, and every ❌ row
 | Cascade | `::before` / `::after` take their own styles | ✅ Supported |
 | Cascade | `attr()` and quotes in `content` | ✅ Supported |
 | Cascade | `@media print` | ✅ Supported |
-| Cascade | Width media queries (`min-width`) | ❌ Not yet ([#29](https://github.com/MoncefMak/ferropdf/issues/29)) |
+| Cascade | Width media queries (`min-width`) | ✅ Supported |
+| Cascade | `max-width`, range syntax and `orientation` queries | ✅ Supported |
+| Cascade | `Options(viewport_width=…)` for desktop breakpoints | ✅ Supported |
+| Cascade | Nested `@media` | ✅ Supported |
 | Cascade | `<style>` inside `<body>` is not rendered | ✅ Supported |
 | Text | Bold / italic | ✅ Supported |
 | Text | `text-align: right` | ✅ Supported |

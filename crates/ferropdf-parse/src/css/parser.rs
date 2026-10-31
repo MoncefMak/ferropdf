@@ -64,6 +64,8 @@ pub struct FontFaceRule {
     pub src: String,
     pub font_weight: Option<String>,
     pub font_style: Option<String>,
+    /// Media query lists of the enclosing `@media` rules (all must match).
+    pub media: Vec<String>,
 }
 
 /// A single CSS rule: selector(s) + declarations
@@ -71,6 +73,23 @@ pub struct FontFaceRule {
 pub struct StyleRule {
     pub selectors: Vec<String>,
     pub declarations: Vec<Declaration>,
+    /// Media query lists of the enclosing `@media` rules, outermost first;
+    /// the rule applies when all of them match (see `media_matches`).
+    pub media: Vec<String>,
+}
+
+impl StyleRule {
+    /// Whether the rule's `@media` conditions hold in `ctx`.
+    pub fn media_applies(&self, ctx: &crate::css::MediaContext) -> bool {
+        self.media.iter().all(|m| crate::css::media_matches(m, ctx))
+    }
+}
+
+impl FontFaceRule {
+    /// Whether the rule's `@media` conditions hold in `ctx`.
+    pub fn media_applies(&self, ctx: &crate::css::MediaContext) -> bool {
+        self.media.iter().all(|m| crate::css::media_matches(m, ctx))
+    }
 }
 
 /// A CSS declaration: property + value
@@ -313,11 +332,9 @@ pub fn parse_stylesheet(css: &str) -> ferropdf_core::Result<Stylesheet> {
                     font_faces.push(ff);
                 }
             } else if name_lower == "media" {
-                // Inline the rules of `@media print` queries as if they were
-                // top-level — PDF rendering treats `print` as always active.
-                // Other media types (`screen`, `(min-width: 800px)`, …) are
-                // not relevant to a printed document and are skipped.
-                let (extra_rules, extra_font_faces) = parse_media_at_rule(&mut parser);
+                // Rules inside `@media` keep their condition; it is evaluated
+                // against the page (`print`, page-area width…) at cascade time.
+                let (extra_rules, extra_font_faces) = parse_media_at_rule(&mut parser, &[]);
                 rules.extend(extra_rules);
                 font_faces.extend(extra_font_faces);
             } else if name_lower == "page" {
@@ -457,35 +474,29 @@ fn parse_page_rule(parser: &mut Parser<'_, '_>) -> Option<PageRule> {
 /// for `print` (or `all`); if found, descends into the curly block and
 /// parses its contents as if they were top-level rules. Otherwise the
 /// block is consumed and discarded.
-fn parse_media_at_rule(parser: &mut Parser<'_, '_>) -> (Vec<StyleRule>, Vec<FontFaceRule>) {
-    let mut should_inline = false;
-
-    // Walk prelude tokens until we encounter the `{...}` block. cssparser
-    // yields `Token::CurlyBracketBlock` without entering it; the next call
-    // to `parse_nested_block` consumes its contents.
-    loop {
+fn parse_media_at_rule(
+    parser: &mut Parser<'_, '_>,
+    outer: &[String],
+) -> (Vec<StyleRule>, Vec<FontFaceRule>) {
+    // The prelude (the query list) runs up to the `{...}` block; cssparser
+    // yields `Token::CurlyBracketBlock` without entering it.
+    let start = parser.position();
+    let end = loop {
+        let before = parser.position();
         match parser.next_including_whitespace() {
-            Ok(&Token::CurlyBracketBlock) => break,
-            Ok(Token::Ident(name)) => {
-                if name.eq_ignore_ascii_case("print") || name.eq_ignore_ascii_case("all") {
-                    should_inline = true;
-                }
+            Ok(&Token::CurlyBracketBlock) => break before,
+            Ok(&Token::Function(_) | &Token::ParenthesisBlock) => {
+                let _ = parser.parse_nested_block(|p| -> Result<(), ParseError<'_, ()>> {
+                    while p.next_including_whitespace_and_comments().is_ok() {}
+                    Ok(())
+                });
             }
-            // `screen`, comma-separated lists, `(min-width: ...)`, etc. —
-            // ignored. We only flatten when we positively saw `print`/`all`.
             Ok(_) => {}
             Err(_) => return (Vec::new(), Vec::new()),
         }
-    }
-
-    if !should_inline {
-        // We've already consumed the `{`; drain its contents and discard.
-        let _ = parser.parse_nested_block(|p| -> Result<(), ParseError<'_, ()>> {
-            while p.next().is_ok() {}
-            Ok(())
-        });
-        return (Vec::new(), Vec::new());
-    }
+    };
+    let mut media = outer.to_vec();
+    media.push(parser.slice(start..end).trim().to_string());
 
     parser
         .parse_nested_block(
@@ -504,18 +515,26 @@ fn parse_media_at_rule(parser: &mut Parser<'_, '_>) -> (Vec<StyleRule>, Vec<Font
                     if let Ok(Token::AtKeyword(ref name)) = p.next() {
                         let name_lower = name.to_lowercase();
                         if name_lower == "font-face" {
-                            if let Some(ff) = parse_font_face_rule(p) {
+                            if let Some(mut ff) = parse_font_face_rule(p) {
+                                ff.media = media.clone();
                                 font_faces.push(ff);
                             }
+                        } else if name_lower == "media" {
+                            // Nested `@media`: both conditions must hold.
+                            let (r, f) = parse_media_at_rule(p, &media);
+                            rules.extend(r);
+                            font_faces.extend(f);
                         } else {
-                            // Nested @media is not flattened — out of scope.
                             let _ = skip_at_rule(p);
                         }
                         continue;
                     }
                     p.reset(&start);
                     match parse_qualified_rule(p) {
-                        Some(rule) => rules.push(rule),
+                        Some(mut rule) => {
+                            rule.media = media.clone();
+                            rules.push(rule);
+                        }
                         None => {
                             let _ = p.next();
                         }
@@ -639,6 +658,7 @@ fn parse_font_face_rule(parser: &mut Parser<'_, '_>) -> Option<FontFaceRule> {
             src,
             font_weight,
             font_style,
+            media: Vec::new(),
         }),
         _ => None,
     }
@@ -720,6 +740,7 @@ fn parse_qualified_rule(parser: &mut Parser<'_, '_>) -> Option<StyleRule> {
     Some(StyleRule {
         selectors,
         declarations,
+        media: Vec::new(),
     })
 }
 

@@ -26,6 +26,11 @@ pub struct RenderOptions {
     pub author: Option<String>,
     /// Reject input HTML longer than this. Defaults to [`DEFAULT_MAX_HTML_BYTES`].
     pub max_html_bytes: Option<usize>,
+    /// Width in CSS px that `@media` width queries are evaluated against.
+    /// `None` uses the page area (A4 with 20mm margins ≈ 643px), which picks
+    /// the narrow layout of responsive frameworks; set e.g. `1200` for their
+    /// desktop layout. Layout itself always uses the page width.
+    pub viewport_width: Option<f32>,
 }
 
 /// Result of a render operation: PDF bytes + any non-fatal warnings.
@@ -126,20 +131,6 @@ fn render_with_warnings_inner(
         }
     }
 
-    // 3. Load @font-face custom fonts
-    for sheet in &stylesheets {
-        for ff in &sheet.font_faces {
-            match load_font_face_data(&ff.src, opts.base_url.as_deref()) {
-                Ok(Some(data)) => fonts.load_font_data(data),
-                Ok(None) => {}
-                Err(reason) => warnings.push(RenderWarning::StylesheetFailed {
-                    path: ff.src.clone(),
-                    reason: format!("@font-face: {}", reason),
-                }),
-            }
-        }
-    }
-
     // 4. Build page config — @page { margin / size } overrides Options
     // when present (last @page rule wins, in source order across all sheets).
     let mut page_config = PageConfig {
@@ -188,6 +179,39 @@ fn render_with_warnings_inner(
         }
     }
 
+    // 4a. Media features for `@media`: the page area in CSS px, or the
+    // `viewport_width` option (the height keeps the page's proportions).
+    let media = {
+        let (w, h) = (
+            page_config.content_width_pt() / 0.75,
+            page_config.content_height_pt() / 0.75,
+        );
+        match opts.viewport_width.filter(|v| *v > 0.0 && w > 0.0) {
+            Some(vw) => ferropdf_parse::css::MediaContext {
+                width: vw,
+                height: h * vw / w,
+            },
+            None => ferropdf_parse::css::MediaContext {
+                width: w,
+                height: h,
+            },
+        }
+    };
+
+    // 4c. Load @font-face custom fonts (those whose `@media` matches)
+    for sheet in &stylesheets {
+        for ff in sheet.font_faces.iter().filter(|f| f.media_applies(&media)) {
+            match load_font_face_data(&ff.src, opts.base_url.as_deref()) {
+                Ok(Some(data)) => fonts.load_font_data(data),
+                Ok(None) => {}
+                Err(reason) => warnings.push(RenderWarning::StylesheetFailed {
+                    path: ff.src.clone(),
+                    reason: format!("@font-face: {}", reason),
+                }),
+            }
+        }
+    }
+
     // 4b. Add synthetic `::before` / `::after` elements; the cascade styles
     // them and step 5a fills in their generated content.
     {
@@ -199,16 +223,13 @@ fn render_with_warnings_inner(
         ferropdf_style::pseudo_elements::inject_pseudo_content(
             &mut parse_result.document,
             &all_sheets,
+            &media,
         );
     }
 
     // 5. Resolve styles (all values resolved to pt)
-    let mut styles = ferropdf_style::resolve(
-        &parse_result.document,
-        &stylesheets,
-        ua_css,
-        page_config.content_width_pt(),
-    )?;
+    let mut styles =
+        ferropdf_style::resolve_with_media(&parse_result.document, &stylesheets, ua_css, &media)?;
 
     // 5a. CSS counters and `content` of the pseudo-elements.
     ferropdf_style::pseudo_elements::resolve_generated_content(

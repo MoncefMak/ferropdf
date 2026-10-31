@@ -56,6 +56,7 @@ fn default_opts() -> RenderOptions {
         title: None,
         author: None,
         max_html_bytes: None,
+        viewport_width: None,
     }
 }
 

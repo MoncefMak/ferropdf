@@ -345,6 +345,31 @@ def chk_media_width():
     assert b"1 0 0 rg" in d.pdf
 
 
+def chk_media_max_width_and_range():
+    # The A4 page area (20mm margins) is ~643px wide.
+    css = ("@media (max-width: 700px){.a{color:#ff0000}}"
+           "@media (700px < width){.b{color:#00ff00}}"
+           "@media (600px <= width <= 700px) and (orientation: portrait){.c{color:#0000ff}}")
+    d = Doc(wrap('<p class="a">a</p><p class="b">b</p><p class="c">c</p>', css))
+    assert b"1 0 0 rg" in d.pdf and b"0 1 0 rg" not in d.pdf and b"0 0 1 rg" in d.pdf
+
+
+def chk_viewport_width_option():
+    # Bootstrap-style grid: two columns side by side only from 768px.
+    css = (".row{display:flex;flex-wrap:wrap}.col{width:100%}"
+           "@media (min-width:768px){.col-md-6{width:50%}}")
+    html = wrap('<div class="row"><div class="col col-md-6">LEFT</div><div class="col col-md-6">RIGHT</div></div>', css)
+    narrow, wide = Doc(html), Doc(html, viewport_width=1200)
+    assert narrow.word("RIGHT")[1] > narrow.word("LEFT")[1], "stacked on the page-width viewport"
+    assert abs(wide.word("RIGHT")[1] - wide.word("LEFT")[1]) < 1, "side by side at 1200px"
+
+
+def chk_nested_media():
+    css = "@media print{@media (min-width:100px){p{color:#ff0000}}@media (min-width:5000px){p{color:#00ff00}}}"
+    d = Doc(wrap("<p>x</p>", css))
+    assert b"1 0 0 rg" in d.pdf and b"0 1 0 rg" not in d.pdf
+
+
 def chk_lists():
     d = Doc(wrap('<ul><li>a</li></ul><ol><li>b</li></ol><ol style="list-style-type:upper-roman"><li>c</li><li>d</li></ol>'))
     t = d.text()
@@ -879,7 +904,10 @@ FEATURES = [
     Feature("Cascade", "`::before` / `::after` take their own styles", chk_pseudo_own_style),
     Feature("Cascade", "`attr()` and quotes in `content`", chk_content_attr_quotes),
     Feature("Cascade", "`@media print`", chk_media_print),
-    Feature("Cascade", "Width media queries (`min-width`)", chk_media_width, 29),
+    Feature("Cascade", "Width media queries (`min-width`)", chk_media_width),
+    Feature("Cascade", "`max-width`, range syntax and `orientation` queries", chk_media_max_width_and_range),
+    Feature("Cascade", "`Options(viewport_width=…)` for desktop breakpoints", chk_viewport_width_option),
+    Feature("Cascade", "Nested `@media`", chk_nested_media),
     Feature("Cascade", "`<style>` inside `<body>` is not rendered", chk_style_in_body_hidden),
     Feature("Text", "Bold / italic", chk_font_weight_style),
     Feature("Text", "`text-align: right`", chk_text_align_right),
