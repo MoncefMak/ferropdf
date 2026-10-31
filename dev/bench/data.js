@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793427278897,
+  "lastUpdate": 1793427477385,
   "repoUrl": "https://github.com/MoncefMak/ferropdf",
   "entries": {
     "FastPDF Criterion Benchmarks": [
@@ -2695,6 +2695,54 @@ window.BENCHMARK_DATA = {
             "name": "render_invoice_cached",
             "value": 3441456,
             "range": "± 52597",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "72460183+MoncefMak@users.noreply.github.com",
+            "name": "MoncefMak",
+            "username": "MoncefMak"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "529ff6ddf38ac1fa2977cd9d7ddbfcde51513c04",
+          "message": "Merge pull request #79 from MoncefMak/fix/font-collections\n\nfix: font collections, CFF embedding and exact ToUnicode",
+          "timestamp": "2026-10-31T07:12:17+01:00",
+          "tree_id": "cd6c84e9d6148afc6f2fd1e00ce76e5c0d3a634c",
+          "url": "https://github.com/MoncefMak/ferropdf/commit/529ff6ddf38ac1fa2977cd9d7ddbfcde51513c04"
+        },
+        "date": 1793427476603,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "render_simple",
+            "value": 6734293,
+            "range": "± 60920",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice",
+            "value": 7724097,
+            "range": "± 328205",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_simple_cached",
+            "value": 3226480,
+            "range": "± 13324",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice_cached",
+            "value": 4263157,
+            "range": "± 22076",
             "unit": "ns/iter"
           }
         ]
