@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- `@page :first`, `:left` and `:right` margins were ignored. They now apply to their pages: pagination uses each page's content height, and content and margin boxes use each page's margins. Content is laid out once at the base `@page` width, so a per-page left margin shifts it rather than re-flowing it (#27).
 - `border-radius` percentages (`50%` circles and ellipses), `em` / `rem` radii (Bootstrap's `.375rem`), the 2–4 value and `/` elliptical forms, and the `border-*-radius` longhands were dropped; corners are now elliptical, resolved against the border box and scaled down when they overlap. Box-shadow spread and `overflow` clips follow the same radii (#64).
 - A `display: none` child no longer breaks the inline flow of its parent (an inline-block next to it was laid out full-width on its own line).
 - An `inline-block` holding inline elements and text shrink-wraps to their combined width instead of wrapping its content.

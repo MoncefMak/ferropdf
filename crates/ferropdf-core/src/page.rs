@@ -173,6 +173,23 @@ impl PageMargins {
         }
     }
 
+    /// Parse the `margin` shorthand strictly: `None` when invalid.
+    pub fn parse_shorthand(s: &str) -> Option<[f32; 4]> {
+        let vals: Option<Vec<f32>> = s.split_whitespace().map(parse_css_length_to_pt).collect();
+        match vals.as_deref()? {
+            [a] => Some([*a; 4]),
+            [v, h] => Some([*v, *h, *v, *h]),
+            [t, h, b] => Some([*t, *h, *b, *h]),
+            [t, r, b, l] => Some([*t, *r, *b, *l]),
+            _ => None,
+        }
+    }
+
+    /// Parse one margin length; `None` when invalid.
+    pub fn parse_side(s: &str) -> Option<f32> {
+        parse_css_length_to_pt(s)
+    }
+
     /// Apply a single side (`margin-top: 3cm`); invalid values are ignored.
     pub fn set_side(&mut self, side: usize, value: &str) {
         if let Some(v) = parse_css_length_to_pt(value) {
@@ -206,11 +223,23 @@ fn parse_css_length_to_pt(s: &str) -> Option<f32> {
     }
 }
 
+/// Margin sides (top, right, bottom, left) set by `@page :first`,
+/// `@page :left` and `@page :right` rules; `None` keeps the base margin.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct PageMarginOverrides {
+    pub first: [Option<f32>; 4],
+    pub left: [Option<f32>; 4],
+    pub right: [Option<f32>; 4],
+}
+
 #[derive(Debug, Clone)]
 pub struct PageConfig {
     pub size: PageSize,
+    /// Margins of the base `@page` rule (and the layout width).
     pub margins: PageMargins,
     pub orientation: Orientation,
+    /// Per-page margins from `:first` / `:left` / `:right`.
+    pub margin_overrides: PageMarginOverrides,
 }
 
 impl Default for PageConfig {
@@ -219,11 +248,52 @@ impl Default for PageConfig {
             size: PageSize::A4,
             margins: PageMargins::default(),
             orientation: Orientation::Portrait,
+            margin_overrides: PageMarginOverrides::default(),
         }
     }
 }
 
 impl PageConfig {
+    /// Margins of page `page_number` (1-based). Page 1 is a right page;
+    /// `:first` beats `:left` / `:right`, which beat the base rule
+    /// (CSS Paged Media 3 §4.2).
+    ///
+    /// Content is laid out once at the base content width: a per-page
+    /// left margin moves the content horizontally (binding offset) but does
+    /// not re-flow it.
+    pub fn margins_for(&self, page_number: u32) -> PageMargins {
+        let mut m = self.margins.clone();
+        let mut apply = |sides: &[Option<f32>; 4]| {
+            for (i, v) in sides.iter().enumerate() {
+                if let Some(v) = v {
+                    match i {
+                        0 => m.top = *v,
+                        1 => m.right = *v,
+                        2 => m.bottom = *v,
+                        _ => m.left = *v,
+                    }
+                }
+            }
+        };
+        let o = &self.margin_overrides;
+        apply(if page_number % 2 == 1 {
+            &o.right
+        } else {
+            &o.left
+        });
+        if page_number == 1 {
+            apply(&o.first);
+        }
+        m
+    }
+
+    /// Content height of page `page_number` (1-based), in pt.
+    pub fn content_height_for(&self, page_number: u32) -> f32 {
+        let (_, h) = self.size.dimensions_pt();
+        let m = self.margins_for(page_number);
+        (h - m.top - m.bottom).max(0.0)
+    }
+
     /// Content width in points (pt). Unité interne du moteur.
     pub fn content_width_pt(&self) -> f32 {
         let (w, _) = self.size.dimensions_pt();
@@ -303,5 +373,38 @@ mod margin_tests {
         );
         assert_eq!(mm(&PageMargins::from_css_str("0")), [0, 0, 0, 0]);
         assert_eq!(mm(&PageMargins::from_css_str("bogus")), [20, 20, 20, 20]);
+    }
+}
+
+#[cfg(test)]
+mod per_page_margin_tests {
+    use super::*;
+
+    #[test]
+    fn first_beats_left_right_beats_base() {
+        let mut c = PageConfig {
+            margins: PageMargins::uniform_pt(50.0),
+            ..Default::default()
+        };
+        c.margin_overrides.right[3] = Some(80.0);
+        c.margin_overrides.left[3] = Some(30.0);
+        c.margin_overrides.first[0] = Some(200.0);
+        c.margin_overrides.first[3] = Some(10.0);
+        let p1 = c.margins_for(1);
+        assert_eq!((p1.top, p1.left), (200.0, 10.0));
+        let p2 = c.margins_for(2);
+        assert_eq!((p2.top, p2.left), (50.0, 30.0));
+        let p3 = c.margins_for(3);
+        assert_eq!((p3.top, p3.left), (50.0, 80.0));
+        assert!(c.content_height_for(1) < c.content_height_for(2));
+    }
+
+    #[test]
+    fn strict_shorthand() {
+        assert_eq!(
+            PageMargins::parse_shorthand("1in 2pt"),
+            Some([72.0, 2.0, 72.0, 2.0])
+        );
+        assert_eq!(PageMargins::parse_shorthand("auto"), None);
     }
 }

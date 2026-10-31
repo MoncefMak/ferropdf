@@ -73,11 +73,13 @@ pub(crate) fn add_margin_boxes(
         return;
     }
     let total = pages.len() as u32;
-    let content_w = config.content_width_pt();
-    let content_h = config.content_height_pt();
 
     for page in pages.iter_mut() {
         let n = page.page_number;
+        // Margin areas follow this page's margins (`@page :first` …).
+        let margins = config.margins_for(n);
+        let content_w = (config.page_width_pt() - margins.left - margins.right).max(0.0);
+        let content_h = config.content_height_for(n);
         // Matching rules, lowest priority first (stable sort keeps source order).
         let mut matching: Vec<&PageRule> = rules
             .iter()
@@ -104,8 +106,8 @@ pub(crate) fn add_margin_boxes(
                 continue; // `content: none` / `normal`
             };
             let (area_y, area_h) = match side {
-                Side::Top => (-config.margins.top, config.margins.top),
-                Side::Bottom => (content_h, config.margins.bottom),
+                Side::Top => (-margins.top, margins.top),
+                Side::Bottom => (content_h, margins.bottom),
             };
 
             // `element(name)`: place the pre-laid-out running element.
