@@ -3,6 +3,9 @@ use ferropdf_core::*;
 /// Apply tag-specific defaults (e.g. <b> is bold, <em> is italic)
 pub fn apply_tag_defaults(style: &mut ComputedStyle, tag: Option<&str>) {
     match tag {
+        Some(ferropdf_core::dom::PSEUDO_BEFORE | ferropdf_core::dom::PSEUDO_AFTER) => {
+            style.display = Display::Inline;
+        }
         Some("b") | Some("strong") => {
             style.display = Display::Inline;
             style.font_weight = FontWeight::Bold;

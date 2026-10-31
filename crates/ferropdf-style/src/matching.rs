@@ -227,12 +227,19 @@ impl<'a> DomNode<'a> {
                 .children
                 .iter()
                 .copied()
-                .filter(|&cid| self.doc.get(cid).node_type == NodeType::Element)
+                .filter(|&cid| is_real_element(self.doc, cid))
                 .collect()
         } else {
             vec![]
         }
     }
+}
+
+/// An element node that is not a synthetic `::before` / `::after` box:
+/// generated content is invisible to structural selectors.
+fn is_real_element(doc: &Document, id: NodeId) -> bool {
+    let n = doc.get(id);
+    n.node_type == NodeType::Element && !n.is_pseudo()
 }
 
 impl<'a> selectors::Element for DomNode<'a> {
@@ -287,7 +294,7 @@ impl<'a> selectors::Element for DomNode<'a> {
             .children
             .iter()
             .copied()
-            .find(|&cid| self.doc.get(cid).node_type == NodeType::Element)
+            .find(|&cid| is_real_element(self.doc, cid))
             .map(|id| DomNode::new(self.doc, id))
     }
 
@@ -409,7 +416,7 @@ impl<'a> selectors::Element for DomNode<'a> {
         self.node().children.iter().all(|&cid| {
             let child = self.doc.get(cid);
             match child.node_type {
-                NodeType::Element => false,
+                NodeType::Element => child.is_pseudo(),
                 NodeType::Text => child.text.as_deref().is_none_or(|t| t.trim().is_empty()),
                 _ => true,
             }
@@ -488,6 +495,54 @@ pub fn parse_rules(sheets: &[&Stylesheet], ua_sheet_count: usize) -> Vec<Matched
     rules
 }
 
+fn pseudo_kind(node: &ferropdf_core::Node) -> Option<FerroPseudoElement> {
+    match node.tag()? {
+        ferropdf_core::dom::PSEUDO_BEFORE => Some(FerroPseudoElement::Before),
+        ferropdf_core::dom::PSEUDO_AFTER => Some(FerroPseudoElement::After),
+        _ => None,
+    }
+}
+
+/// Whether a rule declaring `content` targets the `::before`
+/// (`after == false`) or `::after` pseudo-element of `element`. Rules
+/// without `content` (`*, ::before, ::after { box-sizing: … }`) alone never
+/// generate a box.
+pub fn has_pseudo_rules(
+    doc: &Document,
+    element: NodeId,
+    after: bool,
+    rules: &[MatchedRule],
+    nth_cache: &mut NthIndexCache,
+) -> bool {
+    let kind = if after {
+        FerroPseudoElement::After
+    } else {
+        FerroPseudoElement::Before
+    };
+    let el = DomNode::new(doc, element);
+    let declares_content = |rule: &MatchedRule| {
+        rule.declarations.iter().any(|d| {
+            matches!(&d.property, ferropdf_parse::CssProperty::Unknown(n) if n.eq_ignore_ascii_case("content"))
+        })
+    };
+    rules.iter().filter(|r| declares_content(r)).any(|rule| {
+        rule.selectors.0.iter().any(|selector| {
+            if selector.pseudo_element() != Some(&kind) {
+                return false;
+            }
+            let mut context = MatchingContext::new(
+                MatchingMode::ForStatelessPseudoElement,
+                None,
+                nth_cache,
+                QuirksMode::NoQuirks,
+                NeedsSelectorFlags::No,
+                IgnoreNthChildForInvalidation::No,
+            );
+            selectors::matching::matches_selector(selector, 0, None, &el, &mut context)
+        })
+    })
+}
+
 /// Match all rules against a node and return declarations scored with specificity.
 /// The `selectors` crate handles ALL matching logic: combinators, pseudo-classes,
 /// attribute selectors, :nth-child, etc.
@@ -505,13 +560,25 @@ pub fn match_node(
         return Vec::new();
     }
 
-    let element = DomNode::new(doc, node_id);
+    // A synthetic `::before` / `::after` element takes the rules whose
+    // selector ends in that pseudo-element, matched against its parent
+    // (the originating element). Other elements skip those rules.
+    let pseudo = pseudo_kind(node);
+    let (target, mode) = match (pseudo.is_some(), node.parent) {
+        (true, Some(parent)) => (parent, MatchingMode::ForStatelessPseudoElement),
+        (true, None) => return Vec::new(),
+        (false, _) => (node_id, MatchingMode::Normal),
+    };
+    let element = DomNode::new(doc, target);
     let mut result = Vec::new();
 
     for rule in rules {
         for selector in rule.selectors.0.iter() {
+            if selector.pseudo_element() != pseudo.as_ref() {
+                continue;
+            }
             let mut context = MatchingContext::new(
-                MatchingMode::Normal,
+                mode,
                 None, // no bloom filter
                 nth_cache,
                 QuirksMode::NoQuirks,
