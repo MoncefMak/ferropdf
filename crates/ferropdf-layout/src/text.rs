@@ -517,6 +517,20 @@ pub fn shape_rich_text_lines(
     lines
 }
 
+/// Text of `glyph`'s cluster, or `""` when an earlier glyph of the same
+/// cluster (same source byte range) already carries it.
+fn cluster_text(
+    line: &str,
+    glyph: &cosmic_text::LayoutGlyph,
+    seen: &mut std::collections::HashSet<(usize, usize)>,
+) -> String {
+    if seen.insert((glyph.start, glyph.end)) {
+        line.get(glyph.start..glyph.end).unwrap_or("").to_string()
+    } else {
+        String::new()
+    }
+}
+
 #[cfg(test)]
 mod pool_tests {
     use super::FontDatabase;
@@ -557,19 +571,5 @@ mod pool_tests {
     fn font_database_is_send_and_sync() {
         fn assert_send_sync<T: Send + Sync>() {}
         assert_send_sync::<FontDatabase>();
-    }
-}
-
-/// Text of `glyph`'s cluster, or `""` when an earlier glyph of the same
-/// cluster (same source byte range) already carries it.
-fn cluster_text(
-    line: &str,
-    glyph: &cosmic_text::LayoutGlyph,
-    seen: &mut std::collections::HashSet<(usize, usize)>,
-) -> String {
-    if seen.insert((glyph.start, glyph.end)) {
-        line.get(glyph.start..glyph.end).unwrap_or("").to_string()
-    } else {
-        String::new()
     }
 }
