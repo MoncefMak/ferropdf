@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CFF-flavoured OpenType fonts (`.otf`, most CJK and macOS faces) were embedded as TrueType (`FontFile2` / `CIDFontType2`); they are now embedded as `FontFile3 /OpenType` with a `CIDFontType0`.
 - Text extraction: the ToUnicode map is built from the shaped text, so ligatures extract as their letters (`office`, not `oﬃce`) and glyphs shared by several code points map to the code point actually written (`日`, not the Kangxi radical `⽇`). Destination strings outside the BMP are now encoded as UTF-16 surrogate pairs.
 - `@font-face` ignored an unquoted `src: url(data:…)`.
+- `border-radius` percentages (`50%` circles and ellipses), `em` / `rem` radii (Bootstrap's `.375rem`), the 2–4 value and `/` elliptical forms, and the `border-*-radius` longhands were dropped; corners are now elliptical, resolved against the border box and scaled down when they overlap. Box-shadow spread and `overflow` clips follow the same radii (#64).
 - A `display: none` child no longer breaks the inline flow of its parent (an inline-block next to it was laid out full-width on its own line).
 - An `inline-block` holding inline elements and text shrink-wraps to their combined width instead of wrapping its content.
 - White space between flex/grid items (indented HTML) created invisible items: extra gaps, wrong `space-between`/`flex: 1` distribution, shifted grid cells.

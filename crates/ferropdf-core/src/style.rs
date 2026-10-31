@@ -318,35 +318,109 @@ impl Default for BorderSide {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+/// Computed `border-radius`: for each corner (top-left, top-right,
+/// bottom-right, bottom-left) a horizontal and a vertical radius. Lengths are
+/// in pt after unit resolution; percentages stay until paint time, where
+/// [`BorderRadius::resolve`] measures them against the border box.
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BorderRadius {
-    pub top_left: f32,
-    pub top_right: f32,
-    pub bottom_right: f32,
-    pub bottom_left: f32,
+    pub corners: [(Length, Length); 4],
 }
-impl BorderRadius {
-    pub fn uniform(r: f32) -> Self {
+
+impl Default for BorderRadius {
+    fn default() -> Self {
         Self {
-            top_left: r,
-            top_right: r,
-            bottom_right: r,
-            bottom_left: r,
+            corners: [(Length::Zero, Length::Zero); 4],
         }
     }
-    pub fn any_nonzero(&self) -> bool {
-        self.top_left > 0.0
-            || self.top_right > 0.0
-            || self.bottom_right > 0.0
-            || self.bottom_left > 0.0
+}
+
+impl BorderRadius {
+    /// The same circular radius on every corner.
+    pub fn uniform(r: Length) -> Self {
+        Self {
+            corners: [(r, r); 4],
+        }
     }
-    pub fn to_array(&self) -> [f32; 4] {
-        [
-            self.top_left,
-            self.top_right,
-            self.bottom_right,
-            self.bottom_left,
-        ]
+
+    /// Resolve against a border box of `w` × `h` pt, then scale down
+    /// overlapping radii (CSS Backgrounds §5.5).
+    pub fn resolve(&self, w: f32, h: f32) -> Radii {
+        let len = |l: Length, basis: f32| -> f32 {
+            let v = match l {
+                Length::Pt(v) => v,
+                Length::Px(v) => v * 0.75,
+                Length::Mm(v) => v * 2.834_646,
+                Length::Percent(p) => p / 100.0 * basis,
+                Length::Calc(c) => c.against(basis),
+                _ => 0.0,
+            };
+            v.max(0.0)
+        };
+        Radii(self.corners.map(|(x, y)| (len(x, w), len(y, h)))).clamped(w, h)
+    }
+}
+
+/// Resolved elliptical corner radii in pt: `(horizontal, vertical)` for
+/// top-left, top-right, bottom-right, bottom-left.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct Radii(pub [(f32, f32); 4]);
+
+impl Radii {
+    pub const ZERO: Radii = Radii([(0.0, 0.0); 4]);
+
+    /// Circular radius `r` on every corner.
+    pub fn uniform(r: f32) -> Self {
+        Radii([(r, r); 4])
+    }
+
+    pub fn is_zero(&self) -> bool {
+        self.0.iter().all(|(x, y)| *x <= 0.0 || *y <= 0.0)
+    }
+
+    /// Scale all radii by one factor so that adjacent radii fit the box.
+    pub fn clamped(self, w: f32, h: f32) -> Self {
+        let [tl, tr, br, bl] = self.0;
+        let fit = |side: f32, a: f32, b: f32| {
+            if a + b > side && a + b > 0.0 {
+                side.max(0.0) / (a + b)
+            } else {
+                1.0
+            }
+        };
+        let f = fit(w, tl.0, tr.0)
+            .min(fit(w, bl.0, br.0))
+            .min(fit(h, tl.1, bl.1))
+            .min(fit(h, tr.1, br.1));
+        if f >= 1.0 {
+            return self;
+        }
+        Radii(self.0.map(|(x, y)| (x * f, y * f)))
+    }
+
+    /// Radii of a box inset by `[top, right, bottom, left]` (e.g. the padding
+    /// edge inside the borders): each radius shrinks by the adjacent inset.
+    pub fn inset(self, [t, r, b, l]: [f32; 4]) -> Self {
+        let [tl, tr, br, bl] = self.0;
+        let sub = |v: f32, d: f32| (v - d).max(0.0);
+        Radii([
+            (sub(tl.0, l), sub(tl.1, t)),
+            (sub(tr.0, r), sub(tr.1, t)),
+            (sub(br.0, r), sub(br.1, b)),
+            (sub(bl.0, l), sub(bl.1, b)),
+        ])
+    }
+
+    /// Radii of a box grown by `d` on every side (box-shadow spread);
+    /// square corners stay square.
+    pub fn grow(self, d: f32) -> Self {
+        Radii(self.0.map(|(x, y)| {
+            if x <= 0.0 || y <= 0.0 {
+                (x, y)
+            } else {
+                ((x + d).max(0.0), (y + d).max(0.0))
+            }
+        }))
     }
 }
 
@@ -592,5 +666,37 @@ mod white_space_tests {
         assert!(WhiteSpace::PreWrap.wraps());
         assert!(!WhiteSpace::Nowrap.wraps());
         assert!(!WhiteSpace::Pre.wraps());
+    }
+}
+
+#[cfg(test)]
+mod radii_tests {
+    use super::Radii;
+
+    #[test]
+    fn pill_radii_are_clamped_to_half_the_height() {
+        let r = Radii::uniform(9999.0).clamped(200.0, 40.0);
+        for (x, y) in r.0 {
+            assert!((x - 20.0).abs() < 0.01 && (y - 20.0).abs() < 0.01, "{r:?}");
+        }
+    }
+
+    #[test]
+    fn small_radii_are_untouched() {
+        let r = Radii([(5.0, 5.0), (6.0, 6.0), (7.0, 7.0), (8.0, 8.0)]);
+        assert_eq!(r.clamped(100.0, 50.0), r);
+    }
+
+    #[test]
+    fn inset_and_grow() {
+        let r = Radii::uniform(10.0).inset([2.0, 3.0, 4.0, 5.0]);
+        assert_eq!(r.0[0], (5.0, 8.0)); // top-left: minus left, minus top
+        assert_eq!(r.0[2], (7.0, 6.0)); // bottom-right: minus right, minus bottom
+        assert_eq!(
+            Radii::ZERO.grow(5.0),
+            Radii::ZERO,
+            "square corners stay square"
+        );
+        assert_eq!(Radii::uniform(4.0).grow(2.0).0[1], (6.0, 6.0));
     }
 }
