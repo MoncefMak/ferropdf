@@ -8,10 +8,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
-- Fonts from `.ttc` / `.otc` collections (macOS system fonts, Noto CJK) embedded face 0 of the file whatever face was used, so text from any other face drew wrong glyphs and could not be extracted. The face index is now kept through glyph lookup, subsetting, metrics and ToUnicode (#59).
-- CFF-flavoured OpenType fonts (`.otf`, most CJK and macOS faces) were embedded as TrueType (`FontFile2` / `CIDFontType2`); they are now embedded as `FontFile3 /OpenType` with a `CIDFontType0`.
-- Text extraction: the ToUnicode map is built from the shaped text, so ligatures extract as their letters (`office`, not `oﬃce`) and glyphs shared by several code points map to the code point actually written (`日`, not the Kangxi radical `⽇`). Destination strings outside the BMP are now encoded as UTF-16 surrogate pairs.
-- `@font-face` ignored an unquoted `src: url(data:…)`.
 - `border-radius` percentages (`50%` circles and ellipses), `em` / `rem` radii (Bootstrap's `.375rem`), the 2–4 value and `/` elliptical forms, and the `border-*-radius` longhands were dropped; corners are now elliptical, resolved against the border box and scaled down when they overlap. Box-shadow spread and `overflow` clips follow the same radii (#64).
 - A `display: none` child no longer breaks the inline flow of its parent (an inline-block next to it was laid out full-width on its own line).
 - An `inline-block` holding inline elements and text shrink-wraps to their combined width instead of wrapping its content.
@@ -35,6 +31,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A shared `Engine` serialised concurrent renders on a global font lock (#53).
 - `from_html()`, `from_file()`, `write_pdf()` and the Django/FastAPI helpers reloaded system fonts on every call (#54).
 - `@font-face` fonts leaked from one document into later renders of the same engine.
+- Fonts from `.ttc` / `.otc` collections (macOS system fonts, Noto CJK) embedded face 0 of the file whatever face was used, so text from any other face drew wrong glyphs and could not be extracted. The face index is now kept through glyph lookup, subsetting, metrics and ToUnicode (#59).
+- CFF-flavoured OpenType fonts (`.otf`, most CJK and macOS faces) were embedded as TrueType (`FontFile2` / `CIDFontType2`); they are now embedded as `FontFile3 /OpenType` with a `CIDFontType0`.
+- Text extraction: the ToUnicode map is built from the shaped text, so ligatures extract as their letters (`office`, not `oﬃce`) and glyphs shared by several code points map to the code point actually written (`日`, not the Kangxi radical `⽇`). Destination strings outside the BMP are now encoded as UTF-16 surrogate pairs.
+- `@font-face` ignored an unquoted `src: url(data:…)`.
 - Tag defaults (`<a>` underline, `<b>` bold, `<span>` inline…) overrode author CSS: `span { display: inline-block }`, `a { text-decoration: none }` had no effect.
 - `border-radius` is painted (backgrounds, uniform borders, shadows), radii clamped so `9999px` pills work (#49).
 - `dashed`, `dotted` and `double` borders (#19).
@@ -48,7 +48,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PyO3 0.24 → 0.29 (RUSTSEC-2026-0176, RUSTSEC-2026-0177).
 
 ### Added
-- Subset fonts carry the `ABCDEF+Name` subset tag in their PDF font name (PDF 32000 §9.6.4).
 - CSS counters: `counter-reset`, `counter-increment`, `counter-set` with nested scopes, and `counter()` / `counters()` in `content` with counter styles (decimal, decimal-leading-zero, roman, alpha, greek, disc…). `content` also accepts `attr()`, `open-quote` / `close-quote` and CSS string escapes (#31).
 - `::before` / `::after` are real boxes styled by their own rules (colour, font, `display`, counters…), instead of plain text inheriting the parent's style. Structural selectors (`:first-child`, `:empty`, `+`) ignore them, as in browsers.
 - 2D transforms: `transform` (`translate*`, `scale*`, `rotate`, `skew*`, `matrix`; 3D functions flattened onto the page), the individual `translate` / `rotate` / `scale` properties and `transform-origin`. Applied as a PDF transformation matrix around the box and its descendants, so text stays vector and selectable (#38).
@@ -64,6 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `@page` margin boxes (`@top-left|center|right`, `@bottom-left|center|right`) with `counter(page)` / `counter(pages)` and counter styles (#25, #26).
 - `@page :first`, `:left`, `:right` selectors for margin boxes.
 - Template corpus, feature-matrix tests (README table generated from them), visual regression tests, multi-engine benchmark (`bench/engines.py`).
+- Subset fonts carry the `ABCDEF+Name` subset tag in their PDF font name (PDF 32000 §9.6.4).
 
 ## [0.2.9] - 2026-04
 
