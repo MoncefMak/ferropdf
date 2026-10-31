@@ -143,7 +143,7 @@ fn populate_shaped_lines_inner(
                 style.font_weight.is_bold(),
                 style.font_style == ferropdf_core::FontStyle::Italic,
                 lb.content.width,
-                text::css_align(style.text_align),
+                text::css_align(style.text_align.physical(style.direction)),
                 style.white_space.wraps(),
                 fs,
             );
@@ -229,7 +229,7 @@ fn merge_inline_children(lb: &mut LayoutBox, fs: &mut cosmic_text::FontSystem) {
     lb.shaped_lines = text::shape_rich_text_lines(
         &spans,
         lb.content.width,
-        text::css_align(lb.style.text_align),
+        text::css_align(lb.style.text_align.physical(lb.style.direction)),
         lb.style.white_space.wraps(),
         fs,
     );

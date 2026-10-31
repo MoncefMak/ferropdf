@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Multi-row `<thead>` overlapped on continuation pages; a header left alone at the bottom of a page now moves with the first body row; content after a multi-page table no longer overlaps its last rows.
 - `<thead>`/`<tfoot>` are laid out first/last wherever they appear in the source.
 - `text-align: right | center` had no effect since 0.2.7; `justify` now works (#48, #33).
+- Right-to-left layout is mirrored like in browsers: in a `direction: rtl` flex row the first item is on the right and `flex-start` packs to the right, and grid / table columns run right to left (#51).
+- `text-align` now defaults to `start` and accepts `start` / `end`: right-to-left blocks align right even for Latin text, as in browsers.
 - Whitespace collapsing per `white-space` (`normal`, `nowrap`, `pre`, `pre-wrap`, `pre-line`) (#13, #16).
 - `<style>`, `<script>` and other non-rendered elements inside `<body>` were printed (#14).
 - `break-before` / `break-after` / `break-inside` (#15); `@page { size: A4 landscape }` (#56).

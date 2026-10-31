@@ -498,12 +498,17 @@ fn apply_single(
             }
         }
         CssProperty::TextAlign => {
-            style.text_align = match raw {
-                "center" => TextAlign::Center,
-                "right" => TextAlign::Right,
-                "justify" => TextAlign::Justify,
-                _ => TextAlign::Left,
-            };
+            if let Some(a) = match raw {
+                "start" => Some(TextAlign::Start),
+                "end" => Some(TextAlign::End),
+                "left" => Some(TextAlign::Left),
+                "center" => Some(TextAlign::Center),
+                "right" => Some(TextAlign::Right),
+                "justify" => Some(TextAlign::Justify),
+                _ => None,
+            } {
+                style.text_align = a;
+            }
         }
         CssProperty::TextDecoration => {
             style.text_decoration = match raw {

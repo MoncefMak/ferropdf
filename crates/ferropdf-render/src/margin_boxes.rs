@@ -149,7 +149,7 @@ pub(crate) fn add_margin_boxes(
                 style.font_weight.is_bold(),
                 style.font_style == ferropdf_core::FontStyle::Italic,
                 content_w,
-                ferropdf_layout::text::css_align(style.text_align),
+                ferropdf_layout::text::css_align(style.text_align.physical(style.direction)),
                 true,
                 fs,
             );

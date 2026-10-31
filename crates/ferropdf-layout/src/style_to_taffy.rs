@@ -150,12 +150,40 @@ pub fn convert(style: &ComputedStyle) -> taffy::Style {
         ..Default::default()
     };
     apply_grid(style, &mut out);
+    if style.direction == ferropdf_core::Direction::Rtl
+        && style.display == ferropdf_core::Display::Flex
+    {
+        apply_rtl_flex(&mut out);
+    }
     if style.box_sizing == ferropdf_core::BoxSizing::ContentBox
         && style.display != ferropdf_core::Display::Table
     {
         apply_content_box(style, &mut out);
     }
     out
+}
+
+/// Taffy 0.5 has no `direction`. In a right-to-left flex container the
+/// inline axis runs right to left: a `row` behaves as Taffy's `row-reverse`
+/// (main-start on the right, first item rightmost, `flex-start` packing to
+/// the right) and vice versa, while physical margins keep their sides. For
+/// column containers the cross axis is the inline axis, so start / end
+/// alignment swaps.
+fn apply_rtl_flex(out: &mut taffy::Style) {
+    out.flex_direction = match out.flex_direction {
+        FlexDirection::Row => FlexDirection::RowReverse,
+        FlexDirection::RowReverse => FlexDirection::Row,
+        column => {
+            out.align_items = match out.align_items {
+                Some(AlignItems::FlexStart) => Some(AlignItems::FlexEnd),
+                Some(AlignItems::FlexEnd) => Some(AlignItems::FlexStart),
+                Some(AlignItems::Start) => Some(AlignItems::End),
+                Some(AlignItems::End) => Some(AlignItems::Start),
+                other => other,
+            };
+            column
+        }
+    };
 }
 
 /// Taffy 0.5 sizes are border-box. For `box-sizing: content-box` (the CSS
@@ -604,5 +632,36 @@ mod grid_tests {
         );
         assert_eq!(parse_placement(Some("auto")), GridPlacement::Auto);
         assert_eq!(parse_placement(None), GridPlacement::Auto);
+    }
+}
+
+#[cfg(test)]
+mod rtl_tests {
+    use super::*;
+    use ferropdf_core::{AlignItems as FAlign, Direction, Display as FDisplay};
+
+    fn flex(dir: ferropdf_core::FlexDirection) -> ComputedStyle {
+        ComputedStyle {
+            display: FDisplay::Flex,
+            direction: Direction::Rtl,
+            flex_direction: dir,
+            align_items: FAlign::FlexStart,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn rtl_row_is_reversed() {
+        let out = convert(&flex(ferropdf_core::FlexDirection::Row));
+        assert_eq!(out.flex_direction, FlexDirection::RowReverse);
+        let out = convert(&flex(ferropdf_core::FlexDirection::RowReverse));
+        assert_eq!(out.flex_direction, FlexDirection::Row);
+    }
+
+    #[test]
+    fn rtl_column_swaps_cross_alignment() {
+        let out = convert(&flex(ferropdf_core::FlexDirection::Column));
+        assert_eq!(out.flex_direction, FlexDirection::Column);
+        assert_eq!(out.align_items, Some(AlignItems::FlexEnd));
     }
 }
