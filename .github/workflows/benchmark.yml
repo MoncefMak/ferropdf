@@ -58,8 +58,14 @@ jobs:
           output-file-path: bench_output.txt
           # Only push results on main branch
           auto-push: ${{ github.ref == 'refs/heads/main' }}
-          alert-threshold: "130%"
-          comment-on-alert: true
+          # Shared runners vary up to ~2x between identical runs (see the
+          # gh-pages history), so only flag larger slowdowns.
+          alert-threshold: "200%"
+          # Commit comments need write access, which pull-request tokens do
+          # not have ("Resource not accessible by integration" failed the
+          # job). On PRs the comparison goes to the job summary instead.
+          comment-on-alert: ${{ github.event_name == 'push' }}
+          summary-always: true
           fail-on-alert: false
           github-token: ${{ secrets.GITHUB_TOKEN }}
           # Store results in gh-pages branch

@@ -1007,6 +1007,97 @@ fn load_image(src: &str, base_url: Option<&str>) -> Result<ImageKind, String> {
     })
 }
 
+/// Append a rounded-rectangle path (PDF coordinates, origin bottom-left).
+///
+/// `radii` = [top-left, top-right, bottom-right, bottom-left] in CSS order.
+/// Radii are scaled down together when adjacent ones exceed a side
+/// (CSS Backgrounds 3 §5.5), which is what turns `border-radius: 9999px`
+/// into a pill rather than a broken shape.
+/// Append a rectangle with elliptical corners to the path (PDF space:
+/// `(x, y)` is the bottom-left corner). Radii are scaled down to fit.
+pub(crate) fn rounded_rect_path(
+    content: &mut Content,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    radii: ferropdf_core::Radii,
+) {
+    // A corner with a zero radius on either axis is square.
+    let corner = |(rx, ry): (f32, f32)| {
+        if rx <= 0.0 || ry <= 0.0 {
+            (0.0, 0.0)
+        } else {
+            (rx, ry)
+        }
+    };
+    let ferropdf_core::Radii([tl, tr, br, bl]) = radii.clamped(w, h);
+    let (tl, tr, br, bl) = (corner(tl), corner(tr), corner(br), corner(bl));
+    // Bézier control-point distance for a quarter ellipse.
+    const K: f32 = 0.552_284_8;
+    let top = y + h;
+    let right = x + w;
+    content.move_to(x + tl.0, top);
+    content.line_to(right - tr.0, top);
+    if tr.0 > 0.0 {
+        content.cubic_to(
+            right - tr.0 + tr.0 * K,
+            top,
+            right,
+            top - tr.1 + tr.1 * K,
+            right,
+            top - tr.1,
+        );
+    }
+    content.line_to(right, y + br.1);
+    if br.0 > 0.0 {
+        content.cubic_to(
+            right,
+            y + br.1 - br.1 * K,
+            right - br.0 + br.0 * K,
+            y,
+            right - br.0,
+            y,
+        );
+    }
+    content.line_to(x + bl.0, y);
+    if bl.0 > 0.0 {
+        content.cubic_to(x + bl.0 - bl.0 * K, y, x, y + bl.1 - bl.1 * K, x, y + bl.1);
+    }
+    content.line_to(x, top - tl.1);
+    if tl.0 > 0.0 {
+        content.cubic_to(
+            x,
+            top - tl.1 + tl.1 * K,
+            x + tl.0 - tl.0 * K,
+            top,
+            x + tl.0,
+            top,
+        );
+    }
+    content.close_path();
+}
+
+/// Dash pattern for `dashed` / `dotted` borders (approximating browsers:
+/// dashes 3×width long, dots as round caps spaced 2×width).
+fn set_border_dash(content: &mut Content, style: ferropdf_core::BorderStyle, width: f32) {
+    match style {
+        ferropdf_core::BorderStyle::Dashed => {
+            content.set_dash_pattern([3.0 * width, 3.0 * width], 0.0);
+        }
+        ferropdf_core::BorderStyle::Dotted => {
+            content.set_line_cap(LineCapStyle::RoundCap);
+            content.set_dash_pattern([0.0, 2.0 * width], 0.0);
+        }
+        _ => {}
+    }
+}
+
+fn reset_border_dash(content: &mut Content) {
+    content.set_dash_pattern([], 0.0);
+    content.set_line_cap(LineCapStyle::ButtCap);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1133,95 +1224,4 @@ mod tests {
         assert_eq!(y_to_pdf(800.0, 800.0), 0.0);
         assert_eq!(y_to_pdf(100.0, 800.0), 700.0);
     }
-}
-
-/// Append a rounded-rectangle path (PDF coordinates, origin bottom-left).
-///
-/// `radii` = [top-left, top-right, bottom-right, bottom-left] in CSS order.
-/// Radii are scaled down together when adjacent ones exceed a side
-/// (CSS Backgrounds 3 §5.5), which is what turns `border-radius: 9999px`
-/// into a pill rather than a broken shape.
-/// Append a rectangle with elliptical corners to the path (PDF space:
-/// `(x, y)` is the bottom-left corner). Radii are scaled down to fit.
-pub(crate) fn rounded_rect_path(
-    content: &mut Content,
-    x: f32,
-    y: f32,
-    w: f32,
-    h: f32,
-    radii: ferropdf_core::Radii,
-) {
-    // A corner with a zero radius on either axis is square.
-    let corner = |(rx, ry): (f32, f32)| {
-        if rx <= 0.0 || ry <= 0.0 {
-            (0.0, 0.0)
-        } else {
-            (rx, ry)
-        }
-    };
-    let ferropdf_core::Radii([tl, tr, br, bl]) = radii.clamped(w, h);
-    let (tl, tr, br, bl) = (corner(tl), corner(tr), corner(br), corner(bl));
-    // Bézier control-point distance for a quarter ellipse.
-    const K: f32 = 0.552_284_8;
-    let top = y + h;
-    let right = x + w;
-    content.move_to(x + tl.0, top);
-    content.line_to(right - tr.0, top);
-    if tr.0 > 0.0 {
-        content.cubic_to(
-            right - tr.0 + tr.0 * K,
-            top,
-            right,
-            top - tr.1 + tr.1 * K,
-            right,
-            top - tr.1,
-        );
-    }
-    content.line_to(right, y + br.1);
-    if br.0 > 0.0 {
-        content.cubic_to(
-            right,
-            y + br.1 - br.1 * K,
-            right - br.0 + br.0 * K,
-            y,
-            right - br.0,
-            y,
-        );
-    }
-    content.line_to(x + bl.0, y);
-    if bl.0 > 0.0 {
-        content.cubic_to(x + bl.0 - bl.0 * K, y, x, y + bl.1 - bl.1 * K, x, y + bl.1);
-    }
-    content.line_to(x, top - tl.1);
-    if tl.0 > 0.0 {
-        content.cubic_to(
-            x,
-            top - tl.1 + tl.1 * K,
-            x + tl.0 - tl.0 * K,
-            top,
-            x + tl.0,
-            top,
-        );
-    }
-    content.close_path();
-}
-
-/// Dash pattern for `dashed` / `dotted` borders (approximating browsers:
-/// dashes 3×width long, dots as round caps spaced 2×width).
-fn set_border_dash(content: &mut Content, style: ferropdf_core::BorderStyle, width: f32) {
-    match style {
-        ferropdf_core::BorderStyle::Dashed => {
-            content.set_dash_pattern([3.0 * width, 3.0 * width], 0.0);
-        }
-        ferropdf_core::BorderStyle::Dotted => {
-            content.set_line_cap(LineCapStyle::RoundCap);
-            content.set_dash_pattern([0.0, 2.0 * width], 0.0);
-        }
-        _ => {}
-    }
-}
-
-fn reset_border_dash(content: &mut Content) {
-    content.set_dash_pattern([], 0.0);
-    content.set_line_cap(LineCapStyle::ButtCap);
 }

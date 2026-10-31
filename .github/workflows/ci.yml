@@ -82,7 +82,8 @@ jobs:
       - name: Format check
         run: cargo fmt --all --check
       - name: Clippy
-        run: cargo clippy --workspace -- -D warnings
+        # --all-targets lints tests, benches and examples too.
+        run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Security audit
         run: |
           cargo install cargo-audit --quiet 2>/dev/null || true

@@ -32,19 +32,23 @@ mod tests {
 
     #[test]
     fn inherits_color() {
-        let mut parent = ComputedStyle::default();
-        parent.color = Color::from_rgb8(255, 0, 0);
+        let parent = ComputedStyle {
+            color: Color::from_rgb8(255, 0, 0),
+            ..Default::default()
+        };
         let child = inherit_from(&parent);
         assert_eq!(child.color, Color::from_rgb8(255, 0, 0));
     }
 
     #[test]
     fn inherits_font_properties() {
-        let mut parent = ComputedStyle::default();
-        parent.font_size = 24.0;
-        parent.font_weight = FontWeight::Bold;
-        parent.font_style = FontStyle::Italic;
-        parent.font_family = vec!["Georgia".to_string()];
+        let parent = ComputedStyle {
+            font_size: 24.0,
+            font_weight: FontWeight::Bold,
+            font_style: FontStyle::Italic,
+            font_family: vec!["Georgia".to_string()],
+            ..Default::default()
+        };
         let child = inherit_from(&parent);
         assert_eq!(child.font_size, 24.0);
         assert_eq!(child.font_weight, FontWeight::Bold);
@@ -54,41 +58,51 @@ mod tests {
 
     #[test]
     fn does_not_inherit_margin() {
-        let mut parent = ComputedStyle::default();
-        parent.margin = [Length::Pt(20.0); 4];
+        let parent = ComputedStyle {
+            margin: [Length::Pt(20.0); 4],
+            ..Default::default()
+        };
         let child = inherit_from(&parent);
         assert_eq!(child.margin, [Length::Zero; 4]);
     }
 
     #[test]
     fn does_not_inherit_padding() {
-        let mut parent = ComputedStyle::default();
-        parent.padding = [Length::Pt(10.0); 4];
+        let parent = ComputedStyle {
+            padding: [Length::Pt(10.0); 4],
+            ..Default::default()
+        };
         let child = inherit_from(&parent);
         assert_eq!(child.padding, [Length::Zero; 4]);
     }
 
     #[test]
     fn does_not_inherit_background() {
-        let mut parent = ComputedStyle::default();
-        parent.background_color = Color::from_rgb8(255, 0, 0);
+        let parent = ComputedStyle {
+            background_color: Color::from_rgb8(255, 0, 0),
+            ..Default::default()
+        };
         let child = inherit_from(&parent);
         assert!(child.background_color.is_transparent());
     }
 
     #[test]
     fn does_not_inherit_display() {
-        let mut parent = ComputedStyle::default();
-        parent.display = Display::Flex;
+        let parent = ComputedStyle {
+            display: Display::Flex,
+            ..Default::default()
+        };
         let child = inherit_from(&parent);
         assert_eq!(child.display, Display::Block); // default
     }
 
     #[test]
     fn inherits_orphans_widows() {
-        let mut parent = ComputedStyle::default();
-        parent.orphans = 5;
-        parent.widows = 3;
+        let parent = ComputedStyle {
+            orphans: 5,
+            widows: 3,
+            ..Default::default()
+        };
         let child = inherit_from(&parent);
         assert_eq!(child.orphans, 5);
         assert_eq!(child.widows, 3);
@@ -96,8 +110,10 @@ mod tests {
 
     #[test]
     fn inherits_text_align() {
-        let mut parent = ComputedStyle::default();
-        parent.text_align = TextAlign::Center;
+        let parent = ComputedStyle {
+            text_align: TextAlign::Center,
+            ..Default::default()
+        };
         let child = inherit_from(&parent);
         assert_eq!(child.text_align, TextAlign::Center);
     }
