@@ -1,3 +1,4 @@
+use ferropdf_core::Radii;
 use ferropdf_core::{BorderStyle, BoxShadow, Color, Rect, ShapedGlyph};
 
 /// A drawing operation for rendering.
@@ -8,7 +9,7 @@ pub enum DrawOp {
     FillRect {
         rect: Rect,
         color: Color,
-        border_radius: [f32; 4],
+        border_radius: Radii,
     },
     /// Draw a border around a rectangle
     StrokeRect {
@@ -24,7 +25,7 @@ pub enum DrawOp {
         color: Color,
         width: f32,
         style: BorderStyle,
-        border_radius: [f32; 4],
+        border_radius: Radii,
     },
     /// Draw text at a position
     DrawText {
@@ -49,14 +50,14 @@ pub enum DrawOp {
     /// Fill `rect` (rounded by `border_radius`) with a resolved gradient.
     FillGradient {
         rect: Rect,
-        border_radius: [f32; 4],
+        border_radius: Radii,
         gradient: crate::gradient::ResolvedGradient,
     },
     /// Draw a box shadow (approximated as offset semi-transparent filled rects)
     DrawBoxShadow {
         rect: Rect,
         shadow: BoxShadow,
-        border_radius: [f32; 4],
+        border_radius: Radii,
     },
     /// Save graphics state
     Save,
@@ -66,7 +67,7 @@ pub enum DrawOp {
     ClipRect {
         rect: Rect,
         /// Corner radii [top-left, top-right, bottom-right, bottom-left].
-        border_radius: [f32; 4],
+        border_radius: Radii,
     },
     /// Set opacity
     SetOpacity(f32),

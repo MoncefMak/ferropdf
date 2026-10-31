@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Right-to-left layout is mirrored like in browsers: in a `direction: rtl` flex row the first item is on the right and `flex-start` packs to the right, and grid / table columns run right to left (#51).
 - `text-align` now defaults to `start` and accepts `start` / `end`: right-to-left blocks align right even for Latin text, as in browsers.
+- `border-radius` percentages (`50%` circles and ellipses), `em` / `rem` radii (Bootstrap's `.375rem`), the 2–4 value and `/` elliptical forms, and the `border-*-radius` longhands were dropped; corners are now elliptical, resolved against the border box and scaled down when they overlap. Box-shadow spread and `overflow` clips follow the same radii (#64).
 - A `display: none` child no longer breaks the inline flow of its parent (an inline-block next to it was laid out full-width on its own line).
 - An `inline-block` holding inline elements and text shrink-wraps to their combined width instead of wrapping its content.
 - White space between flex/grid items (indented HTML) created invisible items: extra gaps, wrong `space-between`/`flex: 1` distribution, shifted grid cells.
