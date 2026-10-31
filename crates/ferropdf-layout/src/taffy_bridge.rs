@@ -229,6 +229,8 @@ fn build_taffy_tree_inner(
                 font_family: style.font_family.first().cloned().unwrap_or_default(),
                 bold: style.font_weight.is_bold(),
                 italic: style.font_style == ferropdf_core::FontStyle::Italic,
+                spacing: text::Spacing::of(&style),
+                indent: first_line_indent(doc, node_id, styles, available_width),
             };
 
             let taffy_node = taffy
@@ -367,6 +369,49 @@ fn build_taffy_tree_inner(
     }
     node_map.insert(node_id, taffy_node);
     Ok(())
+}
+
+/// `text-indent` for a text node that starts the first line of its block:
+/// it must be the first rendered piece of content of every inline ancestor
+/// up to a block container. The same indent is applied when the block's
+/// inline content is shaped as one paragraph, so measurement and final
+/// shaping agree.
+fn first_line_indent(
+    doc: &Document,
+    node_id: NodeId,
+    styles: &StyleTree,
+    available_width: f32,
+) -> f32 {
+    let renders = |id: NodeId| -> bool {
+        let n = doc.get(id);
+        if n.is_text() {
+            return n.text.as_deref().is_some_and(|t| !t.trim().is_empty());
+        }
+        n.is_element() && styles.get(&id).is_some_and(|s| s.display != FDisplay::None)
+    };
+    let mut cur = node_id;
+    while let Some(parent) = doc.get(cur).parent {
+        let first = doc
+            .get(parent)
+            .children
+            .iter()
+            .copied()
+            .find(|&c| renders(c));
+        if first != Some(cur) {
+            return 0.0;
+        }
+        let Some(ps) = styles.get(&parent) else {
+            return 0.0;
+        };
+        match ps.display {
+            FDisplay::Inline => cur = parent,
+            FDisplay::Block | FDisplay::ListItem | FDisplay::TableCell | FDisplay::InlineBlock => {
+                return ps.text_indent.resolve_against(available_width);
+            }
+            _ => return 0.0,
+        }
+    }
+    0.0
 }
 
 /// Move a laid-out box and its descendants horizontally by `dx`.

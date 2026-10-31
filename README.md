@@ -249,9 +249,12 @@ every row is a test that renders a snippet and checks the PDF, and every ❌ row
 | Text | Whitespace collapsing (`white-space: normal`) | ✅ Supported |
 | Text | `white-space: pre` | ✅ Supported |
 | Text | `white-space: nowrap` | ✅ Supported |
-| Text | `letter-spacing` | ❌ Not yet ([#34](https://github.com/MoncefMak/ferropdf/issues/34)) |
-| Text | `text-transform` | ❌ Not yet ([#34](https://github.com/MoncefMak/ferropdf/issues/34)) |
-| Text | `text-indent` | ❌ Not yet ([#34](https://github.com/MoncefMak/ferropdf/issues/34)) |
+| Text | `letter-spacing` | ✅ Supported |
+| Text | `word-spacing` | ✅ Supported |
+| Text | Letter spacing taken into account by line breaking | ✅ Supported |
+| Text | `text-transform` | ✅ Supported |
+| Text | `text-transform: capitalize` | ✅ Supported |
+| Text | `text-indent` | ✅ Supported |
 | Text | Arabic shaping + RTL alignment | ✅ Supported |
 | Text | Lists (disc, decimal, roman) | ✅ Supported |
 | Layout | Flexbox row | ✅ Supported |

@@ -534,8 +534,28 @@ fn apply_single(
             };
         }
         CssProperty::LetterSpacing => {
-            if let Some(pt) = parse_length_to_pt(raw) {
-                style.letter_spacing = pt;
+            if let Some(l) = parse_spacing(raw) {
+                style.letter_spacing = l;
+            }
+        }
+        CssProperty::Unknown(ref name) if name == "word-spacing" => {
+            if let Some(l) = parse_spacing(raw) {
+                style.word_spacing = l;
+            }
+        }
+        CssProperty::Unknown(ref name) if name == "text-indent" => match parse_length(raw) {
+            Length::Auto | Length::None => {}
+            l => style.text_indent = l,
+        },
+        CssProperty::Unknown(ref name) if name == "text-transform" => {
+            if let Some(t) = match raw {
+                "none" => Some(TextTransform::None),
+                "uppercase" => Some(TextTransform::Uppercase),
+                "lowercase" => Some(TextTransform::Lowercase),
+                "capitalize" => Some(TextTransform::Capitalize),
+                _ => None,
+            } {
+                style.text_transform = t;
             }
         }
 
@@ -861,6 +881,17 @@ fn split_top_level(s: &str) -> Vec<&str> {
         parts.push(&s[st..]);
     }
     parts
+}
+
+/// `letter-spacing` / `word-spacing`: `normal` or a length (may be negative).
+fn parse_spacing(raw: &str) -> Option<Length> {
+    if raw.eq_ignore_ascii_case("normal") {
+        return Some(Length::Zero);
+    }
+    match parse_length(raw) {
+        Length::Auto | Length::None | Length::Percent(_) => None,
+        l => Some(l),
+    }
 }
 
 /// One radius: a non-negative length or percentage.

@@ -13,6 +13,9 @@ pub struct InlineSpan {
     pub italic: bool,
     pub color: Color,
     pub text_decoration: TextDecoration,
+    /// `letter-spacing` / `word-spacing` in pt.
+    pub letter_spacing: f32,
+    pub word_spacing: f32,
 }
 
 /// A styled segment within a shaped line (populated for rich/inline-merged text).

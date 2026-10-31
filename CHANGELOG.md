@@ -51,6 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PyO3 0.24 → 0.29 (RUSTSEC-2026-0176, RUSTSEC-2026-0177).
 
 ### Added
+- Text spacing and case: `letter-spacing` (was parsed but ignored), `word-spacing`, `text-indent` (lengths, `em`, percentages, negative / hanging indents, also when the first line starts with an inline element) and `text-transform: uppercase | lowercase | capitalize` (also on generated content). Spacing and indent are added to the shaped advances before line breaking, so wrapping and Taffy's measurement account for them (#34).
 - CSS counters: `counter-reset`, `counter-increment`, `counter-set` with nested scopes, and `counter()` / `counters()` in `content` with counter styles (decimal, decimal-leading-zero, roman, alpha, greek, disc…). `content` also accepts `attr()`, `open-quote` / `close-quote` and CSS string escapes (#31).
 - `::before` / `::after` are real boxes styled by their own rules (colour, font, `display`, counters…), instead of plain text inheriting the parent's style. Structural selectors (`:first-child`, `:empty`, `+`) ignore them, as in browsers.
 - 2D transforms: `transform` (`translate*`, `scale*`, `rotate`, `skew*`, `matrix`; 3D functions flattened onto the page), the individual `translate` / `rotate` / `scale` properties and `transform-origin`. Applied as a PDF transformation matrix around the box and its descendants, so text stays vector and selectable (#38).

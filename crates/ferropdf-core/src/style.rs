@@ -102,6 +102,16 @@ impl TextAlign {
     }
 }
 
+/// CSS `text-transform`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TextTransform {
+    #[default]
+    None,
+    Uppercase,
+    Lowercase,
+    Capitalize,
+}
+
 /// CSS Grid properties, kept as raw CSS and converted to Taffy's track /
 /// placement types by the layout crate (which owns the Taffy dependency).
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -532,7 +542,13 @@ pub struct ComputedStyle {
     pub line_height: f32,
     pub text_align: TextAlign,
     pub text_decoration: TextDecoration,
-    pub letter_spacing: f32,
+    /// `letter-spacing` / `word-spacing`: extra space after each character /
+    /// word separator (`normal` = 0). Resolved to pt per element.
+    pub letter_spacing: Length,
+    pub word_spacing: Length,
+    /// `text-indent` of the first line of a block (percentages of its width).
+    pub text_indent: Length,
+    pub text_transform: TextTransform,
     pub white_space: WhiteSpace,
     pub box_sizing: BoxSizing,
 
@@ -624,7 +640,10 @@ impl Default for ComputedStyle {
             line_height: 14.4, // 12pt × 1.2 = 14.4pt
             text_align: TextAlign::Start,
             text_decoration: TextDecoration::None,
-            letter_spacing: 0.0,
+            letter_spacing: Length::Zero,
+            word_spacing: Length::Zero,
+            text_indent: Length::Zero,
+            text_transform: TextTransform::None,
             white_space: WhiteSpace::Normal,
             box_sizing: BoxSizing::ContentBox,
             flex_direction: FlexDirection::Row,

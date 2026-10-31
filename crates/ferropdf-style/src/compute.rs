@@ -65,6 +65,16 @@ pub fn resolve_units(
         resolve_length_em_rem(inset, font_size, root_font_size);
     }
 
+    // Text spacing and indent: absolute units to pt (`em` uses this
+    // element's font size, so children inherit the computed length).
+    for l in [
+        &mut style.letter_spacing,
+        &mut style.word_spacing,
+        &mut style.text_indent,
+    ] {
+        resolve_length_em_rem(l, font_size, root_font_size);
+    }
+
     // Border radii: absolute units to pt; percentages are resolved against
     // the border box at paint time.
     for (x, y) in &mut style.border_radius.corners {

@@ -60,6 +60,18 @@ impl CalcLength {
 }
 
 impl Length {
+    /// Value in pt of a length already resolved to `Pt` / `Percent` /
+    /// `Calc` (after unit resolution), with percentages of `basis_pt`.
+    /// Anything else (`auto`, unresolved units) counts as 0.
+    pub fn resolve_against(&self, basis_pt: f32) -> f32 {
+        match *self {
+            Length::Pt(v) => v,
+            Length::Percent(p) => p / 100.0 * basis_pt,
+            Length::Calc(c) => c.against(basis_pt),
+            _ => 0.0,
+        }
+    }
+
     pub fn is_auto(&self) -> bool {
         matches!(self, Length::Auto)
     }

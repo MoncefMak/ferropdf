@@ -1,4 +1,7 @@
-use cosmic_text::{Align, Attrs, Buffer, Family, FontSystem, Metrics, Shaping, Wrap};
+use cosmic_text::{
+    Align, Attrs, AttrsList, Buffer, Family, FontSystem, LayoutGlyph, LineIter, Metrics,
+    ShapeGlyph, ShapeLine, Shaping, Wrap,
+};
 use ferropdf_core::layout::{InlineSpan, ShapedGlyph, ShapedLine, ShapedSegment};
 use std::sync::Mutex;
 use taffy::prelude::*;
@@ -16,6 +19,32 @@ pub struct TextContext {
     pub font_family: String,
     pub bold: bool,
     pub italic: bool,
+    /// `letter-spacing` / `word-spacing`.
+    pub spacing: Spacing,
+    /// `text-indent` of the first line (pt), when this text starts a block.
+    pub indent: f32,
+}
+
+/// CSS `letter-spacing` / `word-spacing`, in pt, added to the shaped
+/// advances before line breaking.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Spacing {
+    pub letter: f32,
+    pub word: f32,
+}
+
+impl Spacing {
+    /// The computed `letter-spacing` / `word-spacing` of `style`.
+    pub fn of(style: &ferropdf_core::ComputedStyle) -> Self {
+        Self {
+            letter: style.letter_spacing.resolve_against(0.0),
+            word: style.word_spacing.resolve_against(0.0),
+        }
+    }
+
+    pub fn is_zero(&self) -> bool {
+        self.letter == 0.0 && self.word == 0.0
+    }
 }
 
 // =============================================================================
@@ -197,6 +226,194 @@ pub fn space_width(ctx: &TextContext, font_system: &mut FontSystem) -> f32 {
     (measure("x x", font_system) - measure("xx", font_system)).max(0.0)
 }
 
+/// cosmic-text attributes for a family / weight / style.
+fn text_attrs(font_family: &str, bold: bool, italic: bool) -> Attrs<'_> {
+    let family = if font_family.is_empty() {
+        Family::SansSerif
+    } else {
+        Family::Name(font_family)
+    };
+    let mut attrs = Attrs::new().family(family);
+    if bold {
+        attrs = attrs.weight(cosmic_text::Weight::BOLD);
+    }
+    if italic {
+        attrs = attrs.style(cosmic_text::Style::Italic);
+    }
+    attrs
+}
+
+/// One laid-out line: the parts of cosmic-text's `LayoutRun` ferropdf uses.
+struct Line {
+    /// Text of the paragraph the line belongs to (glyph byte ranges index it).
+    text: String,
+    glyphs: Vec<LayoutGlyph>,
+    line_w: f32,
+    line_y: f32,
+    line_height: f32,
+}
+
+/// Metadata of the synthetic glyph that carries `text-indent`.
+const INDENT_GLYPH: usize = usize::MAX - 1;
+
+/// Shape and break `spans` (one span when `rich` is false) into lines.
+///
+/// Without letter/word spacing or indent this is cosmic-text's `Buffer`.
+/// Otherwise each paragraph is shaped with `ShapeLine`, the spacing is added
+/// to the glyph advances and the indent inserted as an invisible glyph, and
+/// only then are lines broken, so wrapping accounts for them. `spacing` is
+/// indexed by span (glyph metadata).
+#[allow(clippy::too_many_arguments)]
+fn lay_out(
+    fs: &mut FontSystem,
+    spans: &[(&str, Attrs)],
+    default_attrs: Attrs,
+    rich: bool,
+    metrics: Metrics,
+    width: Option<f32>,
+    wrap: bool,
+    align: Option<Align>,
+    spacing: &[Spacing],
+    indent: f32,
+) -> Vec<Line> {
+    if indent == 0.0 && spacing.iter().all(Spacing::is_zero) {
+        let mut buffer = Buffer::new(fs, metrics);
+        buffer.set_size(fs, width, None);
+        if !wrap {
+            buffer.set_wrap(fs, Wrap::None);
+        }
+        if rich {
+            buffer.set_rich_text(fs, spans.iter().copied(), default_attrs, Shaping::Advanced);
+        } else {
+            buffer.set_text(fs, spans[0].0, spans[0].1, Shaping::Advanced);
+        }
+        apply_align(&mut buffer, align);
+        buffer.shape_until_scroll(fs, false);
+        return buffer
+            .layout_runs()
+            .map(|run| Line {
+                text: run.text.to_string(),
+                glyphs: run.glyphs.to_vec(),
+                line_w: run.line_w,
+                line_y: run.line_y,
+                line_height: run.line_height,
+            })
+            .collect();
+    }
+
+    let full: String = spans.iter().map(|(t, _)| *t).collect();
+    let mut ranges = Vec::with_capacity(spans.len());
+    let mut pos = 0;
+    for (t, a) in spans {
+        ranges.push((pos..pos + t.len(), *a));
+        pos += t.len();
+    }
+    let base = if rich { default_attrs } else { spans[0].1 };
+    let wrap = if wrap { Wrap::WordOrGlyph } else { Wrap::None };
+
+    let mut lines = Vec::new();
+    let mut line_top = 0.0;
+    for (i, (range, _)) in LineIter::new(&full).enumerate() {
+        let para = &full[range.clone()];
+        let mut attrs_list = AttrsList::new(base);
+        if rich {
+            for (r, a) in &ranges {
+                let (s, e) = (r.start.max(range.start), r.end.min(range.end));
+                if s < e {
+                    attrs_list.add_span(s - range.start..e - range.start, *a);
+                }
+            }
+        }
+        let mut shape = ShapeLine::new(fs, para, &attrs_list, Shaping::Advanced, 8);
+        add_spacing(&mut shape, para, spacing, metrics.font_size);
+        if i == 0 && indent != 0.0 {
+            add_indent(&mut shape, indent, metrics.font_size);
+        }
+        for ll in shape.layout(metrics.font_size, width, wrap, align, None) {
+            // Same vertical placement as `Buffer::layout_runs`.
+            let line_height = ll.line_height_opt.unwrap_or(metrics.line_height);
+            let glyph_height = ll.max_ascent + ll.max_descent;
+            let line_y = line_top + (line_height - glyph_height) / 2.0 + ll.max_ascent;
+            lines.push(Line {
+                text: para.to_string(),
+                glyphs: ll
+                    .glyphs
+                    .into_iter()
+                    .filter(|g| g.metadata != INDENT_GLYPH)
+                    .collect(),
+                line_w: ll.w,
+                line_y,
+                line_height,
+            });
+            line_top += line_height;
+        }
+    }
+    lines
+}
+
+/// Add `letter-spacing` after every cluster and `word-spacing` after every
+/// word separator (CSS Text 3 §8), as extra advance (in em) on the last
+/// glyph of the cluster.
+fn add_spacing(shape: &mut ShapeLine, line: &str, spacing: &[Spacing], font_size: f32) {
+    for span in &mut shape.spans {
+        for word in &mut span.words {
+            let n = word.glyphs.len();
+            for i in 0..n {
+                let key = (word.glyphs[i].start, word.glyphs[i].end);
+                if word.glyphs[i + 1..].iter().any(|g| (g.start, g.end) == key) {
+                    continue; // not the last glyph of its cluster
+                }
+                let g = &mut word.glyphs[i];
+                let sp = spacing.get(g.metadata).copied().unwrap_or_default();
+                let separator = matches!(
+                    line.get(g.start..g.end),
+                    Some(" " | "\u{a0}" | "\u{1361}" | "\u{10100}" | "\u{10101}" | "\u{1039f}")
+                );
+                let extra = sp.letter + if separator { sp.word } else { 0.0 };
+                if extra != 0.0 {
+                    let size = g.metrics_opt.map_or(font_size, |m| m.font_size);
+                    g.x_advance += extra / size;
+                }
+            }
+        }
+    }
+}
+
+/// Insert `text-indent` as an invisible glyph at the logical start of the
+/// paragraph (its visual start: the right edge of a right-to-left line).
+fn add_indent(shape: &mut ShapeLine, indent: f32, font_size: f32) {
+    let Some(span) = shape.spans.first_mut() else {
+        return;
+    };
+    let rtl = span.level.is_rtl();
+    let Some(word) = span.words.iter_mut().find(|w| !w.glyphs.is_empty()) else {
+        return;
+    };
+    // Right-to-left words hold their glyphs in visual order.
+    let model = if rtl {
+        word.glyphs.last()
+    } else {
+        word.glyphs.first()
+    };
+    let Some(model) = model else {
+        return;
+    };
+    let glyph = ShapeGlyph {
+        end: model.start,
+        x_advance: indent / font_size,
+        y_advance: 0.0,
+        x_offset: 0.0,
+        y_offset: 0.0,
+        metadata: INDENT_GLYPH,
+        ..model.clone()
+    };
+    if rtl {
+        word.glyphs.push(glyph);
+    } else {
+        word.glyphs.insert(0, glyph);
+    }
+}
+
 /// Measure a text node using cosmic-text.
 ///
 /// Called by Taffy's layout engine via `compute_layout_with_measure` whenever
@@ -212,7 +429,6 @@ pub fn measure_text(
     }
 
     let metrics = Metrics::new(ctx.font_size, ctx.line_height);
-    let mut buffer = Buffer::new(font_system, metrics);
 
     // Determine width constraint from Taffy
     let width_limit: Option<f32> = known_dimensions.width.or(match available_space.width {
@@ -221,32 +437,24 @@ pub fn measure_text(
         AvailableSpace::MinContent => Some(0.0), // Force maximum wrapping
     });
 
-    buffer.set_size(font_system, width_limit, None);
-    if !ctx.wrap {
-        buffer.set_wrap(font_system, Wrap::None);
-    }
-
-    let family = if ctx.font_family.is_empty() {
-        Family::SansSerif
-    } else {
-        Family::Name(&ctx.font_family)
-    };
-
-    let mut attrs = Attrs::new().family(family);
-    if ctx.bold {
-        attrs = attrs.weight(cosmic_text::Weight::BOLD);
-    }
-    if ctx.italic {
-        attrs = attrs.style(cosmic_text::Style::Italic);
-    }
-
-    buffer.set_text(font_system, &ctx.text, attrs, Shaping::Advanced);
-    buffer.shape_until_scroll(font_system, false);
+    let attrs = text_attrs(&ctx.font_family, ctx.bold, ctx.italic);
+    let lines = lay_out(
+        font_system,
+        &[(&ctx.text, attrs)],
+        attrs,
+        false,
+        metrics,
+        width_limit,
+        ctx.wrap,
+        None,
+        &[ctx.spacing],
+        ctx.indent,
+    );
 
     let mut max_width: f32 = 0.0;
     let mut total_height: f32 = 0.0;
 
-    for run in buffer.layout_runs() {
+    for run in &lines {
         max_width = max_width.max(run.line_w);
         total_height += run.line_height;
     }
@@ -311,6 +519,7 @@ pub fn shape_text_lines(
     content_width: f32,
     align: Option<Align>,
     wrap: bool,
+    spacing: Spacing,
     font_system: &mut FontSystem,
 ) -> Vec<ShapedLine> {
     if text.trim().is_empty() {
@@ -318,33 +527,23 @@ pub fn shape_text_lines(
     }
 
     let metrics = Metrics::new(font_size, line_height);
-    let mut buffer = Buffer::new(font_system, metrics);
-    buffer.set_size(font_system, Some(content_width), None);
-    if !wrap {
-        buffer.set_wrap(font_system, Wrap::None);
-    }
-
-    let family = if font_family.is_empty() {
-        Family::SansSerif
-    } else {
-        Family::Name(font_family)
-    };
-
-    let mut attrs = Attrs::new().family(family);
-    if bold {
-        attrs = attrs.weight(cosmic_text::Weight::BOLD);
-    }
-    if italic {
-        attrs = attrs.style(cosmic_text::Style::Italic);
-    }
-
-    buffer.set_text(font_system, text, attrs, Shaping::Advanced);
-    apply_align(&mut buffer, align);
-    buffer.shape_until_scroll(font_system, false);
+    let attrs = text_attrs(font_family, bold, italic);
+    let runs = lay_out(
+        font_system,
+        &[(text, attrs)],
+        attrs,
+        false,
+        metrics,
+        Some(content_width),
+        wrap,
+        align,
+        &[spacing],
+        0.0,
+    );
 
     let mut lines = Vec::new();
 
-    for run in buffer.layout_runs() {
+    for run in &runs {
         let mut glyphs = Vec::new();
 
         // Extract visual line text from the source BufferLine using glyph byte ranges.
@@ -366,7 +565,7 @@ pub fn shape_text_lines(
                 y: glyph.y,
                 advance: glyph.w,
                 metadata: 0,
-                text: cluster_text(run.text, glyph, &mut clusters),
+                text: cluster_text(&run.text, glyph, &mut clusters),
             });
         }
 
@@ -385,11 +584,13 @@ pub fn shape_text_lines(
 /// Shape merged inline text using cosmic-text's rich text API.
 /// Each InlineSpan maps to a cosmic-text span with per-span bold/italic/font_family.
 /// Returns ShapedLines with per-segment metadata linking back to the span index.
+#[allow(clippy::too_many_arguments)]
 pub fn shape_rich_text_lines(
     spans: &[InlineSpan],
     content_width: f32,
     align: Option<Align>,
     wrap: bool,
+    indent: f32,
     font_system: &mut FontSystem,
 ) -> Vec<ShapedLine> {
     if spans.is_empty() {
@@ -399,11 +600,6 @@ pub fn shape_rich_text_lines(
     let font_size = spans[0].font_size;
     let line_height = spans[0].line_height;
     let metrics = Metrics::new(font_size, line_height);
-    let mut buffer = Buffer::new(font_system, metrics);
-    buffer.set_size(font_system, Some(content_width), None);
-    if !wrap {
-        buffer.set_wrap(font_system, Wrap::None);
-    }
 
     // Build per-span Attrs with metadata = span index
     let rich_spans: Vec<(&str, Attrs)> = spans
@@ -433,13 +629,29 @@ pub fn shape_rich_text_lines(
     };
     let default_attrs = Attrs::new().family(default_family);
 
-    buffer.set_rich_text(font_system, rich_spans, default_attrs, Shaping::Advanced);
-    apply_align(&mut buffer, align);
-    buffer.shape_until_scroll(font_system, false);
+    let spacing: Vec<Spacing> = spans
+        .iter()
+        .map(|span| Spacing {
+            letter: span.letter_spacing,
+            word: span.word_spacing,
+        })
+        .collect();
+    let runs = lay_out(
+        font_system,
+        &rich_spans,
+        default_attrs,
+        true,
+        metrics,
+        Some(content_width),
+        wrap,
+        align,
+        &spacing,
+        indent,
+    );
 
     let mut lines = Vec::new();
 
-    for run in buffer.layout_runs() {
+    for run in &runs {
         let mut glyphs = Vec::new();
         let mut clusters = std::collections::HashSet::new();
         let mut segments: Vec<ShapedSegment> = Vec::new();
@@ -480,7 +692,7 @@ pub fn shape_rich_text_lines(
                 y: glyph.y,
                 advance: glyph.w,
                 metadata: glyph.metadata,
-                text: cluster_text(run.text, glyph, &mut clusters),
+                text: cluster_text(&run.text, glyph, &mut clusters),
             });
         }
 
@@ -575,5 +787,66 @@ mod pool_tests {
     fn font_database_is_send_and_sync() {
         fn assert_send_sync<T: Send + Sync>() {}
         assert_send_sync::<FontDatabase>();
+    }
+}
+
+#[cfg(test)]
+mod spacing_tests {
+    use super::*;
+
+    fn width(text: &str, spacing: Spacing, indent: f32, fs: &mut FontSystem) -> (f32, usize) {
+        let attrs = text_attrs("", false, false);
+        let lines = lay_out(
+            fs,
+            &[(text, attrs)],
+            attrs,
+            false,
+            Metrics::new(12.0, 14.0),
+            None,
+            true,
+            None,
+            &[spacing],
+            indent,
+        );
+        (lines[0].line_w, lines[0].glyphs.len())
+    }
+
+    #[test]
+    fn letter_and_word_spacing_add_to_the_line_width() {
+        let mut fs = FontSystem::new();
+        let (plain, n) = width("ab cd", Spacing::default(), 0.0, &mut fs);
+        let (letter, _) = width(
+            "ab cd",
+            Spacing {
+                letter: 2.0,
+                word: 0.0,
+            },
+            0.0,
+            &mut fs,
+        );
+        assert!(
+            (letter - plain - 2.0 * 5.0).abs() < 0.01,
+            "{plain} {letter}"
+        );
+        let (word, m) = width(
+            "ab cd",
+            Spacing {
+                letter: 0.0,
+                word: 7.0,
+            },
+            0.0,
+            &mut fs,
+        );
+        assert!((word - plain - 7.0).abs() < 0.01, "one separator");
+        assert_eq!(n, m, "no glyph added");
+    }
+
+    #[test]
+    fn indent_widens_the_first_line_without_a_visible_glyph() {
+        let mut fs = FontSystem::new();
+        let (plain, n) = width("abc", Spacing::default(), 0.0, &mut fs);
+        let (indented, m) = width("abc", Spacing::default(), 20.0, &mut fs);
+        assert!((indented - plain - 20.0).abs() < 0.01);
+        assert_eq!(n, m, "the indent glyph is filtered out");
     }
 }

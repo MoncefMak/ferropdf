@@ -151,6 +151,7 @@ pub(crate) fn add_margin_boxes(
                 content_w,
                 ferropdf_layout::text::css_align(style.text_align.physical(style.direction)),
                 true,
+                ferropdf_layout::text::Spacing::of(&style),
                 fs,
             );
             if lines.is_empty() {

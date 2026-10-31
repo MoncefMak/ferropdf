@@ -145,6 +145,7 @@ fn populate_shaped_lines_inner(
                 lb.content.width,
                 text::css_align(style.text_align.physical(style.direction)),
                 style.white_space.wraps(),
+                text::Spacing::of(style),
                 fs,
             );
         }
@@ -226,11 +227,18 @@ fn merge_inline_children(lb: &mut LayoutBox, fs: &mut cosmic_text::FontSystem) {
     }
 
     // Shape merged rich text at parent's content width
+    // `text-indent` indents the first line of a block container.
+    let indent = if lb.style.display == Display::Inline {
+        0.0
+    } else {
+        lb.style.text_indent.resolve_against(lb.content.width)
+    };
     lb.shaped_lines = text::shape_rich_text_lines(
         &spans,
         lb.content.width,
         text::css_align(lb.style.text_align.physical(lb.style.direction)),
         lb.style.white_space.wraps(),
+        indent,
         fs,
     );
     lb.inline_spans = spans;
@@ -250,6 +258,8 @@ fn collect_and_clear(lb: &mut LayoutBox, spans: &mut Vec<InlineSpan>) {
                 italic: style.font_style == ferropdf_core::FontStyle::Italic,
                 color: style.color,
                 text_decoration: style.text_decoration.clone(),
+                letter_spacing: style.letter_spacing.resolve_against(0.0),
+                word_spacing: style.word_spacing.resolve_against(0.0),
             });
         }
     } else {
@@ -306,6 +316,8 @@ mod white_space_tests {
             italic: false,
             color: ferropdf_core::Color::black(),
             text_decoration: ferropdf_core::TextDecoration::None,
+            letter_spacing: 0.0,
+            word_spacing: 0.0,
         }
     }
 
