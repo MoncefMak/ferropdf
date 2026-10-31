@@ -187,9 +187,8 @@ fn render_with_warnings_inner(
         }
     }
 
-    // 4b. Materialise `::before` / `::after` content as real text
-    // nodes before the cascade runs. Failures are silent — a malformed
-    // selector or non-literal `content` simply means no injection.
+    // 4b. Add synthetic `::before` / `::after` elements; the cascade styles
+    // them and step 5a fills in their generated content.
     {
         let ua_sheet = ferropdf_parse::parse_stylesheet(ua_css)?;
         let mut all_sheets: Vec<&ferropdf_parse::Stylesheet> =
@@ -209,6 +208,12 @@ fn render_with_warnings_inner(
         ua_css,
         page_config.content_width_pt(),
     )?;
+
+    // 5a. CSS counters and `content` of the pseudo-elements.
+    ferropdf_style::pseudo_elements::resolve_generated_content(
+        &mut parse_result.document,
+        &mut styles,
+    );
 
     // 5b. Replaced elements: <img width/height> attributes and intrinsic size.
     apply_image_sizes(
