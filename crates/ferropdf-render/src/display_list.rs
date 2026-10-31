@@ -71,6 +71,18 @@ pub enum DrawOp {
     },
     /// Set opacity
     SetOpacity(f32),
+    /// A clickable area: an external URI, or `#name` for an anchor.
+    Link { rect: Rect, target: String },
+    /// The position (top of a box) a `#name` link jumps to.
+    Anchor { name: String, y: f32 },
+    /// A PDF outline (bookmark) entry; `key` identifies the heading so that
+    /// fragments split across pages produce one entry.
+    Bookmark {
+        key: usize,
+        level: u8,
+        title: String,
+        y: f32,
+    },
     /// Concatenate an affine matrix `[a, b, c, d, e, f]` expressed in page
     /// coordinates (top-left origin, y down) to the current transform.
     Transform([f32; 6]),

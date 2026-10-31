@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Text and inline elements placed directly in `<body>` (no block wrapper) were not rendered at all.
 - `@page :first`, `:left` and `:right` margins were ignored. They now apply to their pages: pagination uses each page's content height, and content and margin boxes use each page's margins. Content is laid out once at the base `@page` width, so a per-page left margin shifts it rather than re-flowing it (#27).
 - `border-radius` percentages (`50%` circles and ellipses), `em` / `rem` radii (Bootstrap's `.375rem`), the 2–4 value and `/` elliptical forms, and the `border-*-radius` longhands were dropped; corners are now elliptical, resolved against the border box and scaled down when they overlap. Box-shadow spread and `overflow` clips follow the same radii (#64).
 - A `display: none` child no longer breaks the inline flow of its parent (an inline-block next to it was laid out full-width on its own line).
@@ -51,6 +52,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PyO3 0.24 → 0.29 (RUSTSEC-2026-0176, RUSTSEC-2026-0177).
 
 ### Added
+- Clickable links: `<a href>` becomes a PDF link annotation over the link's text (each line it spans) or over its box (block links, image links). `#name` links jump to the element with that `id` (or `<a name>`), on any page. Only `http`, `https`, `mailto`, `tel` and relative URLs are made clickable; `javascript:` and `data:` links are not (#40).
+- PDF outline (bookmarks) from `<h1>`–`<h6>`, nested by level, each opening its heading's page at the heading (#41).
 - Text spacing and case: `letter-spacing` (was parsed but ignored), `word-spacing`, `text-indent` (lengths, `em`, percentages, negative / hanging indents, also when the first line starts with an inline element) and `text-transform: uppercase | lowercase | capitalize` (also on generated content). Spacing and indent are added to the shaped advances before line breaking, so wrapping and Taffy's measurement account for them (#34).
 - CSS counters: `counter-reset`, `counter-increment`, `counter-set` with nested scopes, and `counter()` / `counters()` in `content` with counter styles (decimal, decimal-leading-zero, roman, alpha, greek, disc…). `content` also accepts `attr()`, `open-quote` / `close-quote` and CSS string escapes (#31).
 - `::before` / `::after` are real boxes styled by their own rules (colour, font, `display`, counters…), instead of plain text inheriting the parent's style. Structural selectors (`:first-child`, `:empty`, `+`) ignore them, as in browsers.

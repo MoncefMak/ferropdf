@@ -16,6 +16,8 @@ pub struct InlineSpan {
     /// `letter-spacing` / `word-spacing` in pt.
     pub letter_spacing: f32,
     pub word_spacing: f32,
+    /// Target of the `<a href>` this text is inside, if any.
+    pub link: Option<String>,
 }
 
 /// A styled segment within a shaped line (populated for rich/inline-merged text).
@@ -87,6 +89,13 @@ pub struct LayoutBox {
     /// For Display::Table boxes: number of rows that came from <tfoot> (repeated at the
     /// bottom of each page fragment).
     pub tfoot_row_count: usize,
+    /// `href` of an `<a>` element: the box (or its text, when merged into a
+    /// paragraph) is a clickable link.
+    pub link: Option<String>,
+    /// Fragment name this box can be linked to (`id`, `<a name>`).
+    pub anchor: Option<String>,
+    /// PDF outline entry of a heading: (level 1–6, title).
+    pub bookmark: Option<(u8, String)>,
 }
 
 impl Default for LayoutBox {
@@ -111,6 +120,9 @@ impl Default for LayoutBox {
             list_item_index: None,
             thead_row_count: 0,
             tfoot_row_count: 0,
+            link: None,
+            anchor: None,
+            bookmark: None,
         }
     }
 }

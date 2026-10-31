@@ -3,6 +3,7 @@ mod font_subsetter;
 mod gradient;
 mod images;
 mod margin_boxes;
+mod navigation;
 mod painter;
 mod pdf;
 mod sandbox;

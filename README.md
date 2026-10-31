@@ -246,6 +246,7 @@ every row is a test that renders a snippet and checks the PDF, and every ❌ row
 | Text | `text-align: center` | ✅ Supported |
 | Text | `text-align: justify` | ✅ Supported |
 | Text | `text-align: start` follows `direction` | ✅ Supported |
+| Text | Inline content directly in `<body>` | ✅ Supported |
 | Text | Whitespace collapsing (`white-space: normal`) | ✅ Supported |
 | Text | `white-space: pre` | ✅ Supported |
 | Text | `white-space: nowrap` | ✅ Supported |
@@ -306,8 +307,11 @@ every row is a test that renders a snippet and checks the PDF, and every ❌ row
 | PDF | CFF / `.otf` fonts embedded as OpenType (FontFile3) | ✅ Supported |
 | PDF | Ligatures extract as their letters | ✅ Supported |
 | PDF | Subset fonts carry a subset tag (`ABCDEF+Name`) | ✅ Supported |
-| PDF | Clickable links | ❌ Not yet ([#40](https://github.com/MoncefMak/ferropdf/issues/40)) |
-| PDF | Outline / bookmarks | ❌ Not yet ([#41](https://github.com/MoncefMak/ferropdf/issues/41)) |
+| PDF | Clickable links | ✅ Supported |
+| PDF | Internal `#anchor` links | ✅ Supported |
+| PDF | Block and image links | ✅ Supported |
+| PDF | `javascript:` / `data:` links are not clickable | ✅ Supported |
+| PDF | Outline / bookmarks (nested `h1`–`h6`) | ✅ Supported |
 <!-- feature-matrix:end -->
 
 Regenerate after changing a feature: `python tests/test_feature_matrix.py`.

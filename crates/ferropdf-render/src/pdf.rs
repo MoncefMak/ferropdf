@@ -350,8 +350,18 @@ pub fn write_pdf(
         page_gradients.push(list);
     }
 
+    // ── Links, anchors and outline ──
+    let nav = crate::navigation::collect(pages, &mut next_ref);
+    let outline_ref = (!nav.bookmarks.is_empty()).then(&mut next_ref);
+
     // Write catalog
-    pdf.catalog(catalog_ref).pages(page_tree_ref);
+    {
+        let mut catalog = pdf.catalog(catalog_ref);
+        catalog.pages(page_tree_ref);
+        if let Some(r) = outline_ref {
+            catalog.outlines(r);
+        }
+    }
 
     // Write page tree
     let mut page_tree = pdf.pages(page_tree_ref);
@@ -407,6 +417,9 @@ pub fn write_pdf(
         }
         resources.finish();
 
+        if !nav.links[i].is_empty() {
+            page.annotations(nav.links[i].iter().map(|l| l.annotation));
+        }
         page.contents(content_ref);
         page.finish();
 
@@ -814,6 +827,8 @@ pub fn write_pdf(
                     content.clip_nonzero();
                     content.end_path();
                 }
+                // Navigation is written as annotations and outline items.
+                DrawOp::Link { .. } | DrawOp::Anchor { .. } | DrawOp::Bookmark { .. } => {}
                 DrawOp::Save => {
                     content.save_state();
                 }
@@ -905,6 +920,8 @@ pub fn write_pdf(
         gs.stroking_alpha(alpha);
         gs.finish();
     }
+
+    crate::navigation::write(&mut pdf, &nav, &page_refs, outline_ref, page_h);
 
     // Write metadata
     let mut info = pdf.document_info(next_ref());

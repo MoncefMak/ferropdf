@@ -95,9 +95,15 @@ impl PaginationContext {
 pub fn paginate(root: &LayoutBox, config: &PageConfig) -> Vec<Page> {
     let mut ctx = PaginationContext::new(config);
 
-    // Process the root's direct children
-    for child in &root.children {
-        fragment_box(child, &mut ctx);
+    // A root whose inline content was merged into its own lines (a body
+    // holding only text and inline elements) is itself the paragraph to
+    // place; otherwise its children are.
+    if root.shaped_lines.is_empty() {
+        for child in &root.children {
+            fragment_box(child, &mut ctx);
+        }
+    } else {
+        fragment_box(root, &mut ctx);
     }
 
     // Flush the last page if not empty
@@ -701,6 +707,11 @@ fn make_container_fragment(
         list_item_index: None,
         thead_row_count: 0,
         tfoot_row_count: 0,
+        // Every fragment of a link is clickable; the anchor and the outline
+        // entry point at the first fragment only.
+        link: parent.link.clone(),
+        anchor: parent.anchor.clone().filter(|_| is_first_fragment),
+        bookmark: parent.bookmark.clone().filter(|_| is_first_fragment),
     }
 }
 
@@ -773,6 +784,17 @@ mod tests {
             orientation: Orientation::Portrait,
             margin_overrides: Default::default(),
         }
+    }
+
+    #[test]
+    fn root_with_its_own_lines_is_placed() {
+        // `<body>text</body>`: the text is merged into the root's lines.
+        let mut root = make_text_box(0.0, 3, 20.0);
+        root.children = vec![make_box(0.0, 20.0)];
+        let pages = paginate(&root, &make_config(200.0));
+        assert_eq!(pages.len(), 1);
+        assert_eq!(pages[0].content.len(), 1);
+        assert_eq!(pages[0].content[0].shaped_lines.len(), 3);
     }
 
     #[test]

@@ -736,7 +736,38 @@ fn read_layout(
         list_item_index: None,
         thead_row_count,
         tfoot_row_count,
+        link: node
+            .attr("href")
+            .filter(|_| node.tag() == Some("a"))
+            .map(str::to_string),
+        anchor: node
+            .attr("id")
+            .or_else(|| node.attr("name").filter(|_| node.tag() == Some("a")))
+            .filter(|a| !a.is_empty())
+            .map(str::to_string),
+        bookmark: heading_bookmark(doc, node_id),
     })
+}
+
+/// Outline entry of an `<h1>`–`<h6>`: its level and text (white space
+/// collapsed). Empty headings get no entry.
+fn heading_bookmark(doc: &Document, node_id: NodeId) -> Option<(u8, String)> {
+    let level = match doc.get(node_id).tag()? {
+        "h1" => 1,
+        "h2" => 2,
+        "h3" => 3,
+        "h4" => 4,
+        "h5" => 5,
+        "h6" => 6,
+        _ => return None,
+    };
+    let text: String = doc
+        .iter_preorder(node_id)
+        .filter_map(|id| doc.get(id).text.as_deref())
+        .collect::<Vec<_>>()
+        .join("");
+    let title = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    (!title.is_empty()).then_some((level, title))
 }
 
 fn resolve_margin_insets(style: &ComputedStyle) -> Insets {
