@@ -230,7 +230,11 @@ every row is a test that renders a snippet and checks the PDF, and every ❌ row
 | Cascade | `calc()` mixing `%` and lengths, with `var()` | ✅ Supported |
 | Cascade | `::before` / `::after` with literal `content` | ✅ Supported |
 | Cascade | Author CSS overrides tag defaults (`a`, `b`, `span`) | ✅ Supported |
-| Cascade | CSS counters in `content` | ❌ Not yet ([#31](https://github.com/MoncefMak/ferropdf/issues/31)) |
+| Cascade | CSS counters in `content` | ✅ Supported |
+| Cascade | Section numbering (`counter-reset` scopes, counter styles) | ✅ Supported |
+| Cascade | Nested counters with `counters()` | ✅ Supported |
+| Cascade | `::before` / `::after` take their own styles | ✅ Supported |
+| Cascade | `attr()` and quotes in `content` | ✅ Supported |
 | Cascade | `@media print` | ✅ Supported |
 | Cascade | Width media queries (`min-width`) | ❌ Not yet ([#29](https://github.com/MoncefMak/ferropdf/issues/29)) |
 | Cascade | `<style>` inside `<body>` is not rendered | ✅ Supported |
@@ -260,6 +264,8 @@ every row is a test that renders a snippet and checks the PDF, and every ❌ row
 | Layout | `float` (text beside a floated box) | ✅ Supported |
 | Layout | `float` left/right header + `clear` | ✅ Supported |
 | Layout | `overflow: hidden` | ✅ Supported |
+| Layout | Hidden child keeps the inline flow | ✅ Supported |
+| Layout | `inline-block` shrink-wraps mixed inline content | ✅ Supported |
 | Visual | `overflow: hidden` with `border-radius` (round clip) | ✅ Supported |
 | Layout | `box-sizing` (content-box default, border-box) | ✅ Supported |
 | Visual | Solid borders | ✅ Supported |
@@ -349,7 +355,7 @@ To compare *output quality* side by side, render the corpus with every engine:
 python tests/corpus/report.py /tmp/report && open /tmp/report/index.html
 ```
 
-ferropdf is significantly faster on simple-layout documents because its CSS surface is much smaller than WeasyPrint's. The gap narrows as you exercise CSS features ferropdf doesn't yet implement (CSS counters, advanced selectors). For honest comparisons, time **your** workload on **your** hardware.
+ferropdf is significantly faster on simple-layout documents because its CSS surface is much smaller than WeasyPrint's. The gap narrows as you exercise CSS features ferropdf doesn't yet implement (advanced selectors, some text properties). For honest comparisons, time **your** workload on **your** hardware.
 
 ---
 

@@ -266,6 +266,51 @@ def chk_css_counters():
     assert "2.b" in d.text().replace(" ", "")
 
 
+def chk_section_numbering():
+    css = ("body{counter-reset:s}h2{counter-reset:ss;counter-increment:s}h3{counter-increment:ss}"
+           'h2::before{content:counter(s,upper-roman) ". "}h3::before{content:counter(s) "." counter(ss) " "}')
+    d = Doc(wrap("<h2>Alpha</h2><h3>One</h3><h3>Two</h3><h2>Beta</h2><h3>Three</h3>", css))
+    t = d.text().replace(" ", "")
+    assert all(x in t for x in ("I.Alpha", "1.1One", "1.2Two", "II.Beta", "2.1Three")), t
+
+
+def chk_nested_counters():
+    css = 'ol{counter-reset:i;list-style:none}li{counter-increment:i}li::before{content:counters(i,".") " "}'
+    d = Doc(wrap("<ol><li>a<ol><li>b</li><li>c</li></ol></li><li>d</li></ol>", css))
+    t = d.text().replace(" ", "")
+    assert all(x in t for x in ("1a", "1.1b", "1.2c", "2d")), t
+
+
+def chk_pseudo_own_style():
+    # The generated "TAG" takes its own colour and size; the element's own
+    # "TAG" keeps the inherited ones. (Font size rather than weight: the
+    # macOS runners have no bold fallback face.)
+    d = Doc(wrap('<p class="x">TAG</p>', '.x::before{content:"TAG";color:#ff0000;font-size:20px;margin-right:4px}'))
+    spans = [s for b in d.doc[0].get_text("dict")["blocks"] for l in b.get("lines", []) for s in l["spans"]]
+    tags = [s for s in spans if s["text"].strip() == "TAG"]
+    assert len(tags) == 2, spans
+    gen, own = sorted(tags, key=lambda s: s["bbox"][0])
+    assert gen["color"] == 0xFF0000 and own["color"] == 0, (gen, own)
+    assert abs(gen["size"] - 15) < 0.1 and abs(own["size"] - 12) < 0.1, (gen["size"], own["size"])
+
+
+def chk_content_attr_quotes():
+    css = 'a::after{content:" (" attr(href) ")"}q::before{content:open-quote}q::after{content:close-quote}'
+    d = Doc(wrap('<p><a href="https://x.dev">site</a> <q>hi</q></p>', css))
+    t = d.text()
+    assert "(https://x.dev)" in t and "\u201chi\u201d" in t, t
+
+
+def chk_hidden_child_keeps_inline_flow():
+    d = Doc(wrap('<p><span style="display:none">h</span><span style="display:inline-block">BTN</span> after</p>'))
+    assert abs(d.word("BTN")[1] - d.word("after")[1]) < 6, "same line"
+
+
+def chk_inline_block_shrink_wraps_mixed_content():
+    d = Doc(wrap('<p><span style="display:inline-block;background:#00f"><b>&gt;</b> Pay online</span> x</p>'))
+    assert abs(d.word("Pay")[1] - d.word("online")[1]) < 1, "no wrap inside the inline-block"
+
+
 def chk_media_print():
     d = Doc(wrap("<p>x</p>", "@media print{p{color:#ff0000}}"))
     assert b"1 0 0 rg" in d.pdf
@@ -709,7 +754,11 @@ FEATURES = [
     Feature("Cascade", "`calc()` mixing `%` and lengths, with `var()`", chk_calc_mixed),
     Feature("Cascade", "`::before` / `::after` with literal `content`", chk_before_after_literal),
     Feature("Cascade", "Author CSS overrides tag defaults (`a`, `b`, `span`)", chk_author_overrides_tag_defaults),
-    Feature("Cascade", "CSS counters in `content`", chk_css_counters, 31),
+    Feature("Cascade", "CSS counters in `content`", chk_css_counters),
+    Feature("Cascade", "Section numbering (`counter-reset` scopes, counter styles)", chk_section_numbering),
+    Feature("Cascade", "Nested counters with `counters()`", chk_nested_counters),
+    Feature("Cascade", "`::before` / `::after` take their own styles", chk_pseudo_own_style),
+    Feature("Cascade", "`attr()` and quotes in `content`", chk_content_attr_quotes),
     Feature("Cascade", "`@media print`", chk_media_print),
     Feature("Cascade", "Width media queries (`min-width`)", chk_media_width, 29),
     Feature("Cascade", "`<style>` inside `<body>` is not rendered", chk_style_in_body_hidden),
@@ -739,6 +788,8 @@ FEATURES = [
     Feature("Layout", "`float` (text beside a floated box)", chk_float),
     Feature("Layout", "`float` left/right header + `clear`", chk_float_header_and_clear),
     Feature("Layout", "`overflow: hidden`", chk_overflow_hidden),
+    Feature("Layout", "Hidden child keeps the inline flow", chk_hidden_child_keeps_inline_flow),
+    Feature("Layout", "`inline-block` shrink-wraps mixed inline content", chk_inline_block_shrink_wraps_mixed_content),
     Feature("Visual", "`overflow: hidden` with `border-radius` (round clip)", chk_overflow_rounded_clip),
     Feature("Layout", "`box-sizing` (content-box default, border-box)", chk_box_sizing),
     Feature("Visual", "Solid borders", chk_border_solid),
