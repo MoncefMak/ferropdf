@@ -523,6 +523,26 @@ def chk_border_radius():
     assert any(item[0] == "c" for dr in d.drawings() for item in dr["items"])
 
 
+def chk_border_radius_percent():
+    # 200x40px box at (57, 57)pt = 150x30pt: 50% makes an ellipse.
+    d = Doc(wrap('<div style="width:200px;height:40px;background:#f00;border-radius:50%"></div>'))
+    pix = d.doc[0].get_pixmap(dpi=72)
+    assert pix.pixel(57 + 75, 57 + 15) == (255, 0, 0), "centre painted"
+    assert pix.pixel(57 + 3, 57 + 3) == (255, 255, 255), "corner cut by the ellipse"
+    # A 15pt pill would cover (77, 58); the 75x15pt ellipse does not.
+    assert pix.pixel(57 + 20, 57 + 1) == (255, 255, 255), "elliptical, not a pill"
+
+
+def chk_border_radius_per_corner():
+    d = Doc(wrap('<div style="width:200px;height:40px;background:#f00;border-radius:0 0 20px 0 / 0 0 10px 0;'
+                 'border-top-left-radius:1rem"></div>'))
+    pix = d.doc[0].get_pixmap(dpi=72)
+    assert pix.pixel(57 + 1, 57 + 1) == (255, 255, 255), "top-left rounded (rem longhand)"
+    assert pix.pixel(57 + 148, 57 + 1) == (255, 0, 0), "top-right square"
+    assert pix.pixel(57 + 149, 57 + 28) == (255, 255, 255), "bottom-right rounded"
+    assert pix.pixel(57 + 1, 57 + 28) == (255, 0, 0), "bottom-left square"
+
+
 def chk_box_shadow():
     d = Doc(wrap('<div style="width:100px;height:40px;box-shadow:4px 4px 0 #000"></div>'))
     assert len(d.drawings()) >= 1
@@ -782,6 +802,8 @@ FEATURES = [
     Feature("Visual", "Dashed / dotted borders", chk_border_dashed),
     Feature("Visual", "Double borders", chk_border_double),
     Feature("Visual", "`border-radius`", chk_border_radius),
+    Feature("Visual", "`border-radius` percentages (circles, ellipses)", chk_border_radius_percent),
+    Feature("Visual", "Per-corner and elliptical `border-radius`", chk_border_radius_per_corner),
     Feature("Visual", "`box-shadow`", chk_box_shadow),
     Feature("Visual", "`box-shadow` not painted under the box", chk_box_shadow_outside_only),
     Feature("Visual", "`opacity`", chk_opacity),

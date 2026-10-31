@@ -1,7 +1,8 @@
 use crate::display_list::{DrawOp, PageDisplayList};
 use ferropdf_core::layout::Page;
 use ferropdf_core::{
-    BorderCollapse, BorderStyle, Color, LayoutBox, ListStyleType, PageConfig, Rect, TextDecoration,
+    BorderCollapse, BorderStyle, Color, LayoutBox, ListStyleType, PageConfig, Radii, Rect,
+    TextDecoration,
 };
 
 /// Paint a page into a display list.
@@ -76,13 +77,16 @@ fn paint_box(
         ops.push(DrawOp::SetOpacity(style.opacity));
     }
 
+    // Corner radii, resolved against this box (percentages, overlap scaling).
+    let radii = style.border_radius.resolve(rect.width, rect.height);
+
     // Box shadows (rendered before background, behind the element)
     for shadow in &style.box_shadow {
         if !shadow.inset {
             ops.push(DrawOp::DrawBoxShadow {
                 rect,
                 shadow: shadow.clone(),
-                border_radius: style.border_radius.to_array(),
+                border_radius: radii,
             });
         }
     }
@@ -92,7 +96,7 @@ fn paint_box(
         ops.push(DrawOp::FillRect {
             rect,
             color: style.background_color,
-            border_radius: style.border_radius.to_array(),
+            border_radius: radii,
         });
     }
 
@@ -110,7 +114,7 @@ fn paint_box(
             if let Some(gradient) = crate::gradient::resolve(g, pad) {
                 ops.push(DrawOp::FillGradient {
                     rect,
-                    border_radius: style.border_radius.to_array(),
+                    border_radius: radii,
                     gradient,
                 });
             }
@@ -118,7 +122,7 @@ fn paint_box(
     }
 
     // Borders
-    paint_borders(layout_box, ops, rect);
+    paint_borders(layout_box, ops, rect, radii);
 
     // overflow: hidden — clip content and descendants to the padding box,
     // following the inner border radius.
@@ -143,18 +147,13 @@ fn paint_box(
         } else {
             (pad.y - FAR, pad.height + 2.0 * FAR)
         };
-        let r = style.border_radius.to_array();
-        let inner = [
-            (r[0] - b.left.max(b.top)).max(0.0),
-            (r[1] - b.right.max(b.top)).max(0.0),
-            (r[2] - b.right.max(b.bottom)).max(0.0),
-            (r[3] - b.left.max(b.bottom)).max(0.0),
-        ];
+        // Padding-edge radii: the outer radii minus the border widths.
+        let inner = radii.inset([b.top, b.right, b.bottom, b.left]);
         let both = style.overflow_clip_x && style.overflow_clip_y;
         ops.push(DrawOp::Save);
         ops.push(DrawOp::ClipRect {
             rect: Rect::new(cx, cy, cw, ch),
-            border_radius: if both { inner } else { [0.0; 4] },
+            border_radius: if both { inner } else { Radii::ZERO },
         });
     }
 
@@ -366,11 +365,11 @@ fn emit_text_decoration(
     ops.push(DrawOp::FillRect {
         rect: Rect::new(x, line_y, width, thickness),
         color,
-        border_radius: [0.0; 4],
+        border_radius: Radii::ZERO,
     });
 }
 
-fn paint_borders(layout_box: &LayoutBox, ops: &mut Vec<DrawOp>, rect: Rect) {
+fn paint_borders(layout_box: &LayoutBox, ops: &mut Vec<DrawOp>, rect: Rect, radii: Radii) {
     let style = &layout_box.style;
 
     // border-collapse: suppress duplicate inner borders for table cells.
@@ -388,7 +387,6 @@ fn paint_borders(layout_box: &LayoutBox, ops: &mut Vec<DrawOp>, rect: Rect) {
     };
 
     // Rounded corners with a uniform border: one rounded path for all sides.
-    let radii = style.border_radius.to_array();
     let sides = [
         &style.border_top,
         &style.border_right,
@@ -398,7 +396,7 @@ fn paint_borders(layout_box: &LayoutBox, ops: &mut Vec<DrawOp>, rect: Rect) {
     let uniform = sides.iter().all(|b| {
         b.width == sides[0].width && b.color == sides[0].color && b.style == sides[0].style
     });
-    if radii.iter().any(|r| *r > 0.0)
+    if !radii.is_zero()
         && uniform
         && !collapse
         && sides[0].width > 0.0
