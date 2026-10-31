@@ -242,6 +242,7 @@ every row is a test that renders a snippet and checks the PDF, and every ❌ row
 | Text | `text-align: right` | ✅ Supported |
 | Text | `text-align: center` | ✅ Supported |
 | Text | `text-align: justify` | ✅ Supported |
+| Text | `text-align: start` follows `direction` | ✅ Supported |
 | Text | Whitespace collapsing (`white-space: normal`) | ✅ Supported |
 | Text | `white-space: pre` | ✅ Supported |
 | Text | `white-space: nowrap` | ✅ Supported |
@@ -249,12 +250,10 @@ every row is a test that renders a snippet and checks the PDF, and every ❌ row
 | Text | `text-transform` | ❌ Not yet ([#34](https://github.com/MoncefMak/ferropdf/issues/34)) |
 | Text | `text-indent` | ❌ Not yet ([#34](https://github.com/MoncefMak/ferropdf/issues/34)) |
 | Text | Arabic shaping + RTL alignment | ✅ Supported |
-| Layout | `direction: rtl` mirrors flex rows | ✅ Supported |
-| Layout | `direction: rtl` mirrors table / grid columns | ✅ Supported |
-| Text | `text-align: start` follows `direction` | ✅ Supported |
 | Text | Lists (disc, decimal, roman) | ✅ Supported |
 | Layout | Flexbox row | ✅ Supported |
 | Layout | `justify-content: space-between` | ✅ Supported |
+| Layout | `direction: rtl` mirrors flex rows | ✅ Supported |
 | Layout | Inline elements as flex items | ✅ Supported |
 | Layout | CSS grid columns | ✅ Supported |
 | Layout | Grid placement (`span`, `grid-area`, row/column gaps) | ✅ Supported |
@@ -263,6 +262,7 @@ every row is a test that renders a snippet and checks the PDF, and every ❌ row
 | Layout | `inline-block` shrink-to-fit next to text | ✅ Supported |
 | Layout | `inline-block` padding around its label | ✅ Supported |
 | Layout | Tables with `colspan` | ✅ Supported |
+| Layout | `direction: rtl` mirrors table / grid columns | ✅ Supported |
 | Layout | `position: absolute` | ✅ Supported |
 | Layout | `float` (text beside a floated box) | ✅ Supported |
 | Layout | `float` left/right header + `clear` | ✅ Supported |

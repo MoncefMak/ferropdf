@@ -678,11 +678,6 @@ def chk_inline_svg():
     assert rects and abs(rects[0].width - 30) < 1, "40px inline svg drawn as a 30pt vector rect"
 
 
-def chk_rtl_arabic():
-    d = Doc(wrap('<p dir="rtl">مرحبا بالعالم</p>'))
-    assert d.text() != "" and d.words()[0][0] > d.page_width() / 2
-
-
 def chk_rtl_flex_mirrored():
     d = Doc(wrap('<div dir="rtl" style="display:flex;gap:10px"><span>FIRST</span><span>SECOND</span></div>'))
     first, second = d.word("FIRST"), d.word("SECOND")
@@ -698,6 +693,11 @@ def chk_rtl_table_mirrored():
 def chk_text_align_start_rtl():
     d = Doc(wrap('<div dir="rtl"><p>LATIN</p></div>'))
     assert d.word("LATIN")[2] > d.page_width() - 70, "start = right in RTL, even for Latin text"
+
+
+def chk_rtl_arabic():
+    d = Doc(wrap('<p dir="rtl">مرحبا بالعالم</p>'))
+    assert d.text() != "" and d.words()[0][0] > d.page_width() / 2
 
 
 def chk_links():
@@ -762,6 +762,7 @@ FEATURES = [
     Feature("Text", "`text-align: right`", chk_text_align_right),
     Feature("Text", "`text-align: center`", chk_text_align_center),
     Feature("Text", "`text-align: justify`", chk_justify),
+    Feature("Text", "`text-align: start` follows `direction`", chk_text_align_start_rtl),
     Feature("Text", "Whitespace collapsing (`white-space: normal`)", chk_whitespace_collapse),
     Feature("Text", "`white-space: pre`", chk_white_space_pre),
     Feature("Text", "`white-space: nowrap`", chk_nowrap),
@@ -769,12 +770,10 @@ FEATURES = [
     Feature("Text", "`text-transform`", chk_text_transform, 34),
     Feature("Text", "`text-indent`", chk_text_indent, 34),
     Feature("Text", "Arabic shaping + RTL alignment", chk_rtl_arabic, needs_fonts=True),
-    Feature("Layout", "`direction: rtl` mirrors flex rows", chk_rtl_flex_mirrored),
-    Feature("Layout", "`direction: rtl` mirrors table / grid columns", chk_rtl_table_mirrored),
-    Feature("Text", "`text-align: start` follows `direction`", chk_text_align_start_rtl),
     Feature("Text", "Lists (disc, decimal, roman)", chk_lists),
     Feature("Layout", "Flexbox row", chk_flex_row),
     Feature("Layout", "`justify-content: space-between`", chk_flex_justify_between),
+    Feature("Layout", "`direction: rtl` mirrors flex rows", chk_rtl_flex_mirrored),
     Feature("Layout", "Inline elements as flex items", chk_flex_inline_items),
     Feature("Layout", "CSS grid columns", chk_grid_columns),
     Feature("Layout", "Grid placement (`span`, `grid-area`, row/column gaps)", chk_grid_placement),
@@ -783,6 +782,7 @@ FEATURES = [
     Feature("Layout", "`inline-block` shrink-to-fit next to text", chk_inline_block_shrink),
     Feature("Layout", "`inline-block` padding around its label", chk_inline_block_padding),
     Feature("Layout", "Tables with `colspan`", chk_table_layout),
+    Feature("Layout", "`direction: rtl` mirrors table / grid columns", chk_rtl_table_mirrored),
     Feature("Layout", "`position: absolute`", chk_position_absolute),
     Feature("Layout", "`float` (text beside a floated box)", chk_float),
     Feature("Layout", "`float` left/right header + `clear`", chk_float_header_and_clear),

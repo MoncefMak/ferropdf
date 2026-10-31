@@ -8,8 +8,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
-- Right-to-left layout is mirrored like in browsers: in a `direction: rtl` flex row the first item is on the right and `flex-start` packs to the right, and grid / table columns run right to left (#51).
-- `text-align` now defaults to `start` and accepts `start` / `end`: right-to-left blocks align right even for Latin text, as in browsers.
 - `border-radius` percentages (`50%` circles and ellipses), `em` / `rem` radii (Bootstrap's `.375rem`), the 2–4 value and `/` elliptical forms, and the `border-*-radius` longhands were dropped; corners are now elliptical, resolved against the border box and scaled down when they overlap. Box-shadow spread and `overflow` clips follow the same radii (#64).
 - A `display: none` child no longer breaks the inline flow of its parent (an inline-block next to it was laid out full-width on its own line).
 - An `inline-block` holding inline elements and text shrink-wraps to their combined width instead of wrapping its content.
@@ -25,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Multi-row `<thead>` overlapped on continuation pages; a header left alone at the bottom of a page now moves with the first body row; content after a multi-page table no longer overlaps its last rows.
 - `<thead>`/`<tfoot>` are laid out first/last wherever they appear in the source.
 - `text-align: right | center` had no effect since 0.2.7; `justify` now works (#48, #33).
+- Right-to-left layout is mirrored like in browsers: in a `direction: rtl` flex row the first item is on the right and `flex-start` packs to the right, and grid / table columns run right to left (#51).
+- `text-align` now defaults to `start` and accepts `start` / `end`: right-to-left blocks align right even for Latin text, as in browsers.
 - Whitespace collapsing per `white-space` (`normal`, `nowrap`, `pre`, `pre-wrap`, `pre-line`) (#13, #16).
 - `<style>`, `<script>` and other non-rendered elements inside `<body>` were printed (#14).
 - `break-before` / `break-after` / `break-inside` (#15); `@page { size: A4 landscape }` (#56).
