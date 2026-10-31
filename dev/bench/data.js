@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793427481109,
+  "lastUpdate": 1793437565066,
   "repoUrl": "https://github.com/MoncefMak/ferropdf",
   "entries": {
     "FastPDF Criterion Benchmarks": [
@@ -2791,6 +2791,54 @@ window.BENCHMARK_DATA = {
             "name": "render_invoice_cached",
             "value": 4275744,
             "range": "± 98825",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "72460183+MoncefMak@users.noreply.github.com",
+            "name": "MoncefMak",
+            "username": "MoncefMak"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "c89e34ba63703a83a572ffbfa0b316bcbc9de793",
+          "message": "Merge pull request #81 from MoncefMak/feat/text-spacing\n\nletter-spacing, word-spacing, text-indent and text-transform",
+          "timestamp": "2026-10-31T10:02:55+01:00",
+          "tree_id": "c069cb78159d331127d31f96f8eaf694a4fe5e70",
+          "url": "https://github.com/MoncefMak/ferropdf/commit/c89e34ba63703a83a572ffbfa0b316bcbc9de793"
+        },
+        "date": 1793437564747,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "render_simple",
+            "value": 6665223,
+            "range": "± 392663",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice",
+            "value": 7724892,
+            "range": "± 51638",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_simple_cached",
+            "value": 3206040,
+            "range": "± 30602",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice_cached",
+            "value": 4265384,
+            "range": "± 205897",
             "unit": "ns/iter"
           }
         ]
