@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793437565066,
+  "lastUpdate": 1793453995883,
   "repoUrl": "https://github.com/MoncefMak/ferropdf",
   "entries": {
     "FastPDF Criterion Benchmarks": [
@@ -2839,6 +2839,54 @@ window.BENCHMARK_DATA = {
             "name": "render_invoice_cached",
             "value": 4265384,
             "range": "± 205897",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "72460183+MoncefMak@users.noreply.github.com",
+            "name": "MoncefMak",
+            "username": "MoncefMak"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "72066093a8538506f8056650c7ad3c319a29b7fc",
+          "message": "Merge pull request #82 from MoncefMak/feat/links-outline\n\nClickable links, anchors and PDF outline",
+          "timestamp": "2026-10-31T14:36:56+01:00",
+          "tree_id": "99c1f1c1572b99cfc9582b30a49f03191fa28edf",
+          "url": "https://github.com/MoncefMak/ferropdf/commit/72066093a8538506f8056650c7ad3c319a29b7fc"
+        },
+        "date": 1793453995115,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "render_simple",
+            "value": 5647176,
+            "range": "± 42697",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice",
+            "value": 6553382,
+            "range": "± 261201",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_simple_cached",
+            "value": 2691457,
+            "range": "± 16220",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice_cached",
+            "value": 3542011,
+            "range": "± 14621",
             "unit": "ns/iter"
           }
         ]
