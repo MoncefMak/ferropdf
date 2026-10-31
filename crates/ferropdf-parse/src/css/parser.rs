@@ -811,6 +811,12 @@ fn parse_css_value(raw: &str) -> CssValue {
         return CssValue::Color(raw.to_string());
     }
 
+    // Values holding quoted strings (`content: "a  b" counter(x)`) are kept
+    // verbatim: splitting on whitespace would collapse spaces inside them.
+    if raw.contains(['"', '\'']) {
+        return CssValue::String(raw.to_string());
+    }
+
     // Check for multiple values (space-separated)
     let parts: Vec<&str> = raw.split_whitespace().collect();
     if parts.len() > 1 {

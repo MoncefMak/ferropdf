@@ -21,7 +21,17 @@ pub struct Node {
     pub children: Vec<NodeId>,
 }
 
+/// Tag names of the synthetic elements standing for `::before` / `::after`.
+/// No author selector can name them; the cascade matches them through
+/// pseudo-element selectors on their parent (the originating element).
+pub const PSEUDO_BEFORE: &str = "::before";
+pub const PSEUDO_AFTER: &str = "::after";
+
 impl Node {
+    /// Whether this is a synthetic `::before` / `::after` element.
+    pub fn is_pseudo(&self) -> bool {
+        matches!(self.tag(), Some(PSEUDO_BEFORE | PSEUDO_AFTER))
+    }
     pub fn is_element(&self) -> bool {
         self.node_type == NodeType::Element
     }

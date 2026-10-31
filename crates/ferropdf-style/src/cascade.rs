@@ -377,6 +377,24 @@ fn apply_single(
                 }
             }
         }
+        CssProperty::Unknown(ref name) if name == "content" => {
+            style.content = Some(raw.to_string());
+        }
+        CssProperty::Unknown(ref name)
+            if matches!(
+                name.as_str(),
+                "counter-reset" | "counter-increment" | "counter-set"
+            ) =>
+        {
+            let default = if name == "counter-increment" { 1 } else { 0 };
+            if let Some(list) = parse_counter_list(raw, default) {
+                match name.as_str() {
+                    "counter-reset" => style.counter_reset = list,
+                    "counter-increment" => style.counter_increment = list,
+                    _ => style.counter_set = list,
+                }
+            }
+        }
         CssProperty::Unknown(ref name) if name == "background-image" => {
             if let Some(g) = crate::gradient::parse_background_image(raw) {
                 style.background_gradients = g;
@@ -816,6 +834,31 @@ fn split_top_level(s: &str) -> Vec<&str> {
 
 /// Parse a CSS length string directly to pt (points typographiques).
 /// Used for properties stored as f32 (border widths, border-radius, etc.)
+/// `none` or a list of `<name> <integer>?` pairs.
+fn parse_counter_list(raw: &str, default: i32) -> Option<Vec<(String, i32)>> {
+    let raw = raw.trim();
+    if raw.eq_ignore_ascii_case("none") {
+        return Some(Vec::new());
+    }
+    let mut out: Vec<(String, i32)> = Vec::new();
+    for word in raw.split_whitespace() {
+        match word.parse::<i32>() {
+            Ok(v) => out.last_mut()?.1 = v,
+            Err(_) => {
+                let valid = word
+                    .chars()
+                    .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+                    && !word.starts_with(|c: char| c.is_ascii_digit());
+                if !valid || matches!(word, "initial" | "inherit" | "unset") {
+                    return None;
+                }
+                out.push((word.to_string(), default));
+            }
+        }
+    }
+    Some(out)
+}
+
 pub(crate) fn parse_length_to_pt(s: &str) -> Option<f32> {
     let s = s.trim();
     if s == "0" || s == "0px" {
