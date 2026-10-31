@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793426475028,
+  "lastUpdate": 1793427278897,
   "repoUrl": "https://github.com/MoncefMak/ferropdf",
   "entries": {
     "FastPDF Criterion Benchmarks": [
@@ -2647,6 +2647,54 @@ window.BENCHMARK_DATA = {
             "name": "render_invoice_cached",
             "value": 4200309,
             "range": "± 44738",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "72460183+MoncefMak@users.noreply.github.com",
+            "name": "MoncefMak",
+            "username": "MoncefMak"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "9cf5f61cd7f6004d8790c832110416c387d22dba",
+          "message": "Merge pull request #78 from MoncefMak/fix/rtl-mirroring\n\nfix: mirror right-to-left flex rows, grids and tables",
+          "timestamp": "2026-10-31T07:12:03+01:00",
+          "tree_id": "9b3db862cd3346fbafd4fdacb6651cb8c369e019",
+          "url": "https://github.com/MoncefMak/ferropdf/commit/9cf5f61cd7f6004d8790c832110416c387d22dba"
+        },
+        "date": 1793427278579,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "render_simple",
+            "value": 5621920,
+            "range": "± 34202",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice",
+            "value": 6411593,
+            "range": "± 18011",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_simple_cached",
+            "value": 2657232,
+            "range": "± 6705",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice_cached",
+            "value": 3441456,
+            "range": "± 52597",
             "unit": "ns/iter"
           }
         ]
