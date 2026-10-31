@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793375220116,
+  "lastUpdate": 1793409530327,
   "repoUrl": "https://github.com/MoncefMak/ferropdf",
   "entries": {
     "FastPDF Criterion Benchmarks": [
@@ -2503,6 +2503,54 @@ window.BENCHMARK_DATA = {
             "name": "render_invoice_cached",
             "value": 3480112,
             "range": "± 55611",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "72460183+MoncefMak@users.noreply.github.com",
+            "name": "MoncefMak",
+            "username": "MoncefMak"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "3aedde865fa1e40e3ac8dc4b367fb5525cc0aa07",
+          "message": "Merge pull request #75 from MoncefMak/feat/counters\n\nCSS counters and styled ::before / ::after",
+          "timestamp": "2026-10-31T02:15:35+01:00",
+          "tree_id": "e028d6c3dddf6b19e03b6f3d0f82a5181d2784e2",
+          "url": "https://github.com/MoncefMak/ferropdf/commit/3aedde865fa1e40e3ac8dc4b367fb5525cc0aa07"
+        },
+        "date": 1793409529596,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "render_simple",
+            "value": 6717278,
+            "range": "± 37565",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice",
+            "value": 7684607,
+            "range": "± 41513",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_simple_cached",
+            "value": 3217411,
+            "range": "± 13301",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice_cached",
+            "value": 4180787,
+            "range": "± 27475",
             "unit": "ns/iter"
           }
         ]
