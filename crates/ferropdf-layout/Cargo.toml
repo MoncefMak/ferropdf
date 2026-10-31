@@ -5,6 +5,7 @@ edition = "2021"
 rust-version.workspace = true
 
 [dependencies]
+rustc-hash = { workspace = true }
 ferropdf-core  = { path = "../ferropdf-core" }
 ferropdf-style = { path = "../ferropdf-style" }
 taffy          = { workspace = true }

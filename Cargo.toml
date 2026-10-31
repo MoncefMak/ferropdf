@@ -26,7 +26,10 @@ selectors    = "0.25"
 taffy        = { version = "0.5", features = ["flexbox", "grid", "block_layout"] }
 
 # Text + Fonts — NE PAS écrire de text shaper maison
-cosmic-text  = "0.12"
+# Fast non-cryptographic hashing for internal maps (glyph ids, node ids).
+rustc-hash   = "2"
+# shape-run-cache: memoise the shaping of each word (see FontSession::drop).
+cosmic-text  = { version = "0.12", features = ["shape-run-cache"] }
 fontdb       = "0.16"
 ttf-parser   = "0.20"
 

@@ -3,7 +3,7 @@ use flate2::write::ZlibEncoder;
 use flate2::Compression;
 use pdf_writer::types::FontFlags;
 use pdf_writer::{Filter, Finish, Name, Pdf, Rect as PdfWriterRect, Ref, Str};
-use std::collections::HashMap;
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::io::Write;
 
 /// A resolved font ready to be embedded in the PDF.
@@ -241,7 +241,7 @@ pub(crate) fn write_cid_font(pdf: &mut Pdf, ef: &EmbeddedFont) -> ferropdf_core:
     cid_font.finish();
 
     // 4. Write ToUnicode CMap
-    let tounicode_cmap = build_tounicode_cmap(&face, ef.gid_remapping.as_ref(), &ef.glyph_text);
+    let tounicode_cmap = build_tounicode_cmap(ef.gid_remapping.as_ref(), &ef.glyph_text);
     pdf.stream(ef.tounicode_ref, tounicode_cmap.as_bytes());
 
     // 5. Write Type0 font
@@ -303,48 +303,21 @@ pub(crate) fn encode_shaped_glyphs(
 // ── ToUnicode CMap builder ──
 
 fn build_tounicode_cmap(
-    face: &ttf_parser::Face,
     gid_remapping: Option<&HashMap<u16, u16>>,
     glyph_text: &HashMap<u16, String>,
 ) -> String {
-    let remap = |gid: u16| -> Option<u16> {
-        match gid_remapping {
+    // (Remapped) glyph ID → the text it was used for. Shaped glyphs carry
+    // their cluster (exact for ligatures and for glyphs shared by several
+    // code points); unshaped text records the character written. No cmap
+    // lookup is needed.
+    let mut gid_to_text: HashMap<u16, String> = HashMap::default();
+    for (&gid, text) in glyph_text {
+        let mapped = match gid_remapping {
             Some(map) => map.get(&gid).copied(),
             None => Some(gid),
-        }
-    };
-    // (Remapped) glyph ID → text. The shaped text wins: it is exact for
-    // ligatures and for glyphs shared by several code points (CJK
-    // compatibility ideographs, Kangxi radicals).
-    let mut gid_to_text: HashMap<u16, String> = HashMap::new();
-    for (&gid, text) in glyph_text {
-        if let Some(mapped) = remap(gid) {
+        };
+        if let Some(mapped) = mapped {
             gid_to_text.insert(mapped, text.clone());
-        }
-    }
-    // Other glyphs (unshaped text): reverse lookup in the cmap, preferring
-    // the lowest code point.
-    if let Some(subtable) = face.tables().cmap {
-        let mut reverse: HashMap<u16, char> = HashMap::new();
-        for sub in subtable.subtables {
-            if !sub.is_unicode() {
-                continue;
-            }
-            sub.codepoints(|cp| {
-                if let Some(ch) = char::from_u32(cp) {
-                    if let Some(gid) = face.glyph_index(ch) {
-                        if let Some(mapped) = remap(gid.0) {
-                            let e = reverse.entry(mapped).or_insert(ch);
-                            if ch < *e {
-                                *e = ch;
-                            }
-                        }
-                    }
-                }
-            });
-        }
-        for (gid, ch) in reverse {
-            gid_to_text.entry(gid).or_insert_with(|| ch.to_string());
         }
     }
 
@@ -403,7 +376,7 @@ fn compress_data(data: &[u8]) -> ferropdf_core::Result<Vec<u8>> {
 pub(crate) fn subset_font(
     font_data: &[u8],
     face_index: u32,
-    used_gids: &std::collections::HashSet<u16>,
+    used_gids: &HashSet<u16>,
 ) -> (Vec<u8>, Option<HashMap<u16, u16>>) {
     // Build a sorted list of GIDs the subsetter should retain
     let mut gids: Vec<u16> = used_gids.iter().copied().collect();
@@ -418,7 +391,7 @@ pub(crate) fn subset_font(
     match subsetter::subset(font_data, face_index, &remapper) {
         Ok(subsetted) => {
             // Build the remapping: old GID → new GID
-            let mut mapping = HashMap::new();
+            let mut mapping = HashMap::default();
             for &old_gid in &gids {
                 if let Some(new_gid) = remapper.get(old_gid) {
                     mapping.insert(old_gid, new_gid);
@@ -566,7 +539,7 @@ mod tests {
     #[test]
     fn encode_shaped_glyphs_applies_remapping() {
         let gids = [42u16, 7, 1000];
-        let mut map = HashMap::new();
+        let mut map = HashMap::default();
         map.insert(42u16, 1u16);
         map.insert(7u16, 2u16);
         // 1000 is not in the map → falls back to 0 (notdef glyph).
@@ -586,7 +559,7 @@ mod tests {
 
     #[test]
     fn subset_font_falls_back_on_garbage_input() {
-        let used: std::collections::HashSet<u16> = [1u16, 2, 3].into_iter().collect();
+        let used: HashSet<u16> = [1u16, 2, 3].into_iter().collect();
         let (data, mapping) = subset_font(b"not a real font", 0, &used);
         // On parse failure subsetter returns the original bytes unchanged
         // and signals "no remapping" via None.

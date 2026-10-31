@@ -215,7 +215,7 @@ fn render_with_warnings_inner(
     // 4b. Add synthetic `::before` / `::after` elements; the cascade styles
     // them and step 5a fills in their generated content.
     {
-        let ua_sheet = ferropdf_parse::parse_stylesheet(ua_css)?;
+        let ua_sheet = ferropdf_parse::css::parse_ua(ua_css)?;
         let mut all_sheets: Vec<&ferropdf_parse::Stylesheet> =
             Vec::with_capacity(1 + stylesheets.len());
         all_sheets.push(&ua_sheet);
