@@ -392,10 +392,40 @@ def chk_style_in_body_hidden():
     assert d.text() == "hello"
 
 
+def _line_extent(d: Doc) -> float:
+    """Width of the text on the first line (extractors may split spaced-out words)."""
+    words = d.words()
+    first = [w for w in words if abs(w[1] - words[0][1]) < 1]
+    return max(w[2] for w in first) - min(w[0] for w in first)
+
+
 def chk_letter_spacing():
-    a = Doc(wrap("<p>WIDE</p>")).word("WIDE")
-    b = Doc(wrap('<p style="letter-spacing:10px">WIDE</p>')).word("WIDE")
-    assert (b[2] - b[0]) - (a[2] - a[0]) > 20
+    a = _line_extent(Doc(wrap("<p>WIDE</p>")))
+    b = _line_extent(Doc(wrap('<p style="letter-spacing:10px">WIDE</p>')))
+    # 10px = 7.5pt after each of the 4 letters (the last one is trailing).
+    assert 20 < b - a < 25, (a, b)
+
+
+def chk_word_spacing():
+    a = _line_extent(Doc(wrap("<p>one two three</p>")))
+    b = _line_extent(Doc(wrap('<p style="word-spacing:20px">one two three</p>')))
+    assert abs((b - a) - 30) < 2, (a, b)  # 2 spaces x 15pt
+
+
+def chk_letter_spacing_wraps():
+    # Spacing is applied before line breaking: the spaced paragraph needs
+    # more lines and never overflows its box.
+    text = "spaced words that need to wrap inside a narrow box"
+    plain = Doc(wrap(f'<p style="width:200px">{text}</p>'))
+    spaced = Doc(wrap(f'<p style="width:200px;letter-spacing:3px">{text}</p>'))
+    lines = lambda d: len({round(w[1]) for w in d.words()})
+    assert lines(spaced) > lines(plain)
+    assert max(w[2] for w in spaced.words()) <= 57 + 150 + 1, "within the 150pt box"
+
+
+def chk_text_transform_capitalize():
+    d = Doc(wrap('<p style="text-transform:capitalize">jean-luc o\'neil</p>'))
+    assert "Jean-Luc O'neil" in d.text(), d.text()
 
 
 def chk_text_transform():
@@ -834,9 +864,12 @@ FEATURES = [
     Feature("Text", "Whitespace collapsing (`white-space: normal`)", chk_whitespace_collapse),
     Feature("Text", "`white-space: pre`", chk_white_space_pre),
     Feature("Text", "`white-space: nowrap`", chk_nowrap),
-    Feature("Text", "`letter-spacing`", chk_letter_spacing, 34),
-    Feature("Text", "`text-transform`", chk_text_transform, 34),
-    Feature("Text", "`text-indent`", chk_text_indent, 34),
+    Feature("Text", "`letter-spacing`", chk_letter_spacing),
+    Feature("Text", "`word-spacing`", chk_word_spacing),
+    Feature("Text", "Letter spacing taken into account by line breaking", chk_letter_spacing_wraps),
+    Feature("Text", "`text-transform`", chk_text_transform),
+    Feature("Text", "`text-transform: capitalize`", chk_text_transform_capitalize),
+    Feature("Text", "`text-indent`", chk_text_indent),
     Feature("Text", "Arabic shaping + RTL alignment", chk_rtl_arabic),
     Feature("Text", "Lists (disc, decimal, roman)", chk_lists),
     Feature("Layout", "Flexbox row", chk_flex_row),

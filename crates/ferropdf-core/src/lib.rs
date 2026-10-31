@@ -29,6 +29,6 @@ pub use style::{
     BoxDecorationBreak, BoxShadow, BoxSizing, Clear, ComputedStyle, Direction, Display,
     FlexDirection, FlexWrap, Float, FontStyle, FontWeight, GridProps, JustifyContent,
     ListStyleType, PageBreak, PageBreakInside, Position, Radii, TextAlign, TextDecoration,
-    WhiteSpace,
+    TextTransform, WhiteSpace,
 };
 pub use transform::{Matrix, TransformFunction};

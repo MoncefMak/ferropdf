@@ -214,6 +214,7 @@ fn render_with_warnings_inner(
         &mut parse_result.document,
         &mut styles,
     );
+    ferropdf_style::text_transform::apply_text_transform(&mut parse_result.document, &styles);
 
     // 5b. Replaced elements: <img width/height> attributes and intrinsic size.
     apply_image_sizes(
