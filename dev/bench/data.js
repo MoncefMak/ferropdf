@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793409530327,
+  "lastUpdate": 1793425031763,
   "repoUrl": "https://github.com/MoncefMak/ferropdf",
   "entries": {
     "FastPDF Criterion Benchmarks": [
@@ -2551,6 +2551,54 @@ window.BENCHMARK_DATA = {
             "name": "render_invoice_cached",
             "value": 4180787,
             "range": "± 27475",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "72460183+MoncefMak@users.noreply.github.com",
+            "name": "MoncefMak",
+            "username": "MoncefMak"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "e333f3882fd8d13c9a063d858f8596e376a23460",
+          "message": "Merge pull request #76 from MoncefMak/fix/border-radius-percent\n\nfix: border-radius percentages, rem units and elliptical corners",
+          "timestamp": "2026-10-31T06:34:23+01:00",
+          "tree_id": "45083c84857e0edd6e2523f37f3e8acdb968140d",
+          "url": "https://github.com/MoncefMak/ferropdf/commit/e333f3882fd8d13c9a063d858f8596e376a23460"
+        },
+        "date": 1793425031467,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "render_simple",
+            "value": 5953950,
+            "range": "± 292330",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice",
+            "value": 6883782,
+            "range": "± 163987",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_simple_cached",
+            "value": 2688172,
+            "range": "± 21788",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice_cached",
+            "value": 3499309,
+            "range": "± 31288",
             "unit": "ns/iter"
           }
         ]
