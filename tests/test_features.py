@@ -70,6 +70,17 @@ class TestArabicAndRtl:
         pdf = render(html)
         assert is_valid_pdf(pdf)
 
+    def test_arabic_combining_marks_extract(self):
+        # A tanween is a second glyph in its base letter's cluster, with no
+        # cluster text of its own: it must still have a ToUnicode entry, or
+        # extractors emit its raw glyph code (a control character).
+        html = '<html><body><p dir="rtl">يومًا</p></body></html>'
+        text = extract_text(render(html))
+        if not text.strip():
+            pytest.skip("no Arabic-capable font on this host")
+        assert not re.search(r"[\x00-\x08\x0e-\x1f]", text), repr(text)
+        assert "\u064b" in text, repr(text)
+
     def test_dir_attribute_lowercase_and_uppercase(self):
         html_lower = '<html><body><p dir="rtl">عربي</p></body></html>'
         html_upper = '<html><body><p dir="RTL">عربي</p></body></html>'

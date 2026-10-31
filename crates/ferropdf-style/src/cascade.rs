@@ -96,7 +96,7 @@ fn collect_custom_properties_scored(style: &mut ComputedStyle, scored: &[&Scored
         if let CssProperty::Unknown(name) = &sd.declaration.property {
             if name.starts_with("--") {
                 let value = sd.declaration.value.to_cow().trim().to_string();
-                style.custom_properties.insert(name.clone(), value);
+                std::sync::Arc::make_mut(&mut style.custom_properties).insert(name.clone(), value);
             }
         }
     }
@@ -108,7 +108,7 @@ fn collect_custom_properties_inline(style: &mut ComputedStyle, decls: &[&Declara
         if let CssProperty::Unknown(name) = &d.property {
             if name.starts_with("--") {
                 let value = d.value.to_cow().trim().to_string();
-                style.custom_properties.insert(name.clone(), value);
+                std::sync::Arc::make_mut(&mut style.custom_properties).insert(name.clone(), value);
             }
         }
     }

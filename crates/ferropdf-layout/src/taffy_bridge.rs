@@ -193,7 +193,7 @@ fn build_taffy_tree_inner(
         return Ok(());
     }
     let node = doc.get(node_id);
-    let style = styles.get(&node_id).cloned().unwrap_or_default();
+    let style = styles.get(&node_id).unwrap_or(ComputedStyle::initial());
 
     if style.display == FDisplay::None {
         return Ok(());
@@ -229,12 +229,14 @@ fn build_taffy_tree_inner(
                 font_family: style.font_family.first().cloned().unwrap_or_default(),
                 bold: style.font_weight.is_bold(),
                 italic: style.font_style == ferropdf_core::FontStyle::Italic,
-                spacing: text::Spacing::of(&style),
+                spacing: text::Spacing::of(style),
                 indent: first_line_indent(doc, node_id, styles, available_width),
+                shaped: None,
+                measured: Vec::new(),
             };
 
             let taffy_node = taffy
-                .new_leaf_with_context(style_to_taffy::convert(&style), ctx)
+                .new_leaf_with_context(style_to_taffy::convert(style), ctx)
                 .map_err(|e| {
                     ferropdf_core::FerroError::Layout(format!("Taffy leaf error: {:?}", e))
                 })?;
@@ -247,7 +249,7 @@ fn build_taffy_tree_inner(
     // ── Element nodes: recurse into children ──
     let mut child_taffy_ids = Vec::new();
     // Width available to the children (used to size tables before layout).
-    let child_available = content_width_estimate(&style, available_width);
+    let child_available = content_width_estimate(style, available_width);
     let is_flex_or_grid = matches!(style.display, FDisplay::Flex | FDisplay::Grid);
 
     for &child_id in &node.children {
@@ -272,7 +274,7 @@ fn build_taffy_tree_inner(
         }
     }
 
-    let mut taffy_style = style_to_taffy::convert(&style);
+    let mut taffy_style = style_to_taffy::convert(style);
     if style.display == FDisplay::Grid {
         resolve_auto_repeat(&mut taffy_style, child_available, child_taffy_ids.len());
     }
@@ -295,7 +297,7 @@ fn build_taffy_tree_inner(
         if has_block && has_inline {
             child_taffy_ids = wrap_inline_runs(
                 &kinds,
-                &style,
+                style,
                 taffy,
                 node_map,
                 table_cell_parent,
@@ -337,7 +339,7 @@ fn build_taffy_tree_inner(
             if child_node.is_text() {
                 return true;
             }
-            let cs = styles.get(&cid).cloned().unwrap_or_default();
+            let cs = styles.get(&cid).unwrap_or(ComputedStyle::initial());
             matches!(cs.display, FDisplay::Inline | FDisplay::InlineBlock)
         });
         if all_inline {
@@ -364,7 +366,7 @@ fn build_taffy_tree_inner(
         .new_with_children(taffy_style, &child_taffy_ids)
         .map_err(|e| ferropdf_core::FerroError::Layout(format!("Taffy node error: {:?}", e)))?;
 
-    if let Some(calc) = CalcFields::of(&style) {
+    if let Some(calc) = CalcFields::of(style) {
         table_cell_parent.calc_nodes.push((taffy_node, calc));
     }
     node_map.insert(node_id, taffy_node);
@@ -436,7 +438,7 @@ fn build_table_as_grid(
     font_system: &mut FontSystem,
     available_width: f32,
 ) -> ferropdf_core::Result<()> {
-    let table_style = styles.get(&table_id).cloned().unwrap_or_default();
+    let table_style = styles.get(&table_id).unwrap_or(ComputedStyle::initial());
 
     // Columns are distributed over the table's own width (`width: 45%`,
     // `width: 520px`), not over the whole containing block.
@@ -509,10 +511,8 @@ fn build_table_as_grid(
     // Column widths from compute_table_layout already include min-content
     // guarantees and proportional extra-space distribution. Use Fixed/Fixed
     // tracks so Taffy doesn't further shrink columns below their min-content.
-    let mut grid_style = style_to_taffy::convert_table_to_grid_with_widths(
-        &table_style,
-        &table_result.column_widths,
-    );
+    let mut grid_style =
+        style_to_taffy::convert_table_to_grid_with_widths(table_style, &table_result.column_widths);
     // Override with Fixed/Fixed column tracks to enforce exact computed widths
     grid_style.grid_template_columns = table_result.taffy_columns;
     // Override rows with computed tracks (min-height with auto growth)
@@ -543,7 +543,7 @@ fn read_layout(
     offset_y: f32,
 ) -> ferropdf_core::Result<LayoutBox> {
     let node = doc.get(node_id);
-    let style = styles.get(&node_id).cloned().unwrap_or_default();
+    let style = styles.get(&node_id).unwrap_or(ComputedStyle::initial());
 
     let taffy_node = match node_map.get(&node_id) {
         Some(n) => *n,
@@ -591,7 +591,7 @@ fn read_layout(
         left: layout.border.left,
     };
 
-    let margin = resolve_margin_insets(&style);
+    let margin = resolve_margin_insets(style);
 
     // Build children
     let mut children = Vec::new();
@@ -718,7 +718,7 @@ fn read_layout(
 
     Ok(LayoutBox {
         node_id: Some(node_id),
-        style,
+        style: style.clone(),
         rect,
         content,
         padding,

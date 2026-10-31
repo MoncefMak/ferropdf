@@ -23,6 +23,11 @@ pub struct TextContext {
     pub spacing: Spacing,
     /// `text-indent` of the first line (pt), when this text starts a block.
     pub indent: f32,
+    /// The text shaped on the first measurement, reused by the next ones.
+    pub shaped: Option<ShapedText>,
+    /// Sizes already measured, by width limit (Taffy asks for the same
+    /// widths several times while sizing a tree).
+    pub measured: Vec<(Option<f32>, (f32, f32))>,
 }
 
 /// CSS `letter-spacing` / `word-spacing`, in pt, added to the shaped
@@ -182,12 +187,19 @@ impl FontSession<'_> {
     }
 }
 
+/// Renders a cached word shape survives without being used again.
+const SHAPE_CACHE_RENDERS: u64 = 2;
+
 impl Drop for FontSession<'_> {
     fn drop(&mut self) {
         if self.tainted {
             return;
         }
-        if let Some(fs) = self.fs.take() {
+        if let Some(mut fs) = self.fs.take() {
+            // Word shapes cached by cosmic-text during this render: keep the
+            // ones used by the last few renders (repeated templates reuse
+            // them) and bound the memory of a long-lived engine.
+            fs.shape_run_cache.trim(SHAPE_CACHE_RENDERS);
             self.owner
                 .pool
                 .lock()
@@ -250,19 +262,121 @@ struct Line {
     glyphs: Vec<LayoutGlyph>,
     line_w: f32,
     line_y: f32,
-    line_height: f32,
 }
 
 /// Metadata of the synthetic glyph that carries `text-indent`.
 const INDENT_GLYPH: usize = usize::MAX - 1;
 
-/// Shape and break `spans` (one span when `rich` is false) into lines.
-///
-/// Without letter/word spacing or indent this is cosmic-text's `Buffer`.
-/// Otherwise each paragraph is shaped with `ShapeLine`, the spacing is added
-/// to the glyph advances and the indent inserted as an invisible glyph, and
-/// only then are lines broken, so wrapping accounts for them. `spacing` is
-/// indexed by span (glyph metadata).
+/// Text shaped paragraph by paragraph. Shaping (font fallback, glyphs,
+/// letter / word spacing, indent) does not depend on the available width,
+/// so it is done once and the paragraphs are line-broken at every width
+/// asked (Taffy measures a text leaf several times).
+#[derive(Debug, Clone)]
+pub struct ShapedText {
+    paragraphs: Vec<(String, ShapeLine)>,
+}
+
+/// Shape `spans` (one span when `rich` is false). `spacing` is indexed by
+/// span (glyph metadata); `indent` applies to the first line.
+#[allow(clippy::too_many_arguments)]
+fn shape_text(
+    fs: &mut FontSystem,
+    spans: &[(&str, Attrs)],
+    default_attrs: Attrs,
+    rich: bool,
+    font_size: f32,
+    spacing: &[Spacing],
+    indent: f32,
+) -> ShapedText {
+    let full: String = spans.iter().map(|(t, _)| *t).collect();
+    let mut ranges = Vec::with_capacity(spans.len());
+    let mut pos = 0;
+    for (t, a) in spans {
+        ranges.push((pos..pos + t.len(), *a));
+        pos += t.len();
+    }
+    let base = if rich { default_attrs } else { spans[0].1 };
+    let spaced = spacing.iter().any(|s| !s.is_zero());
+
+    let mut paragraphs = Vec::new();
+    // Paragraph splitting and per-paragraph attributes as in
+    // `Buffer::set_text` / `set_rich_text`.
+    for (i, (range, _)) in LineIter::new(&full).enumerate() {
+        let para = &full[range.clone()];
+        let mut attrs_list = AttrsList::new(base);
+        if rich {
+            for (r, a) in &ranges {
+                let (s, e) = (r.start.max(range.start), r.end.min(range.end));
+                if s < e {
+                    attrs_list.add_span(s - range.start..e - range.start, *a);
+                }
+            }
+        }
+        let mut shape = ShapeLine::new(fs, para, &attrs_list, Shaping::Advanced, 8);
+        if spaced {
+            add_spacing(&mut shape, para, spacing, font_size);
+        }
+        if i == 0 && indent != 0.0 {
+            add_indent(&mut shape, indent, font_size);
+        }
+        paragraphs.push((para.to_string(), shape));
+    }
+    ShapedText { paragraphs }
+}
+
+/// Break shaped text into lines at `width`, placed as
+/// `Buffer::layout_runs` places them.
+fn break_lines(
+    shaped: &ShapedText,
+    metrics: Metrics,
+    width: Option<f32>,
+    wrap: bool,
+    align: Option<Align>,
+) -> Vec<Line> {
+    let wrap = if wrap { Wrap::WordOrGlyph } else { Wrap::None };
+    let mut lines = Vec::new();
+    let mut line_top = 0.0;
+    for (text, shape) in &shaped.paragraphs {
+        for ll in shape.layout(metrics.font_size, width, wrap, align, None) {
+            let line_height = ll.line_height_opt.unwrap_or(metrics.line_height);
+            let glyph_height = ll.max_ascent + ll.max_descent;
+            let line_y = line_top + (line_height - glyph_height) / 2.0 + ll.max_ascent;
+            lines.push(Line {
+                text: text.clone(),
+                glyphs: ll
+                    .glyphs
+                    .into_iter()
+                    .filter(|g| g.metadata != INDENT_GLYPH)
+                    .collect(),
+                line_w: ll.w,
+                line_y,
+            });
+            line_top += line_height;
+        }
+    }
+    lines
+}
+
+/// Widest line and total height of shaped text broken at `width` (what
+/// [`break_lines`] would give, without building the lines).
+fn measure_lines(
+    shaped: &ShapedText,
+    metrics: Metrics,
+    width: Option<f32>,
+    wrap: bool,
+) -> (f32, f32) {
+    let wrap = if wrap { Wrap::WordOrGlyph } else { Wrap::None };
+    let (mut w, mut h) = (0.0f32, 0.0f32);
+    for (_, shape) in &shaped.paragraphs {
+        for ll in shape.layout(metrics.font_size, width, wrap, None, None) {
+            w = w.max(ll.w);
+            h += ll.line_height_opt.unwrap_or(metrics.line_height);
+        }
+    }
+    (w, h)
+}
+
+/// Shape and break `spans` into lines (see [`shape_text`], [`break_lines`]).
 #[allow(clippy::too_many_arguments)]
 fn lay_out(
     fs: &mut FontSystem,
@@ -276,79 +390,16 @@ fn lay_out(
     spacing: &[Spacing],
     indent: f32,
 ) -> Vec<Line> {
-    if indent == 0.0 && spacing.iter().all(Spacing::is_zero) {
-        let mut buffer = Buffer::new(fs, metrics);
-        buffer.set_size(fs, width, None);
-        if !wrap {
-            buffer.set_wrap(fs, Wrap::None);
-        }
-        if rich {
-            buffer.set_rich_text(fs, spans.iter().copied(), default_attrs, Shaping::Advanced);
-        } else {
-            buffer.set_text(fs, spans[0].0, spans[0].1, Shaping::Advanced);
-        }
-        apply_align(&mut buffer, align);
-        buffer.shape_until_scroll(fs, false);
-        return buffer
-            .layout_runs()
-            .map(|run| Line {
-                text: run.text.to_string(),
-                glyphs: run.glyphs.to_vec(),
-                line_w: run.line_w,
-                line_y: run.line_y,
-                line_height: run.line_height,
-            })
-            .collect();
-    }
-
-    let full: String = spans.iter().map(|(t, _)| *t).collect();
-    let mut ranges = Vec::with_capacity(spans.len());
-    let mut pos = 0;
-    for (t, a) in spans {
-        ranges.push((pos..pos + t.len(), *a));
-        pos += t.len();
-    }
-    let base = if rich { default_attrs } else { spans[0].1 };
-    let wrap = if wrap { Wrap::WordOrGlyph } else { Wrap::None };
-
-    let mut lines = Vec::new();
-    let mut line_top = 0.0;
-    for (i, (range, _)) in LineIter::new(&full).enumerate() {
-        let para = &full[range.clone()];
-        let mut attrs_list = AttrsList::new(base);
-        if rich {
-            for (r, a) in &ranges {
-                let (s, e) = (r.start.max(range.start), r.end.min(range.end));
-                if s < e {
-                    attrs_list.add_span(s - range.start..e - range.start, *a);
-                }
-            }
-        }
-        let mut shape = ShapeLine::new(fs, para, &attrs_list, Shaping::Advanced, 8);
-        add_spacing(&mut shape, para, spacing, metrics.font_size);
-        if i == 0 && indent != 0.0 {
-            add_indent(&mut shape, indent, metrics.font_size);
-        }
-        for ll in shape.layout(metrics.font_size, width, wrap, align, None) {
-            // Same vertical placement as `Buffer::layout_runs`.
-            let line_height = ll.line_height_opt.unwrap_or(metrics.line_height);
-            let glyph_height = ll.max_ascent + ll.max_descent;
-            let line_y = line_top + (line_height - glyph_height) / 2.0 + ll.max_ascent;
-            lines.push(Line {
-                text: para.to_string(),
-                glyphs: ll
-                    .glyphs
-                    .into_iter()
-                    .filter(|g| g.metadata != INDENT_GLYPH)
-                    .collect(),
-                line_w: ll.w,
-                line_y,
-                line_height,
-            });
-            line_top += line_height;
-        }
-    }
-    lines
+    let shaped = shape_text(
+        fs,
+        spans,
+        default_attrs,
+        rich,
+        metrics.font_size,
+        spacing,
+        indent,
+    );
+    break_lines(&shaped, metrics, width, wrap, align)
 }
 
 /// Add `letter-spacing` after every cluster and `word-spacing` after every
@@ -419,7 +470,7 @@ fn add_indent(shape: &mut ShapeLine, indent: f32, font_size: f32) {
 /// Called by Taffy's layout engine via `compute_layout_with_measure` whenever
 /// it needs to know the intrinsic size of a text leaf.
 pub fn measure_text(
-    ctx: &TextContext,
+    ctx: &mut TextContext,
     known_dimensions: Size<Option<f32>>,
     available_space: Size<AvailableSpace>,
     font_system: &mut FontSystem,
@@ -437,37 +488,41 @@ pub fn measure_text(
         AvailableSpace::MinContent => Some(0.0), // Force maximum wrapping
     });
 
-    let attrs = text_attrs(&ctx.font_family, ctx.bold, ctx.italic);
-    let lines = lay_out(
-        font_system,
-        &[(&ctx.text, attrs)],
-        attrs,
-        false,
-        metrics,
-        width_limit,
-        ctx.wrap,
-        None,
-        &[ctx.spacing],
-        ctx.indent,
-    );
-
-    let mut max_width: f32 = 0.0;
-    let mut total_height: f32 = 0.0;
-
-    for run in &lines {
-        max_width = max_width.max(run.line_w);
-        total_height += run.line_height;
+    let size = |(w, h): (f32, f32)| Size {
+        width: known_dimensions.width.unwrap_or(w),
+        height: known_dimensions.height.unwrap_or(h),
+    };
+    if let Some((_, wh)) = ctx.measured.iter().find(|(w, _)| *w == width_limit) {
+        return size(*wh);
     }
+    if ctx.shaped.is_none() {
+        let attrs = text_attrs(&ctx.font_family, ctx.bold, ctx.italic);
+        let shaped = shape_text(
+            font_system,
+            &[(&ctx.text, attrs)],
+            attrs,
+            false,
+            ctx.font_size,
+            &[ctx.spacing],
+            ctx.indent,
+        );
+        ctx.shaped = Some(shaped);
+    }
+    let (max_width, mut total_height) = match &ctx.shaped {
+        Some(shaped) => measure_lines(shaped, metrics, width_limit, ctx.wrap),
+        None => (0.0, 0.0),
+    };
 
     // If no layout runs (e.g. whitespace-only after shaping), return a minimal size
     if total_height == 0.0 {
         total_height = ctx.line_height;
     }
 
-    Size {
-        width: known_dimensions.width.unwrap_or(max_width.ceil()),
-        height: known_dimensions.height.unwrap_or(total_height.ceil()),
+    let wh = (max_width.ceil(), total_height.ceil());
+    if ctx.measured.len() < 8 {
+        ctx.measured.push((width_limit, wh));
     }
+    size(wh)
 }
 
 // =============================================================================
@@ -495,14 +550,6 @@ pub fn css_align(align: ferropdf_core::TextAlign) -> Option<Align> {
         ferropdf_core::TextAlign::Right => Some(Align::Right),
         ferropdf_core::TextAlign::Center => Some(Align::Center),
         ferropdf_core::TextAlign::Justify => Some(Align::Justified),
-    }
-}
-
-fn apply_align(buffer: &mut Buffer, align: Option<Align>) {
-    if align.is_some() {
-        for line in buffer.lines.iter_mut() {
-            line.set_align(align);
-        }
     }
 }
 

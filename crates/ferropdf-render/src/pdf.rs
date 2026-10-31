@@ -9,7 +9,7 @@ use flate2::write::ZlibEncoder;
 use flate2::Compression;
 use pdf_writer::types::LineCapStyle;
 use pdf_writer::{Content, Filter, Finish, Name, Pdf, Rect as PdfWriterRect, Ref, Str, TextStr};
-use std::collections::HashMap;
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::io::Write;
 
 // =============================================================================
@@ -92,18 +92,18 @@ pub fn write_pdf(
         }
     };
 
-    let mut font_cache: HashMap<FontKey, Option<String>> = HashMap::new();
+    let mut font_cache: HashMap<FontKey, Option<String>> = HashMap::default();
     let mut embedded_fonts: Vec<EmbeddedFont> = Vec::new();
     let mut font_name_counter = 3u32; // F1, F2, F3 are reserved for Type1
 
     // Temporary: collect raw font data and used glyphs per font
-    let mut font_raw_data: HashMap<String, (Vec<u8>, u32)> = HashMap::new(); // pdf_name → (raw data, face index)
-                                                                             // pdf_name → original glyph ID → shaped cluster text (for ToUnicode)
-    let mut font_glyph_text: HashMap<String, HashMap<u16, String>> = HashMap::new();
-    let mut font_used_chars: HashMap<String, std::collections::HashSet<u16>> = HashMap::new(); // pdf_name → glyph IDs
+    let mut font_raw_data: HashMap<String, (Vec<u8>, u32)> = HashMap::default(); // pdf_name → (raw data, face index)
+                                                                                 // pdf_name → original glyph ID → shaped cluster text (for ToUnicode)
+    let mut font_glyph_text: HashMap<String, HashMap<u16, String>> = HashMap::default();
+    let mut font_used_chars: HashMap<String, HashSet<u16>> = HashMap::default(); // pdf_name → glyph IDs
 
     // fontdb::ID → pdf_name mapping for shaped glyphs (keyed by the exact font face)
-    let mut fontdb_id_to_pdf_name: HashMap<fontdb::ID, String> = HashMap::new();
+    let mut fontdb_id_to_pdf_name: HashMap<fontdb::ID, String> = HashMap::default();
 
     // Single pass: discover fonts AND collect glyph IDs simultaneously
     for display_list in pages {
@@ -133,8 +133,7 @@ pub fn write_pdf(
                                 font_name_counter += 1;
                                 let pdf_name = format!("F{}", font_name_counter);
                                 font_raw_data.insert(pdf_name.clone(), data);
-                                font_used_chars
-                                    .insert(pdf_name.clone(), std::collections::HashSet::new());
+                                font_used_chars.insert(pdf_name.clone(), HashSet::default());
                                 entry.insert(pdf_name);
                             }
                         }
@@ -167,8 +166,7 @@ pub fn write_pdf(
                                 font_name_counter += 1;
                                 let pdf_name = format!("F{}", font_name_counter);
                                 font_raw_data.insert(pdf_name.clone(), data);
-                                font_used_chars
-                                    .insert(pdf_name.clone(), std::collections::HashSet::new());
+                                font_used_chars.insert(pdf_name.clone(), HashSet::default());
                                 font_cache.insert(key.clone(), Some(pdf_name));
                             }
                             None => {
@@ -182,9 +180,13 @@ pub fn write_pdf(
                             used_gids.insert(0); // .notdef
                             if let Some((raw_data, index)) = font_raw_data.get(pdf_name) {
                                 if let Ok(face) = ttf_parser::Face::parse(raw_data, *index) {
+                                    let texts =
+                                        font_glyph_text.entry(pdf_name.clone()).or_default();
                                     for ch in text.chars() {
                                         if let Some(gid) = face.glyph_index(ch) {
                                             used_gids.insert(gid.0);
+                                            // The character actually written, for ToUnicode.
+                                            texts.entry(gid.0).or_insert_with(|| ch.to_string());
                                         }
                                     }
                                 }
@@ -201,7 +203,8 @@ pub fn write_pdf(
     for pdf_name in pdf_names {
         let (raw_data, face_index) = font_raw_data.remove(&pdf_name).unwrap();
         let used_gids = font_used_chars.remove(&pdf_name).unwrap();
-        let glyph_text = font_glyph_text.remove(&pdf_name).unwrap_or_default();
+        let mut glyph_text = font_glyph_text.remove(&pdf_name).unwrap_or_default();
+        fill_unmapped_glyph_text(&raw_data, face_index, &used_gids, &mut glyph_text);
 
         let type0_ref = next_ref();
         let cid_font_ref = next_ref();
@@ -229,7 +232,7 @@ pub fn write_pdf(
 
     // ── Collect opacity ExtGState objects ──
     // Scan display lists for SetOpacity and DrawBoxShadow ops and create one ExtGState per unique alpha.
-    let mut opacity_states: HashMap<u32, (Ref, String)> = HashMap::new(); // key = (alpha * 1000) as u32
+    let mut opacity_states: HashMap<u32, (Ref, String)> = HashMap::default(); // key = (alpha * 1000) as u32
     let mut gs_counter = 0u32;
     let register_alpha = |alpha: f32,
                           opacity_states: &mut HashMap<u32, (Ref, String)>,
@@ -281,7 +284,7 @@ pub fn write_pdf(
     }
 
     // ── Load images ──
-    let mut image_map: HashMap<String, LoadedImage> = HashMap::new();
+    let mut image_map: HashMap<String, LoadedImage> = HashMap::default();
     let mut img_counter = 0u32;
     for display_list in pages {
         for op in &display_list.ops {
@@ -294,7 +297,7 @@ pub fn write_pdf(
                             let (pdf_ref, kind) = match kind {
                                 ImageKind::Svg { chunk, root } => {
                                     // Renumber svg2pdf's objects into our ref space.
-                                    let mut map = HashMap::new();
+                                    let mut map = HashMap::default();
                                     let chunk = chunk.renumber(|old| {
                                         *map.entry(old).or_insert_with(&mut next_ref)
                                     });
@@ -606,7 +609,7 @@ pub fn write_pdf(
                         // TJ adjustment so glyphs land exactly where cosmic-text
                         // placed them.
                         let mut faces: HashMap<fontdb::ID, (ttf_parser::Face, &EmbeddedFont)> =
-                            HashMap::new();
+                            HashMap::default();
                         for g in &sorted_glyphs {
                             if faces.contains_key(&g.font_id) {
                                 continue;
@@ -1115,6 +1118,55 @@ fn reset_border_dash(content: &mut Content) {
     content.set_line_cap(LineCapStyle::ButtCap);
 }
 
+/// Gives a ToUnicode text to used glyphs that have none yet: glyphs that
+/// continue a shaped cluster (a combining mark after its base, the second
+/// glyph of a decomposition) carry no cluster text of their own. Looks them
+/// up in reverse in the font's cmap, preferring the lowest code point. The
+/// cmap scan only runs when such glyphs exist.
+fn fill_unmapped_glyph_text(
+    font_data: &[u8],
+    face_index: u32,
+    used_gids: &HashSet<u16>,
+    glyph_text: &mut HashMap<u16, String>,
+) {
+    let missing: HashSet<u16> = used_gids
+        .iter()
+        .copied()
+        .filter(|&gid| gid != 0 && !glyph_text.contains_key(&gid))
+        .collect();
+    if missing.is_empty() {
+        return;
+    }
+    let Ok(face) = ttf_parser::Face::parse(font_data, face_index) else {
+        return;
+    };
+    let Some(cmap) = face.tables().cmap else {
+        return;
+    };
+    let mut found: HashMap<u16, char> = HashMap::default();
+    for sub in cmap.subtables {
+        if !sub.is_unicode() {
+            continue;
+        }
+        sub.codepoints(|cp| {
+            let Some(ch) = char::from_u32(cp) else {
+                return;
+            };
+            if let Some(gid) = face.glyph_index(ch) {
+                if missing.contains(&gid.0) {
+                    let e = found.entry(gid.0).or_insert(ch);
+                    if ch < *e {
+                        *e = ch;
+                    }
+                }
+            }
+        });
+    }
+    for (gid, ch) in found {
+        glyph_text.insert(gid, ch.to_string());
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1122,6 +1174,28 @@ mod tests {
     /// 1×1 transparent PNG, base64.
     const ONE_PX_PNG_B64: &str =
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+
+    #[test]
+    fn unmapped_glyphs_get_text_from_the_cmap() {
+        // A glyph that continues a shaped cluster (a combining mark) has no
+        // cluster text: it must still get a ToUnicode entry, or extraction
+        // drops the mark (Arabic tanween, Latin decomposed accents).
+        let data = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/fonts/ferro-cff.otf"
+        ))
+        .unwrap();
+        let face = ttf_parser::Face::parse(&data, 0).unwrap();
+        let a = face.glyph_index('A').unwrap().0;
+        let b = face.glyph_index('B').unwrap().0;
+        let used: HashSet<u16> = [0, a, b].into_iter().collect();
+        let mut text: HashMap<u16, String> = HashMap::default();
+        text.insert(b, "ß".into()); // shaped text wins over the cmap
+        fill_unmapped_glyph_text(&data, 0, &used, &mut text);
+        assert_eq!(text.get(&a).map(String::as_str), Some("A"));
+        assert_eq!(text.get(&b).map(String::as_str), Some("ß"));
+        assert!(!text.contains_key(&0), ".notdef has no text");
+    }
 
     #[test]
     fn load_image_decodes_data_uri() {

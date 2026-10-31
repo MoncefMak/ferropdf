@@ -73,6 +73,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Template corpus, feature-matrix tests (README table generated from them), visual regression tests, multi-engine benchmark (`bench/engines.py`).
 - Subset fonts carry the `ABCDEF+Name` subset tag in their PDF font name (PDF 32000 §9.6.4).
 
+### Performance
+- Rendering is 2–3× faster with unchanged output (identical pixels and extracted text on the template corpus) and unchanged memory use (#55). Each text node is shaped once and its line breaking reused for every width Taffy measures, instead of being reshaped per measurement; word shaping is cached across renders; the UA stylesheet is parsed once per process; computed styles are shared instead of cloned; the ToUnicode map is built from the shaped text instead of a scan of the whole font cmap; internal maps use a faster hash.
+
 ## [0.2.9] - 2026-04
 
 ### Fixed
