@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- `border-radius` percentages (`50%` circles and ellipses), `em` / `rem` radii (Bootstrap's `.375rem`), the 2–4 value and `/` elliptical forms, and the `border-*-radius` longhands were dropped; corners are now elliptical, resolved against the border box and scaled down when they overlap. Box-shadow spread and `overflow` clips follow the same radii (#64).
+- A `display: none` child no longer breaks the inline flow of its parent (an inline-block next to it was laid out full-width on its own line).
+- An `inline-block` holding inline elements and text shrink-wraps to their combined width instead of wrapping its content.
 - White space between flex/grid items (indented HTML) created invisible items: extra gaps, wrong `space-between`/`flex: 1` distribution, shifted grid cells.
 - `gap: <row> <column>` with two values was ignored; `align-items`/`align-self: start | end` fell back to `stretch`.
 - A panic inside the engine now raises `LayoutError` instead of a `PanicException` that escapes `except Exception`.
@@ -41,6 +44,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PyO3 0.24 → 0.29 (RUSTSEC-2026-0176, RUSTSEC-2026-0177).
 
 ### Added
+- CSS counters: `counter-reset`, `counter-increment`, `counter-set` with nested scopes, and `counter()` / `counters()` in `content` with counter styles (decimal, decimal-leading-zero, roman, alpha, greek, disc…). `content` also accepts `attr()`, `open-quote` / `close-quote` and CSS string escapes (#31).
+- `::before` / `::after` are real boxes styled by their own rules (colour, font, `display`, counters…), instead of plain text inheriting the parent's style. Structural selectors (`:first-child`, `:empty`, `+`) ignore them, as in browsers.
 - 2D transforms: `transform` (`translate*`, `scale*`, `rotate`, `skew*`, `matrix`; 3D functions flattened onto the page), the individual `translate` / `rotate` / `scale` properties and `transform-origin`. Applied as a PDF transformation matrix around the box and its descendants, so text stays vector and selectable (#38).
 - Gradients: `linear-gradient()`, `radial-gradient()` and their `repeating-` variants in `background` / `background-image` — angles, `to <side>` / `to <corner>`, circle / ellipse with size keywords and `at <position>`, multi-position and hard stops, translucent stops (soft mask), stacked layers, `border-radius` clipping. Encoded as native PDF axial / radial shadings (#37).
 - `overflow`, `overflow-x`, `overflow-y` (`hidden`, `clip`; `auto`/`scroll` clip as in print): content is clipped to the padding box, following the inner `border-radius` (#36).

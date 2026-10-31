@@ -320,8 +320,34 @@ fn apply_single(
             style.border_left.style = bs;
         }
         CssProperty::BorderRadius => {
-            if let Some(r) = parse_length_to_pt(raw) {
-                style.border_radius = BorderRadius::uniform(r);
+            if let Some(r) = parse_border_radius(raw) {
+                style.border_radius = r;
+            }
+        }
+        CssProperty::Unknown(ref name)
+            if matches!(
+                name.as_str(),
+                "border-top-left-radius"
+                    | "border-top-right-radius"
+                    | "border-bottom-right-radius"
+                    | "border-bottom-left-radius"
+            ) =>
+        {
+            let corner = match name.as_str() {
+                "border-top-left-radius" => 0,
+                "border-top-right-radius" => 1,
+                "border-bottom-right-radius" => 2,
+                _ => 3,
+            };
+            let values: Option<Vec<Length>> =
+                crate::gradient::split_top_level(raw, char::is_whitespace)
+                    .into_iter()
+                    .map(parse_radius_length)
+                    .collect();
+            match values.as_deref() {
+                Some([r]) => style.border_radius.corners[corner] = (*r, *r),
+                Some([x, y]) => style.border_radius.corners[corner] = (*x, *y),
+                _ => {}
             }
         }
 
@@ -374,6 +400,24 @@ fn apply_single(
                     if let Some(v) = t::parse_transform_origin(raw) {
                         style.transform_origin = v;
                     }
+                }
+            }
+        }
+        CssProperty::Unknown(ref name) if name == "content" => {
+            style.content = Some(raw.to_string());
+        }
+        CssProperty::Unknown(ref name)
+            if matches!(
+                name.as_str(),
+                "counter-reset" | "counter-increment" | "counter-set"
+            ) =>
+        {
+            let default = if name == "counter-increment" { 1 } else { 0 };
+            if let Some(list) = parse_counter_list(raw, default) {
+                match name.as_str() {
+                    "counter-reset" => style.counter_reset = list,
+                    "counter-increment" => style.counter_increment = list,
+                    _ => style.counter_set = list,
                 }
             }
         }
@@ -814,8 +858,93 @@ fn split_top_level(s: &str) -> Vec<&str> {
     parts
 }
 
+/// One radius: a non-negative length or percentage.
+fn parse_radius_length(s: &str) -> Option<Length> {
+    match parse_length(s) {
+        Length::Auto | Length::None => None,
+        Length::Px(v)
+        | Length::Pt(v)
+        | Length::Mm(v)
+        | Length::Em(v)
+        | Length::Rem(v)
+        | Length::Percent(v)
+            if v < 0.0 =>
+        {
+            None
+        }
+        l => Some(l),
+    }
+}
+
+/// `border-radius`: one to four horizontal radii, optionally followed by
+/// `/` and one to four vertical radii (CSS Backgrounds §5.1).
+fn parse_border_radius(raw: &str) -> Option<BorderRadius> {
+    // Split on a top-level `/` (one inside `calc()` is a division).
+    let mut depth = 0;
+    let slash = raw.char_indices().find_map(|(i, c)| {
+        match c {
+            '(' => depth += 1,
+            ')' => depth -= 1,
+            '/' if depth == 0 => return Some(i),
+            _ => {}
+        }
+        None
+    });
+    let (h, v) = match slash {
+        Some(i) => (&raw[..i], Some(&raw[i + 1..])),
+        None => (raw, None),
+    };
+    let expand = |part: &str| -> Option<[Length; 4]> {
+        let vals: Vec<Length> = crate::gradient::split_top_level(part, char::is_whitespace)
+            .into_iter()
+            .map(parse_radius_length)
+            .collect::<Option<_>>()?;
+        // Corner order: top-left, top-right, bottom-right, bottom-left.
+        match vals.as_slice() {
+            [a] => Some([*a; 4]),
+            [a, b] => Some([*a, *b, *a, *b]),
+            [a, b, c] => Some([*a, *b, *c, *b]),
+            [a, b, c, d] => Some([*a, *b, *c, *d]),
+            _ => None,
+        }
+    };
+    let hs = expand(h)?;
+    let vs = match v {
+        Some(v) => expand(v)?,
+        None => hs,
+    };
+    Some(BorderRadius {
+        corners: [0, 1, 2, 3].map(|i| (hs[i], vs[i])),
+    })
+}
+
+/// `none` or a list of `<name> <integer>?` pairs.
+fn parse_counter_list(raw: &str, default: i32) -> Option<Vec<(String, i32)>> {
+    let raw = raw.trim();
+    if raw.eq_ignore_ascii_case("none") {
+        return Some(Vec::new());
+    }
+    let mut out: Vec<(String, i32)> = Vec::new();
+    for word in raw.split_whitespace() {
+        match word.parse::<i32>() {
+            Ok(v) => out.last_mut()?.1 = v,
+            Err(_) => {
+                let valid = word
+                    .chars()
+                    .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+                    && !word.starts_with(|c: char| c.is_ascii_digit());
+                if !valid || matches!(word, "initial" | "inherit" | "unset") {
+                    return None;
+                }
+                out.push((word.to_string(), default));
+            }
+        }
+    }
+    Some(out)
+}
+
 /// Parse a CSS length string directly to pt (points typographiques).
-/// Used for properties stored as f32 (border widths, border-radius, etc.)
+/// Used for properties stored as f32 (border widths, etc.)
 pub(crate) fn parse_length_to_pt(s: &str) -> Option<f32> {
     let s = s.trim();
     if s == "0" || s == "0px" {
@@ -1310,5 +1439,34 @@ mod var_tests {
             substitute_var("rgb(var(--r), var(--g), 0)", &p),
             "rgb(255, 128, 0)"
         );
+    }
+}
+
+#[cfg(test)]
+mod border_radius_tests {
+    use super::*;
+
+    #[test]
+    fn shorthand_expansion_and_slash() {
+        let r = parse_border_radius("10px 20%").unwrap();
+        assert_eq!(r.corners[0], (Length::Px(10.0), Length::Px(10.0)));
+        assert_eq!(r.corners[1], (Length::Percent(20.0), Length::Percent(20.0)));
+        assert_eq!(r.corners[2].0, Length::Px(10.0));
+        let r = parse_border_radius("50% / 10px 20px").unwrap();
+        assert_eq!(r.corners[0], (Length::Percent(50.0), Length::Px(10.0)));
+        assert_eq!(r.corners[1], (Length::Percent(50.0), Length::Px(20.0)));
+        let r = parse_border_radius(".5rem").unwrap();
+        assert_eq!(r.corners[3].0, Length::Rem(0.5));
+        assert!(parse_border_radius("-3px").is_none());
+        assert!(parse_border_radius("1px 2px 3px 4px 5px").is_none());
+    }
+
+    #[test]
+    fn percent_resolves_against_box_and_clamps() {
+        let r = parse_border_radius("50%").unwrap().resolve(200.0, 100.0);
+        assert_eq!(r.0[0], (100.0, 50.0));
+        // 100pt radii on a 60pt-tall box are scaled down to fit.
+        let r = BorderRadius::uniform(Length::Pt(100.0)).resolve(200.0, 60.0);
+        assert!((r.0[0].1 - 30.0).abs() < 1e-4 && (r.0[0].0 - 30.0).abs() < 1e-4);
     }
 }

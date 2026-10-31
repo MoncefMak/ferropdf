@@ -3,6 +3,9 @@ use ferropdf_core::*;
 /// Apply tag-specific defaults (e.g. <b> is bold, <em> is italic)
 pub fn apply_tag_defaults(style: &mut ComputedStyle, tag: Option<&str>) {
     match tag {
+        Some(ferropdf_core::dom::PSEUDO_BEFORE | ferropdf_core::dom::PSEUDO_AFTER) => {
+            style.display = Display::Inline;
+        }
         Some("b") | Some("strong") => {
             style.display = Display::Inline;
             style.font_weight = FontWeight::Bold;
@@ -60,6 +63,13 @@ pub fn resolve_units(
         &mut style.left,
     ] {
         resolve_length_em_rem(inset, font_size, root_font_size);
+    }
+
+    // Border radii: absolute units to pt; percentages are resolved against
+    // the border box at paint time.
+    for (x, y) in &mut style.border_radius.corners {
+        resolve_length_em_rem(x, font_size, root_font_size);
+        resolve_length_em_rem(y, font_size, root_font_size);
     }
 
     // Resolve dimensions (only em/rem, keep percent/auto for Taffy)
