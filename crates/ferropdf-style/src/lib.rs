@@ -28,7 +28,24 @@ pub fn resolve(
     document: &Document,
     stylesheets: &[Stylesheet],
     ua_css: &str,
-    _page_width: f32,
+    page_width: f32,
+) -> ferropdf_core::Result<StyleTree> {
+    // Page width in pt → CSS px; height for an A-series (√2) page.
+    let width = page_width / 0.75;
+    let media = ferropdf_parse::css::MediaContext {
+        width,
+        height: width * std::f32::consts::SQRT_2,
+    };
+    resolve_with_media(document, stylesheets, ua_css, &media)
+}
+
+/// [`resolve`] with explicit media features: `@media` rules apply when
+/// their query lists match `media`.
+pub fn resolve_with_media(
+    document: &Document,
+    stylesheets: &[Stylesheet],
+    ua_css: &str,
+    media: &ferropdf_parse::css::MediaContext,
 ) -> ferropdf_core::Result<StyleTree> {
     // Parse UA stylesheet
     let ua_sheet = ferropdf_parse::parse_stylesheet(ua_css)?;
@@ -40,7 +57,7 @@ pub fn resolve(
 
     // Parse all selector lists using the `selectors` crate.
     // UA sheet is the first one — author sheets follow.
-    let rules = matching::parse_rules(&all_sheets, 1);
+    let rules = matching::parse_rules(&all_sheets, 1, media);
 
     let root = document.root();
     let mut style_tree = StyleTree::new();

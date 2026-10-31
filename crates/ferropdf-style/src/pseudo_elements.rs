@@ -22,8 +22,12 @@ use ferropdf_parse::Stylesheet;
 use std::collections::HashMap;
 
 /// Pass 1: add the synthetic `::before` / `::after` elements.
-pub fn inject_pseudo_content(doc: &mut Document, sheets: &[&Stylesheet]) {
-    let rules = crate::matching::parse_rules(sheets, 1);
+pub fn inject_pseudo_content(
+    doc: &mut Document,
+    sheets: &[&Stylesheet],
+    media: &ferropdf_parse::css::MediaContext,
+) {
+    let rules = crate::matching::parse_rules(sheets, 1, media);
     let has_pseudo = rules
         .iter()
         .any(|r| r.selectors.0.iter().any(|s| s.pseudo_element().is_some()));
@@ -437,7 +441,11 @@ mod tests {
         let mut pr = ferropdf_parse::parse(html).unwrap();
         let sheets = vec![ferropdf_parse::parse_stylesheet(css).unwrap()];
         let ua = ferropdf_parse::parse_stylesheet(ferropdf_parse::css::UA_CSS).unwrap();
-        inject_pseudo_content(&mut pr.document, &[&ua, &sheets[0]]);
+        inject_pseudo_content(
+            &mut pr.document,
+            &[&ua, &sheets[0]],
+            &ferropdf_parse::css::MediaContext::default(),
+        );
         let mut styles =
             crate::resolve(&pr.document, &sheets, ferropdf_parse::css::UA_CSS, 480.0).unwrap();
         resolve_generated_content(&mut pr.document, &mut styles);

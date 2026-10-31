@@ -29,6 +29,7 @@ pub struct PyOptions {
     pub title: Option<String>,
     pub author: Option<String>,
     pub max_html_bytes: Option<usize>,
+    pub viewport_width: Option<f32>,
 }
 
 #[pymethods]
@@ -41,6 +42,7 @@ impl PyOptions {
         title     = None,
         author    = None,
         max_html_bytes = None,
+        viewport_width = None,
     ))]
     fn new(
         page_size: &str,
@@ -49,6 +51,7 @@ impl PyOptions {
         title: Option<String>,
         author: Option<String>,
         max_html_bytes: Option<usize>,
+        viewport_width: Option<f32>,
     ) -> Self {
         Self {
             page_size: page_size.to_string(),
@@ -57,6 +60,7 @@ impl PyOptions {
             title,
             author,
             max_html_bytes,
+            viewport_width,
         }
     }
 
@@ -77,6 +81,7 @@ impl From<PyOptions> for ferropdf_render::RenderOptions {
             title: opts.title,
             author: opts.author,
             max_html_bytes: opts.max_html_bytes,
+            viewport_width: opts.viewport_width,
         }
     }
 }
@@ -89,6 +94,7 @@ fn default_options() -> PyOptions {
         title: None,
         author: None,
         max_html_bytes: None,
+        viewport_width: None,
     }
 }
 

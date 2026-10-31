@@ -464,13 +464,19 @@ pub struct ScoredDeclaration {
 /// `ua_sheet_count` indicates how many of the leading sheets are UA stylesheets.
 /// UA rules get origin=0, author rules get origin=1. Per CSS Cascading Level 4,
 /// author rules always beat UA rules regardless of specificity.
-pub fn parse_rules(sheets: &[&Stylesheet], ua_sheet_count: usize) -> Vec<MatchedRule> {
+/// Parse the selectors of every rule whose `@media` conditions hold in
+/// `media`.
+pub fn parse_rules(
+    sheets: &[&Stylesheet],
+    ua_sheet_count: usize,
+    media: &ferropdf_parse::css::MediaContext,
+) -> Vec<MatchedRule> {
     let mut rules = Vec::new();
     let mut order = 0usize;
 
     for (sheet_idx, sheet) in sheets.iter().enumerate() {
         let origin: u8 = if sheet_idx < ua_sheet_count { 0 } else { 1 };
-        for rule in &sheet.rules {
+        for rule in sheet.rules.iter().filter(|r| r.media_applies(media)) {
             // Join selectors back to a single string and let the selectors crate parse them
             let selector_text = rule.selectors.join(", ");
             let mut input = cssparser::ParserInput::new(&selector_text);

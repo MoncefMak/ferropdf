@@ -52,6 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PyO3 0.24 → 0.29 (RUSTSEC-2026-0176, RUSTSEC-2026-0177).
 
 ### Added
+- Width media queries: `@media` rules are evaluated (Media Queries 4) instead of only `print` / `all` being kept — `min-` / `max-width` and `-height`, the range syntax (`(600px <= width < 900px)`), `orientation`, `aspect-ratio`, `and` / `or` / `not`, nested `@media`, and `@font-face` inside `@media`. Width is the page area in CSS px, or the new `Options(viewport_width=…)` to select desktop breakpoints (#29).
 - Clickable links: `<a href>` becomes a PDF link annotation over the link's text (each line it spans) or over its box (block links, image links). `#name` links jump to the element with that `id` (or `<a name>`), on any page. Only `http`, `https`, `mailto`, `tel` and relative URLs are made clickable; `javascript:` and `data:` links are not (#40).
 - PDF outline (bookmarks) from `<h1>`–`<h6>`, nested by level, each opening its heading's page at the heading (#41).
 - Text spacing and case: `letter-spacing` (was parsed but ignored), `word-spacing`, `text-indent` (lengths, `em`, percentages, negative / hanging indents, also when the first line starts with an inline element) and `text-transform: uppercase | lowercase | capitalize` (also on generated content). Spacing and indent are added to the shaped advances before line breaking, so wrapping and Taffy's measurement account for them (#34).
