@@ -77,6 +77,33 @@ fn paint_box(
         ops.push(DrawOp::SetOpacity(style.opacity));
     }
 
+    // Link targets and outline entries point at the top of the box.
+    if let Some(name) = &layout_box.anchor {
+        ops.push(DrawOp::Anchor {
+            name: name.clone(),
+            y: rect.y,
+        });
+    }
+    if let Some((level, title)) = &layout_box.bookmark {
+        ops.push(DrawOp::Bookmark {
+            key: layout_box.node_id.map_or(usize::MAX, |id| id.index()),
+            level: *level,
+            title: title.clone(),
+            y: rect.y,
+        });
+    }
+    // An inline `<a>` whose text was merged into its paragraph is clickable
+    // through its text segments (below); any other link box (block,
+    // inline-block, image link) is clickable over its border box.
+    if let Some(target) = &layout_box.link {
+        if style.display != ferropdf_core::Display::Inline || has_unmerged_content(layout_box) {
+            ops.push(DrawOp::Link {
+                rect,
+                target: target.clone(),
+            });
+        }
+    }
+
     // Corner radii, resolved against this box (percentages, overlap scaling).
     let radii = style.border_radius.resolve(rect.width, rect.height);
 
@@ -174,6 +201,16 @@ fn paint_box(
                     continue;
                 }
                 let span = &layout_box.inline_spans[seg.metadata];
+                if let Some(target) = &span.link {
+                    // The line box of the segment: baseline minus ascent,
+                    // spread over the line height.
+                    let top =
+                        line_y - span.font_size * 0.8 - (span.line_height - span.font_size) / 2.0;
+                    ops.push(DrawOp::Link {
+                        rect: Rect::new(text_x + seg.x_offset, top, seg.width, span.line_height),
+                        target: target.clone(),
+                    });
+                }
                 // Collect shaped glyphs for this segment (with font_id for correct PDF embedding)
                 let seg_glyphs: Vec<ferropdf_core::ShapedGlyph> = line
                     .glyphs
@@ -343,6 +380,16 @@ fn paint_box(
     if matrix.is_some() {
         ops.push(DrawOp::Restore);
     }
+}
+
+/// Whether a box still holds content of its own (text not merged into a
+/// paragraph, an image), so it must be clickable as a box.
+fn has_unmerged_content(lb: &LayoutBox) -> bool {
+    lb.text_content
+        .as_deref()
+        .is_some_and(|t| !t.trim().is_empty())
+        || lb.image_src.is_some()
+        || lb.children.iter().any(has_unmerged_content)
 }
 
 /// Emit a thin FillRect for text-decoration (underline, line-through, overline).

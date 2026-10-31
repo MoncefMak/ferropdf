@@ -800,9 +800,34 @@ def chk_links():
     assert any(l.get("uri") == "https://example.com" for l in d.doc[0].get_links())
 
 
+def chk_inline_content_in_body():
+    d = Doc("<html><body>Loose <b>text</b> in body</body></html>")
+    assert d.text() == "Loose text in body", d.text()
+
+
+def chk_internal_links():
+    d = Doc(wrap('<p><a href="#far">jump</a></p><h2 id="far" style="break-before:page">Far</h2>'))
+    links = d.doc[0].get_links()
+    assert len(links) == 1 and links[0]["kind"] == pymupdf.LINK_GOTO and links[0]["page"] == 1, links
+
+
+def chk_link_boxes():
+    html = (f'<a href="https://block.example" style="display:block;height:30px">B</a>'
+            f'<a href="https://img.example"><img src="{_png_data_uri()}" width="40" height="10"></a>')
+    links = {l["uri"]: l["from"] for l in Doc(wrap(html)).doc[0].get_links()}
+    assert links["https://block.example"].width > 400, "a block link covers its box"
+    assert abs(links["https://img.example"].width - 30) < 1, "an image link covers the image"
+
+
+def chk_unsafe_links_dropped():
+    d = Doc(wrap('<a href="javascript:alert(1)">x</a> <a href="data:text/html,x">y</a>'))
+    assert d.doc[0].get_links() == []
+
+
 def chk_outline():
-    d = Doc(wrap("<h1>One</h1><h2>Two</h2>"))
-    assert len(d.doc.get_toc()) >= 2
+    d = Doc(wrap("<h1>One</h1><h2>Two</h2><h3>Three</h3><h2>Four</h2><h1>Five</h1>"))
+    toc = [(lvl, title) for lvl, title, _ in d.doc.get_toc()]
+    assert toc == [(1, "One"), (2, "Two"), (3, "Three"), (2, "Four"), (1, "Five")], toc
 
 
 def chk_metadata():
@@ -861,6 +886,7 @@ FEATURES = [
     Feature("Text", "`text-align: center`", chk_text_align_center),
     Feature("Text", "`text-align: justify`", chk_justify),
     Feature("Text", "`text-align: start` follows `direction`", chk_text_align_start_rtl),
+    Feature("Text", "Inline content directly in `<body>`", chk_inline_content_in_body),
     Feature("Text", "Whitespace collapsing (`white-space: normal`)", chk_whitespace_collapse),
     Feature("Text", "`white-space: pre`", chk_white_space_pre),
     Feature("Text", "`white-space: nowrap`", chk_nowrap),
@@ -921,8 +947,11 @@ FEATURES = [
     Feature("PDF", "CFF / `.otf` fonts embedded as OpenType (FontFile3)", chk_font_cff_embedding),
     Feature("PDF", "Ligatures extract as their letters", chk_ligature_text_extraction),
     Feature("PDF", "Subset fonts carry a subset tag (`ABCDEF+Name`)", chk_subset_font_tag),
-    Feature("PDF", "Clickable links", chk_links, 40),
-    Feature("PDF", "Outline / bookmarks", chk_outline, 41),
+    Feature("PDF", "Clickable links", chk_links),
+    Feature("PDF", "Internal `#anchor` links", chk_internal_links),
+    Feature("PDF", "Block and image links", chk_link_boxes),
+    Feature("PDF", "`javascript:` / `data:` links are not clickable", chk_unsafe_links_dropped),
+    Feature("PDF", "Outline / bookmarks (nested `h1`–`h6`)", chk_outline),
 ]
 
 

@@ -211,7 +211,7 @@ fn merge_inline_children(lb: &mut LayoutBox, fs: &mut cosmic_text::FontSystem) {
     let mut spans = Vec::new();
     // Single pass: collect spans and clear text content simultaneously
     for child in &mut lb.children {
-        collect_and_clear(child, &mut spans);
+        collect_and_clear(child, &mut spans, None);
     }
 
     if collapses(lb.style.white_space) {
@@ -245,7 +245,8 @@ fn merge_inline_children(lb: &mut LayoutBox, fs: &mut cosmic_text::FontSystem) {
 }
 
 /// Recursively collect InlineSpans and clear text content in a single pass.
-fn collect_and_clear(lb: &mut LayoutBox, spans: &mut Vec<InlineSpan>) {
+fn collect_and_clear(lb: &mut LayoutBox, spans: &mut Vec<InlineSpan>, link: Option<&str>) {
+    let link = lb.link.as_deref().or(link);
     if lb.is_text_leaf() {
         if let Some(text) = lb.text_content.take() {
             let style = &lb.style;
@@ -260,11 +261,12 @@ fn collect_and_clear(lb: &mut LayoutBox, spans: &mut Vec<InlineSpan>) {
                 text_decoration: style.text_decoration.clone(),
                 letter_spacing: style.letter_spacing.resolve_against(0.0),
                 word_spacing: style.word_spacing.resolve_against(0.0),
+                link: link.map(str::to_string),
             });
         }
     } else {
         for child in &mut lb.children {
-            collect_and_clear(child, spans);
+            collect_and_clear(child, spans, link);
         }
     }
     lb.shaped_lines.clear();
@@ -318,6 +320,7 @@ mod white_space_tests {
             text_decoration: ferropdf_core::TextDecoration::None,
             letter_spacing: 0.0,
             word_spacing: 0.0,
+            link: None,
         }
     }
 
