@@ -357,6 +357,7 @@ pub fn shape_text_lines(
             String::new()
         };
 
+        let mut clusters = std::collections::HashSet::new();
         for glyph in run.glyphs.iter() {
             glyphs.push(ShapedGlyph {
                 glyph_id: glyph.glyph_id,
@@ -365,6 +366,7 @@ pub fn shape_text_lines(
                 y: glyph.y,
                 advance: glyph.w,
                 metadata: 0,
+                text: cluster_text(run.text, glyph, &mut clusters),
             });
         }
 
@@ -439,6 +441,7 @@ pub fn shape_rich_text_lines(
 
     for run in buffer.layout_runs() {
         let mut glyphs = Vec::new();
+        let mut clusters = std::collections::HashSet::new();
         let mut segments: Vec<ShapedSegment> = Vec::new();
         let mut current_meta = usize::MAX;
         let mut seg_start_byte = usize::MAX;
@@ -477,6 +480,7 @@ pub fn shape_rich_text_lines(
                 y: glyph.y,
                 advance: glyph.w,
                 metadata: glyph.metadata,
+                text: cluster_text(run.text, glyph, &mut clusters),
             });
         }
 
@@ -515,6 +519,20 @@ pub fn shape_rich_text_lines(
     }
 
     lines
+}
+
+/// Text of `glyph`'s cluster, or `""` when an earlier glyph of the same
+/// cluster (same source byte range) already carries it.
+fn cluster_text(
+    line: &str,
+    glyph: &cosmic_text::LayoutGlyph,
+    seen: &mut std::collections::HashSet<(usize, usize)>,
+) -> String {
+    if seen.insert((glyph.start, glyph.end)) {
+        line.get(glyph.start..glyph.end).unwrap_or("").to_string()
+    } else {
+        String::new()
+    }
 }
 
 #[cfg(test)]

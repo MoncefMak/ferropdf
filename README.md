@@ -299,6 +299,10 @@ every row is a test that renders a snippet and checks the PDF, and every ❌ row
 | Images | SVG `<img>` (vector) | ✅ Supported |
 | Images | Inline `<svg>` (vector) | ✅ Supported |
 | PDF | Title / author metadata | ✅ Supported |
+| PDF | Fonts from a `.ttc` collection (any face) | ✅ Supported |
+| PDF | CFF / `.otf` fonts embedded as OpenType (FontFile3) | ✅ Supported |
+| PDF | Ligatures extract as their letters | ✅ Supported |
+| PDF | Subset fonts carry a subset tag (`ABCDEF+Name`) | ✅ Supported |
 | PDF | Clickable links | ❌ Not yet ([#40](https://github.com/MoncefMak/ferropdf/issues/40)) |
 | PDF | Outline / bookmarks | ❌ Not yet ([#41](https://github.com/MoncefMak/ferropdf/issues/41)) |
 <!-- feature-matrix:end -->

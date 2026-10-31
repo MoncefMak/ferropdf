@@ -587,6 +587,13 @@ fn parse_font_face_rule(parser: &mut Parser<'_, '_>) -> Option<FontFaceRule> {
                         }
                         value_parts.push(url);
                     }
+                    // An unquoted `url(…)` is a single token, not a function.
+                    Ok(Token::UnquotedUrl(ref url)) => {
+                        if is_src && first_url.is_none() {
+                            first_url = Some(url.to_string());
+                        }
+                        value_parts.push(url.to_string());
+                    }
                     Ok(Token::Function(ref _name)) => {
                         // Skip format() and other functions
                         let _ = p.parse_nested_block(|pp| -> Result<(), ParseError<'_, ()>> {
@@ -903,5 +910,26 @@ mod page_rule_tests {
         );
         assert_eq!(sheet.page_rules[1].selector, PageSelector::First);
         assert_eq!(sheet.rules.len(), 1, "rules after @page still parse");
+    }
+}
+
+#[cfg(test)]
+mod font_face_src_tests {
+    use super::*;
+
+    #[test]
+    fn unquoted_and_quoted_urls() {
+        for css in [
+            "@font-face{font-family:A;src:url(data:font/otf;base64,AAAA) format('opentype')}",
+            "@font-face{font-family:A;src:url('data:font/otf;base64,AAAA')}",
+            "@font-face{font-family:A;src:url(\"data:font/otf;base64,AAAA\")}",
+        ] {
+            let sheet = parse_stylesheet(css).unwrap();
+            assert_eq!(sheet.font_faces.len(), 1, "{css}");
+            assert_eq!(
+                sheet.font_faces[0].src, "data:font/otf;base64,AAAA",
+                "{css}"
+            );
+        }
     }
 }

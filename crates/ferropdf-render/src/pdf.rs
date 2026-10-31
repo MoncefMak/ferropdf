@@ -97,7 +97,9 @@ pub fn write_pdf(
     let mut font_name_counter = 3u32; // F1, F2, F3 are reserved for Type1
 
     // Temporary: collect raw font data and used glyphs per font
-    let mut font_raw_data: HashMap<String, Vec<u8>> = HashMap::new(); // pdf_name → raw data
+    let mut font_raw_data: HashMap<String, (Vec<u8>, u32)> = HashMap::new(); // pdf_name → (raw data, face index)
+                                                                             // pdf_name → original glyph ID → shaped cluster text (for ToUnicode)
+    let mut font_glyph_text: HashMap<String, HashMap<u16, String>> = HashMap::new();
     let mut font_used_chars: HashMap<String, std::collections::HashSet<u16>> = HashMap::new(); // pdf_name → glyph IDs
 
     // fontdb::ID → pdf_name mapping for shaped glyphs (keyed by the exact font face)
@@ -125,7 +127,8 @@ pub fn write_pdf(
                         if let std::collections::hash_map::Entry::Vacant(entry) =
                             fontdb_id_to_pdf_name.entry(fid)
                         {
-                            if let Some(data) = font_db.with_face_data(fid, |data, _| data.to_vec())
+                            if let Some(data) =
+                                font_db.with_face_data(fid, |data, index| (data.to_vec(), index))
                             {
                                 font_name_counter += 1;
                                 let pdf_name = format!("F{}", font_name_counter);
@@ -140,6 +143,13 @@ pub fn write_pdf(
                             if let Some(used_gids) = font_used_chars.get_mut(pdf_name) {
                                 used_gids.insert(0); // .notdef
                                 used_gids.insert(glyph.glyph_id);
+                            }
+                            if !glyph.text.is_empty() {
+                                font_glyph_text
+                                    .entry(pdf_name.clone())
+                                    .or_default()
+                                    .entry(glyph.glyph_id)
+                                    .or_insert_with(|| glyph.text.clone());
                             }
                         }
                     }
@@ -170,8 +180,8 @@ pub fn write_pdf(
                     if let Some(Some(pdf_name)) = font_cache.get(&key) {
                         if let Some(used_gids) = font_used_chars.get_mut(pdf_name) {
                             used_gids.insert(0); // .notdef
-                            if let Some(raw_data) = font_raw_data.get(pdf_name) {
-                                if let Ok(face) = ttf_parser::Face::parse(raw_data, 0) {
+                            if let Some((raw_data, index)) = font_raw_data.get(pdf_name) {
+                                if let Ok(face) = ttf_parser::Face::parse(raw_data, *index) {
                                     for ch in text.chars() {
                                         if let Some(gid) = face.glyph_index(ch) {
                                             used_gids.insert(gid.0);
@@ -189,8 +199,9 @@ pub fn write_pdf(
     // Phase 3: Subset fonts and build EmbeddedFont entries
     let pdf_names: Vec<String> = font_raw_data.keys().cloned().collect();
     for pdf_name in pdf_names {
-        let raw_data = font_raw_data.remove(&pdf_name).unwrap();
+        let (raw_data, face_index) = font_raw_data.remove(&pdf_name).unwrap();
         let used_gids = font_used_chars.remove(&pdf_name).unwrap();
+        let glyph_text = font_glyph_text.remove(&pdf_name).unwrap_or_default();
 
         let type0_ref = next_ref();
         let cid_font_ref = next_ref();
@@ -199,10 +210,12 @@ pub fn write_pdf(
         let tounicode_ref = next_ref();
 
         // Subset the font to only include used glyphs
-        let (subset_data, gid_remapping) = subset_font(&raw_data, &used_gids);
+        let (subset_data, gid_remapping) = subset_font(&raw_data, face_index, &used_gids);
 
         embedded_fonts.push(EmbeddedFont {
             original_data: raw_data,
+            face_index,
+            glyph_text,
             subset_data,
             gid_remapping,
             type0_ref,
@@ -592,7 +605,7 @@ pub fn write_pdf(
                             else {
                                 continue;
                             };
-                            if let Ok(face) = ttf_parser::Face::parse(&ef.original_data, 0) {
+                            if let Some(face) = ef.face() {
                                 faces.insert(g.font_id, (face, ef));
                             }
                         }
@@ -662,9 +675,7 @@ pub fn write_pdf(
                                 .and_then(|pdf_name| {
                                     embedded_fonts.iter().find(|f| &f.pdf_name == pdf_name)
                                 });
-                        let font_data = ef_option.map(|ef| ef.original_data.as_slice());
-
-                        let line_width_pt = measure_text_width(line_text, *font_size, font_data);
+                        let line_width_pt = measure_text_width(line_text, *font_size, ef_option);
                         let aligned_x = match text_align {
                             ferropdf_core::TextAlign::Right => *x + container_width - line_width_pt,
                             ferropdf_core::TextAlign::Center => {
@@ -681,6 +692,7 @@ pub fn write_pdf(
                                 let encoded = encode_for_cid_font(
                                     line_text,
                                     &ef.original_data,
+                                    ef.face_index,
                                     ef.gid_remapping.as_ref(),
                                 );
                                 content.show(Str(&encoded));
@@ -919,9 +931,9 @@ fn write_type1_font(pdf: &mut Pdf, font_ref: Ref, base_font: &str) {
 
 /// Measure text width using actual glyph advances from the embedded font.
 /// Falls back to a rough estimate if font data is unavailable.
-fn measure_text_width(text: &str, font_size: f32, font_data: Option<&[u8]>) -> f32 {
-    if let Some(data) = font_data {
-        if let Ok(face) = ttf_parser::Face::parse(data, 0) {
+fn measure_text_width(text: &str, font_size: f32, font: Option<&EmbeddedFont>) -> f32 {
+    if let Some(font) = font {
+        if let Some(face) = font.face() {
             let units_per_em = face.units_per_em() as f32;
             let scale = font_size / units_per_em;
             let mut width = 0.0f32;

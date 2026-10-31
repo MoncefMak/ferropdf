@@ -8,8 +8,14 @@ use std::io::Write;
 
 /// A resolved font ready to be embedded in the PDF.
 pub(crate) struct EmbeddedFont {
-    /// Original raw TTF/OTF bytes (for char→glyph lookups)
+    /// Original raw TTF/OTF/TTC bytes (for char→glyph lookups)
     pub original_data: Vec<u8>,
+    /// Index of the face inside `original_data` (non-zero for a face of a
+    /// `.ttc` / `.otc` collection).
+    pub face_index: u32,
+    /// Text of each original glyph ID as shaped (clusters, ligatures), for
+    /// an exact ToUnicode map.
+    pub glyph_text: HashMap<u16, String>,
     /// Subsetted TTF/OTF bytes (for embedding — much smaller)
     pub subset_data: Vec<u8>,
     /// Mapping from original glyph IDs to subsetted glyph IDs (if subsetted)
@@ -22,6 +28,13 @@ pub(crate) struct EmbeddedFont {
     pub tounicode_ref: Ref,
     /// PDF resource name, e.g. "F4"
     pub pdf_name: String,
+}
+
+impl EmbeddedFont {
+    /// The embedded face, parsed from the original data.
+    pub fn face(&self) -> Option<ttf_parser::Face<'_>> {
+        ttf_parser::Face::parse(&self.original_data, self.face_index).ok()
+    }
 }
 
 /// Key to deduplicate fonts
@@ -39,7 +52,7 @@ pub(crate) fn load_font_data(
     family: &str,
     bold: bool,
     italic: bool,
-) -> Option<Vec<u8>> {
+) -> Option<(Vec<u8>, u32)> {
     if family.is_empty() {
         return None;
     }
@@ -60,15 +73,20 @@ pub(crate) fn load_font_data(
     };
 
     let id = db.query(&query)?;
-    db.with_face_data(id, |data, _| data.to_vec())
+    db.with_face_data(id, |data, index| (data.to_vec(), index))
 }
 
 // ── CIDFont embedding ──
 
 pub(crate) fn write_cid_font(pdf: &mut Pdf, ef: &EmbeddedFont) -> ferropdf_core::Result<()> {
     // Parse the ORIGINAL font for metrics (ascender, bbox, etc.)
-    let face = ttf_parser::Face::parse(&ef.original_data, 0)
-        .map_err(|e| FerroError::Font(format!("Failed to parse TTF: {:?}", e)))?;
+    let face = ef
+        .face()
+        .ok_or_else(|| FerroError::Font("Failed to parse the embedded font".into()))?;
+    // CFF-flavoured OpenType (`.otf`, most `.ttc` CJK / macOS faces) must be
+    // embedded as FontFile3 /OpenType with a CIDFontType0; TrueType outlines
+    // as FontFile2 with a CIDFontType2 (PDF 32000 §9.9).
+    let is_cff = face.tables().cff.is_some();
 
     let units_per_em = face.units_per_em() as f32;
     let scale = 1000.0 / units_per_em;
@@ -95,7 +113,11 @@ pub(crate) fn write_cid_font(pdf: &mut Pdf, ef: &EmbeddedFont) -> ferropdf_core:
     let compressed = compress_data(&ef.subset_data)?;
     let mut stream = pdf.stream(ef.font_stream_ref, &compressed);
     stream.filter(Filter::FlateDecode);
-    stream.pair(Name(b"Length1"), ef.subset_data.len() as i32);
+    if is_cff {
+        stream.pair(Name(b"Subtype"), Name(b"OpenType"));
+    } else {
+        stream.pair(Name(b"Length1"), ef.subset_data.len() as i32);
+    }
     stream.finish();
 
     // 2. Write FontDescriptor
@@ -121,7 +143,17 @@ pub(crate) fn write_cid_font(pdf: &mut Pdf, ef: &EmbeddedFont) -> ferropdf_core:
         })
         .unwrap_or_else(|| "CustomFont".to_string());
 
-    let ps_name = sanitize_ps_name(&base_font_name);
+    // A subset font's name starts with a six-letter tag (PDF 32000 §9.6.4),
+    // which tells readers the font is partial and keeps subsets of the same
+    // font apart.
+    let ps_name = match &ef.gid_remapping {
+        Some(map) => format!(
+            "{}+{}",
+            subset_tag(&ef.pdf_name, map),
+            sanitize_ps_name(&base_font_name)
+        ),
+        None => sanitize_ps_name(&base_font_name),
+    };
 
     let mut descriptor = pdf.font_descriptor(ef.descriptor_ref);
     descriptor.name(Name(ps_name.as_bytes()));
@@ -132,12 +164,20 @@ pub(crate) fn write_cid_font(pdf: &mut Pdf, ef: &EmbeddedFont) -> ferropdf_core:
     descriptor.descent(descender);
     descriptor.cap_height(cap_height);
     descriptor.stem_v(80.0 + ascender * 0.08);
-    descriptor.font_file2(ef.font_stream_ref);
+    if is_cff {
+        descriptor.font_file3(ef.font_stream_ref);
+    } else {
+        descriptor.font_file2(ef.font_stream_ref);
+    }
     descriptor.finish();
 
     // 3. Write CIDFont (CIDFontType2)
     let mut cid_font = pdf.cid_font(ef.cid_font_ref);
-    cid_font.subtype(pdf_writer::types::CidFontType::Type2);
+    cid_font.subtype(if is_cff {
+        pdf_writer::types::CidFontType::Type0
+    } else {
+        pdf_writer::types::CidFontType::Type2
+    });
     cid_font.base_font(Name(ps_name.as_bytes()));
     cid_font.system_info(pdf_writer::types::SystemInfo {
         registry: Str(b"Adobe"),
@@ -151,7 +191,7 @@ pub(crate) fn write_cid_font(pdf: &mut Pdf, ef: &EmbeddedFont) -> ferropdf_core:
     // When subsetted, iterate only the subsetted font's glyphs (much fewer).
     {
         let width_face = if ef.gid_remapping.is_some() {
-            // Parse the subsetted font for width info
+            // Parse the subsetted font (a single face) for width info
             ttf_parser::Face::parse(&ef.subset_data, 0).ok()
         } else {
             None
@@ -193,12 +233,15 @@ pub(crate) fn write_cid_font(pdf: &mut Pdf, ef: &EmbeddedFont) -> ferropdf_core:
         }
     }
 
-    // CIDToGIDMap Identity — CID values map directly to glyph IDs
-    cid_font.cid_to_gid_map_predefined(Name(b"Identity"));
+    // CIDToGIDMap Identity — CID values map directly to glyph IDs. Only
+    // defined for CIDFontType2; a CFF font's CIDs are its glyph indices.
+    if !is_cff {
+        cid_font.cid_to_gid_map_predefined(Name(b"Identity"));
+    }
     cid_font.finish();
 
     // 4. Write ToUnicode CMap
-    let tounicode_cmap = build_tounicode_cmap(&face, ef.gid_remapping.as_ref());
+    let tounicode_cmap = build_tounicode_cmap(&face, ef.gid_remapping.as_ref(), &ef.glyph_text);
     pdf.stream(ef.tounicode_ref, tounicode_cmap.as_bytes());
 
     // 5. Write Type0 font
@@ -217,9 +260,10 @@ pub(crate) fn write_cid_font(pdf: &mut Pdf, ef: &EmbeddedFont) -> ferropdf_core:
 pub(crate) fn encode_for_cid_font(
     text: &str,
     font_data: &[u8],
+    face_index: u32,
     gid_remapping: Option<&HashMap<u16, u16>>,
 ) -> Vec<u8> {
-    let face = match ttf_parser::Face::parse(font_data, 0) {
+    let face = match ttf_parser::Face::parse(font_data, face_index) {
         Ok(f) => f,
         Err(_) => return encode_winansi(text), // fallback
     };
@@ -261,11 +305,27 @@ pub(crate) fn encode_shaped_glyphs(
 fn build_tounicode_cmap(
     face: &ttf_parser::Face,
     gid_remapping: Option<&HashMap<u16, u16>>,
+    glyph_text: &HashMap<u16, String>,
 ) -> String {
-    // Build a mapping of (remapped) glyph ID → Unicode codepoint
-    let mut gid_to_unicode: HashMap<u16, char> = HashMap::new();
-
+    let remap = |gid: u16| -> Option<u16> {
+        match gid_remapping {
+            Some(map) => map.get(&gid).copied(),
+            None => Some(gid),
+        }
+    };
+    // (Remapped) glyph ID → text. The shaped text wins: it is exact for
+    // ligatures and for glyphs shared by several code points (CJK
+    // compatibility ideographs, Kangxi radicals).
+    let mut gid_to_text: HashMap<u16, String> = HashMap::new();
+    for (&gid, text) in glyph_text {
+        if let Some(mapped) = remap(gid) {
+            gid_to_text.insert(mapped, text.clone());
+        }
+    }
+    // Other glyphs (unshaped text): reverse lookup in the cmap, preferring
+    // the lowest code point.
     if let Some(subtable) = face.tables().cmap {
+        let mut reverse: HashMap<u16, char> = HashMap::new();
         for sub in subtable.subtables {
             if !sub.is_unicode() {
                 continue;
@@ -273,23 +333,26 @@ fn build_tounicode_cmap(
             sub.codepoints(|cp| {
                 if let Some(ch) = char::from_u32(cp) {
                     if let Some(gid) = face.glyph_index(ch) {
-                        // Use the remapped GID if font was subsetted
-                        let mapped = match gid_remapping {
-                            Some(map) => match map.get(&gid.0) {
-                                Some(&new_gid) => new_gid,
-                                None => return, // glyph not in subset, skip
-                            },
-                            None => gid.0,
-                        };
-                        gid_to_unicode.entry(mapped).or_insert(ch);
+                        if let Some(mapped) = remap(gid.0) {
+                            let e = reverse.entry(mapped).or_insert(ch);
+                            if ch < *e {
+                                *e = ch;
+                            }
+                        }
                     }
                 }
             });
         }
+        for (gid, ch) in reverse {
+            gid_to_text.entry(gid).or_insert_with(|| ch.to_string());
+        }
     }
 
-    let mut entries: Vec<(u16, char)> = gid_to_unicode.into_iter().collect();
-    entries.sort_by_key(|&(gid, _)| gid);
+    let mut entries: Vec<(u16, String)> = gid_to_text
+        .into_iter()
+        .filter(|(_, t)| !t.is_empty())
+        .collect();
+    entries.sort_by_key(|(gid, _)| *gid);
 
     let mut cmap = String::new();
     cmap.push_str("/CIDInit /ProcSet findresource begin\n");
@@ -306,8 +369,11 @@ fn build_tounicode_cmap(
     // Write in chunks of 100 (PDF limit per beginbfchar block)
     for chunk in entries.chunks(100) {
         cmap.push_str(&format!("{} beginbfchar\n", chunk.len()));
-        for &(gid, ch) in chunk {
-            cmap.push_str(&format!("<{:04X}> <{:04X}>\n", gid, ch as u32));
+        for (gid, text) in chunk {
+            // Destination strings are UTF-16BE (surrogate pairs beyond the
+            // BMP, several code units for ligatures).
+            let utf16: String = text.encode_utf16().map(|u| format!("{u:04X}")).collect();
+            cmap.push_str(&format!("<{gid:04X}> <{utf16}>\n"));
         }
         cmap.push_str("endbfchar\n");
     }
@@ -336,6 +402,7 @@ fn compress_data(data: &[u8]) -> ferropdf_core::Result<Vec<u8>> {
 /// Returns (subsetted_data, gid_remapping) on success, or (original_data, None) on failure.
 pub(crate) fn subset_font(
     font_data: &[u8],
+    face_index: u32,
     used_gids: &std::collections::HashSet<u16>,
 ) -> (Vec<u8>, Option<HashMap<u16, u16>>) {
     // Build a sorted list of GIDs the subsetter should retain
@@ -348,7 +415,7 @@ pub(crate) fn subset_font(
         remapper.remap(gid);
     }
 
-    match subsetter::subset(font_data, 0, &remapper) {
+    match subsetter::subset(font_data, face_index, &remapper) {
         Ok(subsetted) => {
             // Build the remapping: old GID → new GID
             let mut mapping = HashMap::new();
@@ -359,11 +426,33 @@ pub(crate) fn subset_font(
             }
             (subsetted, Some(mapping))
         }
-        Err(_) => {
-            // Subsetting failed — fall back to full font
+        Err(e) => {
+            // Subsetting failed — fall back to the full font. A collection
+            // cannot be embedded whole: the face would be unusable.
+            if font_data.starts_with(b"ttcf") {
+                log::warn!("could not extract face {face_index} of a font collection: {e:?}");
+            }
             (font_data.to_vec(), None)
         }
     }
+}
+
+/// Deterministic six-uppercase-letter subset tag (FNV-1a of the resource
+/// name and the retained glyphs).
+fn subset_tag(pdf_name: &str, gids: &HashMap<u16, u16>) -> String {
+    let mut sorted: Vec<u16> = gids.keys().copied().collect();
+    sorted.sort_unstable();
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    let bytes = pdf_name
+        .bytes()
+        .chain(sorted.iter().flat_map(|g| g.to_be_bytes()));
+    for b in bytes {
+        h ^= b as u64;
+        h = h.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    (0..6)
+        .map(|i| (b'A' + ((h >> (i * 5)) % 26) as u8) as char)
+        .collect()
 }
 
 fn sanitize_ps_name(name: &str) -> String {
@@ -498,10 +587,25 @@ mod tests {
     #[test]
     fn subset_font_falls_back_on_garbage_input() {
         let used: std::collections::HashSet<u16> = [1u16, 2, 3].into_iter().collect();
-        let (data, mapping) = subset_font(b"not a real font", &used);
+        let (data, mapping) = subset_font(b"not a real font", 0, &used);
         // On parse failure subsetter returns the original bytes unchanged
         // and signals "no remapping" via None.
         assert_eq!(data, b"not a real font");
         assert!(mapping.is_none());
+    }
+}
+
+#[cfg(test)]
+mod subset_tag_tests {
+    use super::*;
+
+    #[test]
+    fn tag_is_six_uppercase_letters_and_deterministic() {
+        let map: HashMap<u16, u16> = [(3, 1), (7, 2)].into_iter().collect();
+        let a = subset_tag("F4", &map);
+        assert_eq!(a.len(), 6);
+        assert!(a.chars().all(|c| c.is_ascii_uppercase()));
+        assert_eq!(a, subset_tag("F4", &map));
+        assert_ne!(a, subset_tag("F5", &map));
     }
 }
