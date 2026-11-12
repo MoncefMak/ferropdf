@@ -424,6 +424,64 @@ def _line_extent(d: Doc) -> float:
     return max(w[2] for w in first) - min(w[0] for w in first)
 
 
+def _line_pitch(d: Doc) -> float:
+    """Distance between the first two text lines (pt)."""
+    ys = sorted({round(w[1], 1) for w in d.words()})
+    return ys[1] - ys[0]
+
+
+def _para(css: str) -> Doc:
+    return Doc(wrap(f'<p style="width:150pt;{css}">' + "word " * 60 + "</p>"))
+
+
+def chk_line_height_number():
+    # Unitless line-height is a factor of the font size, also when inherited.
+    assert abs(_line_pitch(_para("font-size:10pt;line-height:1.5")) - 15) < 0.5
+    inherited = Doc(wrap('<p style="width:150pt">' + "word " * 60 + "</p>",
+                         "body{font-size:10pt;line-height:1.5} p{font-size:20pt}"))
+    assert abs(_line_pitch(inherited) - 30) < 0.5, "re-resolved against the child's 20pt"
+
+
+def chk_line_height_relative_lengths():
+    for css in ("line-height:1.5em", "line-height:150%"):
+        assert abs(_line_pitch(_para("font-size:10pt;" + css)) - 15) < 0.5, css
+    assert abs(_line_pitch(_para("font-size:10pt;line-height:2rem")) - 24) < 0.5
+
+
+def chk_line_height_normal_follows_font_size():
+    # `normal` scales with the element's own font size (not the 12pt default).
+    assert abs(_line_pitch(_para("font-size:10pt")) - 12) < 0.5
+    assert abs(_line_pitch(_para("font-size:20pt")) - 24) < 0.5
+
+
+def _text_colors(d: Doc) -> list[int]:
+    return [s["color"] for b in d.doc[0].get_text("dict")["blocks"]
+            for l in b.get("lines", []) for s in l["spans"] if s["text"].strip()]
+
+
+def _fills(d: Doc) -> set[tuple[int, int, int]]:
+    return {tuple(round(c * 255) for c in dr["fill"]) for dr in d.drawings() if dr.get("fill")}
+
+
+def chk_named_colors():
+    for css, want in [("navy", 0x000080), ("teal", 0x008080), ("darkred", 0x8B0000),
+                      ("Red", 0xFF0000), ("rebeccapurple", 0x663399)]:
+        assert _text_colors(Doc(wrap(f'<p style="color:{css}">X</p>'))) == [want], css
+    assert (211, 211, 211) in _fills(Doc(wrap('<div style="background:lightgray;height:20px"></div>')))
+
+
+def chk_color_functions():
+    for css, want in [("hsl(120, 100%, 25%)", 0x008000), ("rgb(100% 0% 0%)", 0xFF0000),
+                      ("#f00f", 0xFF0000), ("hwb(240 0% 0%)", 0x0000FF)]:
+        assert _text_colors(Doc(wrap(f'<p style="color:{css}">X</p>'))) == [want], css
+
+
+def chk_box_shadow_rgba():
+    d = Doc(wrap('<div style="width:100px;height:40px;background:#fff;'
+                 'box-shadow:4px 4px 0 rgba(255,0,0,1)"></div>'))
+    assert (255, 0, 0) in _fills(d), _fills(d)
+
+
 def chk_letter_spacing():
     a = _line_extent(Doc(wrap("<p>WIDE</p>")))
     b = _line_extent(Doc(wrap('<p style="letter-spacing:10px">WIDE</p>')))
@@ -918,6 +976,9 @@ FEATURES = [
     Feature("Text", "Whitespace collapsing (`white-space: normal`)", chk_whitespace_collapse),
     Feature("Text", "`white-space: pre`", chk_white_space_pre),
     Feature("Text", "`white-space: nowrap`", chk_nowrap),
+    Feature("Text", "Unitless `line-height` (inherited as a factor)", chk_line_height_number),
+    Feature("Text", "`line-height` in `em` / `%` / `rem`", chk_line_height_relative_lengths),
+    Feature("Text", "`line-height: normal` follows the font size", chk_line_height_normal_follows_font_size),
     Feature("Text", "`letter-spacing`", chk_letter_spacing),
     Feature("Text", "`word-spacing`", chk_word_spacing),
     Feature("Text", "Letter spacing taken into account by line breaking", chk_letter_spacing_wraps),
@@ -946,6 +1007,9 @@ FEATURES = [
     Feature("Layout", "`inline-block` shrink-wraps mixed inline content", chk_inline_block_shrink_wraps_mixed_content),
     Feature("Visual", "`overflow: hidden` with `border-radius` (round clip)", chk_overflow_rounded_clip),
     Feature("Layout", "`box-sizing` (content-box default, border-box)", chk_box_sizing),
+    Feature("Visual", "Named colours (all 148, case-insensitive)", chk_named_colors),
+    Feature("Visual", "`hsl()`, `hwb()`, `rgb()` percentages, 4/8-digit hex", chk_color_functions),
+    Feature("Visual", "`box-shadow` with an `rgba()` colour", chk_box_shadow_rgba),
     Feature("Visual", "Solid borders", chk_border_solid),
     Feature("Visual", "Dashed / dotted borders", chk_border_dashed),
     Feature("Visual", "Double borders", chk_border_double),

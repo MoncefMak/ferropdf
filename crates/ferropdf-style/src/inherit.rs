@@ -10,6 +10,7 @@ pub fn inherit_from(parent: &ComputedStyle) -> ComputedStyle {
         font_weight: parent.font_weight.clone(),
         font_style: parent.font_style.clone(),
         line_height: parent.line_height,
+        line_height_spec: parent.line_height_spec,
         text_align: parent.text_align,
         text_decoration: parent.text_decoration.clone(),
         letter_spacing: parent.letter_spacing,

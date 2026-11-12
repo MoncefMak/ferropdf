@@ -93,14 +93,27 @@ pub fn resolve_units(
     resolve_length_em_rem(&mut style.column_gap, font_size, root_font_size);
     resolve_length_em_rem(&mut style.row_gap, font_size, root_font_size);
 
-    // Ensure line-height is reasonable for the current font-size.
-    // CSS 'normal' line-height is ~1.2 × font-size. When line_height is inherited
-    // as an absolute value from a parent with a smaller font-size, it can be too
-    // small (e.g. body: 16px→19.2, h2: 24px but line_height still 19.2).
-    // Re-compute only if line_height < font_size (clearly inherited and stale).
-    if style.line_height < font_size {
-        style.line_height = font_size * 1.2;
-    }
+    // line-height against this element's final font size. `normal` and
+    // numbers stay factors so children re-resolve them against their own
+    // font size; lengths become absolute and children inherit that value.
+    let normal = font_size * LineHeight::NORMAL_FACTOR;
+    style.line_height = match style.line_height_spec {
+        LineHeight::Normal => normal,
+        LineHeight::Number(n) => n * font_size,
+        LineHeight::Length(l) => {
+            let pt = match l {
+                Length::Percent(p) => p / 100.0 * font_size,
+                Length::Calc(c) => {
+                    let c = c.resolve_font_relative(font_size, root_font_size);
+                    c.pt + c.percent / 100.0 * font_size
+                }
+                other => other.to_pt(font_size, root_font_size).unwrap_or(normal),
+            }
+            .max(0.0);
+            style.line_height_spec = LineHeight::Length(Length::Pt(pt));
+            pt
+        }
+    };
 }
 
 fn resolve_length_em_rem(length: &mut Length, font_size: f32, root_font_size: f32) {
@@ -200,16 +213,44 @@ mod tests {
         assert_eq!(style.width, Length::Auto);
     }
 
-    #[test]
-    fn resolve_units_fixes_stale_line_height() {
+    fn line_height_for(spec: LineHeight, font_size: f32) -> (f32, LineHeight) {
         let mut style = ComputedStyle {
-            font_size: 24.0,
+            font_size,
+            line_height_spec: spec,
             ..Default::default()
         };
-        style.line_height = 14.4; // inherited from smaller parent
         resolve_units(&mut style, None, 12.0);
-        // line_height < font_size → recalculated to 1.2 × font_size
-        assert!((style.line_height - 28.8).abs() < 0.01);
+        (style.line_height, style.line_height_spec)
+    }
+
+    #[test]
+    fn line_height_normal_follows_own_font_size() {
+        // A 24pt heading inheriting `normal` from a 12pt body gets 1.2 × 24pt,
+        // and a 10pt body gets 12pt rather than the 14.4pt of the root default.
+        assert!((line_height_for(LineHeight::Normal, 24.0).0 - 28.8).abs() < 0.01);
+        assert!((line_height_for(LineHeight::Normal, 10.0).0 - 12.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn line_height_number_stays_a_factor() {
+        let (pt, spec) = line_height_for(LineHeight::Number(1.5), 10.0);
+        assert!((pt - 15.0).abs() < 0.01);
+        assert_eq!(spec, LineHeight::Number(1.5), "numbers inherit as factors");
+    }
+
+    #[test]
+    fn line_height_lengths_become_absolute() {
+        for (l, want) in [
+            (Length::Em(1.5), 15.0),
+            (Length::Percent(150.0), 15.0),
+            (Length::Rem(2.0), 24.0),
+            (Length::Px(20.0), 15.0),
+            (Length::Pt(18.0), 18.0),
+        ] {
+            let (pt, spec) = line_height_for(LineHeight::Length(l), 10.0);
+            assert!((pt - want).abs() < 0.01, "{l:?}: {pt}");
+            assert_eq!(spec, LineHeight::Length(Length::Pt(want)), "{l:?}");
+        }
     }
 
     #[test]

@@ -27,7 +27,7 @@ pub use page::{Orientation, PageConfig, PageMarginOverrides, PageMargins, PageSi
 pub use style::{
     AlignItems, AlignSelf, BorderCollapse, BorderRadius, BorderSide, BorderStyle,
     BoxDecorationBreak, BoxShadow, BoxSizing, Clear, ComputedStyle, Direction, Display,
-    FlexDirection, FlexWrap, Float, FontStyle, FontWeight, GridProps, JustifyContent,
+    FlexDirection, FlexWrap, Float, FontStyle, FontWeight, GridProps, JustifyContent, LineHeight,
     ListStyleType, PageBreak, PageBreakInside, Position, Radii, TextAlign, TextDecoration,
     TextTransform, WhiteSpace,
 };
