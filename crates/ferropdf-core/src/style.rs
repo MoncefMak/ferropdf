@@ -93,6 +93,23 @@ impl LineHeight {
     pub const NORMAL_FACTOR: f32 = 1.2;
 }
 
+/// `vertical-align`, as used for the content of table cells (CSS 2.1
+/// §17.5.3): `top`, `middle` and `bottom` place the cell's content in the
+/// cell's height; `baseline` (the initial value) lays it out from the top.
+/// Inline-level values (`sub`, `super`, lengths…) are not supported.
+///
+/// Inherited in ferropdf so that a value on `<tr>` / `<tbody>` reaches the
+/// cells, which matches the HTML user-agent rules (`tr, td, th {
+/// vertical-align: inherit }`); the UA stylesheet sets `middle` on row groups.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum VerticalAlign {
+    #[default]
+    Baseline,
+    Top,
+    Middle,
+    Bottom,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum TextAlign {
     /// `start` (the initial value): left in LTR, right in RTL.
@@ -563,6 +580,7 @@ pub struct ComputedStyle {
     /// Specified `line-height`, kept for inheritance (see [`LineHeight`]).
     pub line_height_spec: LineHeight,
     pub text_align: TextAlign,
+    pub vertical_align: VerticalAlign,
     pub text_decoration: TextDecoration,
     /// `letter-spacing` / `word-spacing`: extra space after each character /
     /// word separator (`normal` = 0). Resolved to pt per element.
@@ -672,6 +690,7 @@ impl Default for ComputedStyle {
             line_height: 14.4, // 12pt × 1.2 = 14.4pt
             line_height_spec: LineHeight::Normal,
             text_align: TextAlign::Start,
+            vertical_align: VerticalAlign::Baseline,
             text_decoration: TextDecoration::None,
             letter_spacing: Length::Zero,
             word_spacing: Length::Zero,

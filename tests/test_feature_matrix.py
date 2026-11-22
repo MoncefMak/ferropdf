@@ -608,6 +608,55 @@ def chk_table_layout():
     assert d.word("c2")[0] > d.word("c1")[2] and d.word("wide")[1] > d.word("c1")[1]
 
 
+_TBL = "table{border-collapse:collapse;width:300px} td{padding:4px}"
+
+
+def _strokes(d: Doc) -> list[tuple[float, float, tuple[int, int, int]]]:
+    """Horizontal strokes: (y, width, rgb)."""
+    out = []
+    for dr in d.drawings():
+        r, col = dr["rect"], dr.get("color") or dr.get("fill")
+        if col and r.height < 6 and r.width > 20:
+            out.append((round(r.y0, 1), round(dr.get("width") or r.height, 2),
+                        tuple(round(c * 255) for c in col)))
+    return out
+
+
+def chk_cell_vertical_align():
+    d = Doc(wrap('<table><tr><td style="height:60px;vertical-align:top">T</td>'
+                 '<td style="height:60px">M</td><td style="height:60px;vertical-align:bottom">B</td></tr></table>', _TBL))
+    t, m, b = d.word("T")[1], d.word("M")[1], d.word("B")[1]
+    assert m - t > 10 and b - m > 10, (t, m, b)
+    assert abs((m - t) - (b - m)) < 1, "middle is centred (the UA default)"
+
+
+def chk_cell_valign_attribute():
+    d = Doc(wrap('<table><tr valign="top"><td style="width:60pt">a b c d e f g h i j</td><td>R</td>'
+                 '<td valign="bottom">S</td></tr></table>', _TBL))
+    assert abs(d.word("R")[1] - d.word("a")[1]) < 1, "row valign=top reaches the cells"
+    assert d.word("S")[1] > d.word("R")[1] + 10
+
+
+def chk_tall_cell_grows_row():
+    # 100px = 75pt: "tall" is centred, so the cell ends ≥ 37pt below it.
+    d = Doc(wrap('<table><tr><td style="height:100px">tall</td><td>z</td></tr></table><p>after</p>', _TBL))
+    assert d.word("after")[1] > d.word("tall")[1] + 37, "content after the table does not overlap"
+    assert abs(d.word("z")[1] - d.word("tall")[1]) < 1, "the short cell is stretched to the row"
+
+
+def chk_collapse_wider_wins():
+    d = Doc(wrap('<table><tr><td style="border-bottom:1px solid #ccc">a</td></tr>'
+                 '<tr><td style="border-top:3px solid #008000">b</td></tr></table>', _TBL))
+    assert [s for s in _strokes(d) if s[2] == (0, 128, 0) and s[1] > 2], _strokes(d)
+
+
+def chk_row_and_group_borders():
+    d = Doc(wrap('<table><thead style="border-bottom:3px solid #0000ff"><tr><th>H</th></tr></thead>'
+                 '<tbody><tr style="border-bottom:2px solid #ff0000"><td>c</td></tr><tr><td>d</td></tr></tbody></table>', _TBL))
+    colours = {s[2] for s in _strokes(d)}
+    assert {(0, 0, 255), (255, 0, 0)} <= colours, colours
+
+
 def chk_box_sizing():
     d = Doc(wrap('<div style="width:200px;padding:20px;height:10px;background:#f00"></div>'
                  '<div style="box-sizing:border-box;width:200px;padding:20px;height:50px;background:#0f0"></div>'))
@@ -998,6 +1047,11 @@ FEATURES = [
     Feature("Layout", "`inline-block` shrink-to-fit next to text", chk_inline_block_shrink),
     Feature("Layout", "`inline-block` padding around its label", chk_inline_block_padding),
     Feature("Layout", "Tables with `colspan`", chk_table_layout),
+    Feature("Layout", "Table cell `vertical-align` (`middle` by default)", chk_cell_vertical_align),
+    Feature("Layout", "HTML `valign` on rows and cells", chk_cell_valign_attribute),
+    Feature("Layout", "Row grows to its tallest cell (explicit `height`, blocks)", chk_tall_cell_grows_row),
+    Feature("Visual", "Collapsed borders: the wider border wins", chk_collapse_wider_wins),
+    Feature("Visual", "Borders on `<tr>` / `<thead>` / `<tbody>` (collapsed tables)", chk_row_and_group_borders),
     Feature("Layout", "`direction: rtl` mirrors table / grid columns", chk_rtl_table_mirrored),
     Feature("Layout", "`position: absolute`", chk_position_absolute),
     Feature("Layout", "`float` (text beside a floated box)", chk_float),

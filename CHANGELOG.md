@@ -7,7 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `vertical-align` for table cells (`top`, `middle`, `bottom`, `baseline`) and the HTML `valign` attribute on `<td>`, `<th>`, `<tr>` and row groups. Cells are vertically centred by default, as in browsers (`thead, tbody, tfoot { vertical-align: middle }`).
+
 ### Fixed
+- A table row did not grow to fit a cell taller than its text (explicit `height`, images, block children, nested tables): the cell overflowed and the content after the table overlapped it. Row heights are now sized by Taffy from the cells' laid-out content instead of a text-only estimate (which also drops one text shaping pass per cell).
+- Collapsed table borders (`border-collapse: collapse`) are resolved per CSS 2.1 §17.6.2.1: the wider border wins, then double > solid > dashed > dotted, then the upper / left cell (right in RTL). Before, a cell's top and left borders were always dropped below the first row and column, even when they were thicker. Borders on `<tr>`, `<thead>`, `<tbody>` and `<tfoot>`, which were never painted, now apply to the cells along them.
 - Most CSS colours were ignored (text fell back to black, backgrounds were not painted): only a dozen lowercase names, `#rgb`/`#rrggbb` and integer `rgb()` were understood. Colours are now parsed by `cssparser` (CSS Color 4): all 148 named colours in any case, `#rgba` / `#rrggbbaa`, `rgb()` with percentages and the space / `/ alpha` syntax, `hsl()` / `hsla()`, `hwb()` and `color(srgb …)`. `currentColor` and the Lab / LCH / Oklab / Oklch spaces are still ignored.
 - `box-shadow` with an `rgba(…)` colour lost its colour (the value was split on the commas inside the function); colour functions with spaces in `border` shorthands were not recognised.
 - `line-height` only worked with absolute lengths: unitless numbers (`1.5`) were read as pixels and replaced by 1.2 × font size, `em`, `%` and `rem` were ignored, and `normal` kept the root's 14.4pt whatever the font size. Numbers and `normal` now inherit as factors and are resolved against each element's own font size; `em` / `%` / `rem` / `calc()` are computed on the declaring element and inherit as lengths (CSS 2.1 §10.8.1). Table row heights are measured with the cell's line height instead of a fixed 1.2.
