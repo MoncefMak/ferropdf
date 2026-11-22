@@ -361,7 +361,7 @@ fn build_tounicode_cmap(
 
 // ── Helpers ──
 
-fn compress_data(data: &[u8]) -> ferropdf_core::Result<Vec<u8>> {
+pub(crate) fn compress_data(data: &[u8]) -> ferropdf_core::Result<Vec<u8>> {
     let mut encoder = ZlibEncoder::new(Vec::new(), Compression::fast());
     encoder
         .write_all(data)
