@@ -211,7 +211,14 @@ class TestResourceExhaustion:
         doc = fitz.open(stream=ferropdf.from_html(html), filetype="pdf")
         assert doc.page_count > 3
         spans = [s for p in doc for b in p.get_text("dict")["blocks"] for l in b.get("lines", []) for s in l["spans"]]
-        assert sum("Bold" in s["font"] for s in spans if "bold" in s["text"]) == 60
+        bold = [s for s in spans if "bold" in s["text"]]
+        regular = {s["font"] for s in spans if s["text"].strip().startswith("w")}
+        # Font names depend on the platform (DejaVuSans-Bold, Helvetica-Bold,
+        # ArialMT-Bold…): check that every bold run kept a font of its own.
+        assert len(bold) == 60
+        assert all(s["font"] not in regular for s in bold), (
+            f"bold runs lost their font: bold={sorted({s['font'] for s in bold})} regular={sorted(regular)}"
+        )
         assert sum(len(p.get_links()) for p in doc) == 60
 
     @pytest.mark.parametrize("colspan", ["100000", "99999999999999999999999", "0", "-3", "2px"])
