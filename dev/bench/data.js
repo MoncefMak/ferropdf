@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795364989491,
+  "lastUpdate": 1795365576461,
   "repoUrl": "https://github.com/MoncefMak/ferropdf",
   "entries": {
     "FastPDF Criterion Benchmarks": [
@@ -3031,6 +3031,52 @@ window.BENCHMARK_DATA = {
             "name": "render_invoice_cached",
             "value": 1264924,
             "range": "± 11141",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "moncef@Moncefs-MacBook-Pro.local",
+            "name": "Moncef"
+          },
+          "committer": {
+            "email": "moncef@Moncefs-MacBook-Pro.local",
+            "name": "Moncef"
+          },
+          "distinct": true,
+          "id": "2ef30e41a178a6b0cd7b9fa77066780508b60eb1",
+          "message": "Merge branch 'fix/table-cells': vertical-align, row heights and collapsed borders",
+          "timestamp": "2026-11-22T17:37:12+01:00",
+          "tree_id": "12a38c0becf26b22be0079fb41b9edc80924b8cd",
+          "url": "https://github.com/MoncefMak/ferropdf/commit/2ef30e41a178a6b0cd7b9fa77066780508b60eb1"
+        },
+        "date": 1795365575936,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "render_simple",
+            "value": 2764995,
+            "range": "± 29254",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice",
+            "value": 3412721,
+            "range": "± 32442",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_simple_cached",
+            "value": 617620,
+            "range": "± 17098",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice_cached",
+            "value": 1172506,
+            "range": "± 9339",
             "unit": "ns/iter"
           }
         ]
