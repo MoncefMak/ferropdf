@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793471132181,
+  "lastUpdate": 1795364989491,
   "repoUrl": "https://github.com/MoncefMak/ferropdf",
   "entries": {
     "FastPDF Criterion Benchmarks": [
@@ -2983,6 +2983,54 @@ window.BENCHMARK_DATA = {
             "name": "render_invoice_cached",
             "value": 726414,
             "range": "± 13748",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "72460183+MoncefMak@users.noreply.github.com",
+            "name": "MoncefMak",
+            "username": "MoncefMak"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "80ccd9080fc8dd6a7b13fbcb5457892ddbcd2924",
+          "message": "Merge pull request #85 from MoncefMak/fix/colors-line-height\n\nfix: parse all CSS colours and resolve line-height per CSS 2.1",
+          "timestamp": "2026-11-22T17:25:36+01:00",
+          "tree_id": "f890b2a9ea696f041d784442af2b229845cb3522",
+          "url": "https://github.com/MoncefMak/ferropdf/commit/80ccd9080fc8dd6a7b13fbcb5457892ddbcd2924"
+        },
+        "date": 1795364989181,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "render_simple",
+            "value": 4249514,
+            "range": "± 210243",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice",
+            "value": 5003658,
+            "range": "± 79489",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_simple_cached",
+            "value": 596958,
+            "range": "± 8535",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice_cached",
+            "value": 1264924,
+            "range": "± 11141",
             "unit": "ns/iter"
           }
         ]
