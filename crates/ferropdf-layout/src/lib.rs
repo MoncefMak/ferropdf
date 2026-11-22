@@ -1,3 +1,4 @@
+mod collapse;
 pub mod style_to_taffy;
 pub mod table_layout;
 mod taffy_bridge;
@@ -56,6 +57,7 @@ pub fn layout_element(
     let mut tree = taffy_bridge::build_layout_from(document, styles, font_system, node, width)?;
     if let Some(ref mut root) = tree.root {
         populate_shaped_lines(root, font_system);
+        align_table_cells(root);
     }
     Ok(tree.root)
 }
@@ -86,9 +88,73 @@ pub fn layout_with_font_system(
     // This is the SINGLE SOURCE OF TRUTH for line breaks — pdf.rs must not re-wrap.
     if let Some(ref mut root) = tree.root {
         populate_shaped_lines(root, font_system);
+        // Needs the final line boxes, so it runs after shaping.
+        align_table_cells(root);
     }
 
     Ok(tree)
+}
+
+/// `vertical-align` of table cells (CSS 2.1 §17.5.3): cells are stretched to
+/// their row's height, so `middle` / `bottom` move the cell's content down
+/// inside its content box by half / all of the unused height.
+fn align_table_cells(lb: &mut LayoutBox) {
+    for child in &mut lb.children {
+        align_table_cells(child);
+    }
+    if lb.style.display != Display::TableCell {
+        return;
+    }
+    let free = lb.content.height - cell_content_height(lb);
+    let dy = match lb.style.vertical_align {
+        ferropdf_core::VerticalAlign::Middle => free / 2.0,
+        ferropdf_core::VerticalAlign::Bottom => free,
+        ferropdf_core::VerticalAlign::Top | ferropdf_core::VerticalAlign::Baseline => 0.0,
+    };
+    if dy < 0.01 {
+        return; // nothing to move, or content taller than the cell
+    }
+    // The cell's own line boxes are relative to its content box; its
+    // children carry absolute coordinates.
+    for line in &mut lb.shaped_lines {
+        line.y += dy;
+    }
+    for child in &mut lb.children {
+        translate_y(child, dy);
+    }
+}
+
+/// Height of a cell's in-flow content, measured from the top of its content box.
+fn cell_content_height(cell: &LayoutBox) -> f32 {
+    let top = cell.content.y;
+    // `ShapedLine::y` is a baseline. Before pagination the first line box
+    // starts at the top of the content box, so the lines end one line height
+    // below the last baseline's offset from the first.
+    let lines_bottom = |b: &LayoutBox| match (b.shaped_lines.first(), b.shaped_lines.last()) {
+        (Some(first), Some(last)) => Some(b.content.y + (last.y - first.y) + b.style.line_height),
+        _ => None,
+    };
+    let mut bottom = lines_bottom(cell).unwrap_or(top);
+    // Inline children merged into the cell's own lines keep the block rects
+    // Taffy gave them, which stack up: the merged lines are the content.
+    if !cell.inline_spans.is_empty() {
+        return (bottom - top).max(0.0);
+    }
+    for c in cell.children.iter().filter(|c| !c.out_of_flow) {
+        bottom = bottom.max(c.rect.y + c.rect.height + c.margin.bottom);
+        if let Some(b) = lines_bottom(c) {
+            bottom = bottom.max(b);
+        }
+    }
+    (bottom - top).max(0.0)
+}
+
+fn translate_y(b: &mut LayoutBox, dy: f32) {
+    b.rect.y += dy;
+    b.content.y += dy;
+    for c in &mut b.children {
+        translate_y(c, dy);
+    }
 }
 
 /// Walk the LayoutBox tree and populate `shaped_lines` for each text node
@@ -347,5 +413,76 @@ mod white_space_tests {
         ];
         trim_collapsible_edges(&mut s);
         assert_eq!(texts(&s), ["a", " ", "b"]);
+    }
+}
+
+#[cfg(test)]
+mod vertical_align_tests {
+    use super::*;
+    use ferropdf_core::{ComputedStyle, Rect, ShapedLine, VerticalAlign};
+
+    /// A table cell whose content box is 100pt tall at y=10, holding one
+    /// 20pt-tall block child at the top.
+    fn cell(va: VerticalAlign) -> LayoutBox {
+        let child = LayoutBox {
+            rect: Rect::new(0.0, 10.0, 50.0, 20.0),
+            content: Rect::new(0.0, 10.0, 50.0, 20.0),
+            ..Default::default()
+        };
+        LayoutBox {
+            style: ComputedStyle {
+                display: Display::TableCell,
+                vertical_align: va,
+                ..Default::default()
+            },
+            rect: Rect::new(0.0, 0.0, 50.0, 120.0),
+            content: Rect::new(0.0, 10.0, 50.0, 100.0),
+            children: vec![child],
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn middle_and_bottom_move_the_content() {
+        for (va, dy) in [
+            (VerticalAlign::Top, 0.0),
+            (VerticalAlign::Baseline, 0.0),
+            (VerticalAlign::Middle, 40.0),
+            (VerticalAlign::Bottom, 80.0),
+        ] {
+            let mut c = cell(va);
+            align_table_cells(&mut c);
+            assert!((c.children[0].rect.y - (10.0 + dy)).abs() < 0.01, "{va:?}");
+            assert!((c.rect.y).abs() < 0.01, "the cell itself stays put");
+        }
+    }
+
+    #[test]
+    fn own_lines_are_measured_from_their_baselines() {
+        // Two 12pt lines (baselines 9.6 and 21.6) directly in the cell.
+        let mut c = cell(VerticalAlign::Middle);
+        c.children.clear();
+        c.style.line_height = 12.0;
+        c.shaped_lines = [9.6, 21.6]
+            .into_iter()
+            .map(|y| ShapedLine {
+                glyphs: Vec::new(),
+                width: 10.0,
+                y,
+                text: String::new(),
+                segments: Vec::new(),
+            })
+            .collect();
+        assert!((cell_content_height(&c) - 24.0).abs() < 0.01);
+        align_table_cells(&mut c);
+        assert!((c.shaped_lines[0].y - (9.6 + 38.0)).abs() < 0.01);
+    }
+
+    #[test]
+    fn overflowing_content_is_not_moved_up() {
+        let mut c = cell(VerticalAlign::Bottom);
+        c.children[0].rect.height = 150.0;
+        align_table_cells(&mut c);
+        assert!((c.children[0].rect.y - 10.0).abs() < 0.01);
     }
 }

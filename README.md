@@ -282,6 +282,11 @@ every row is a test that renders a snippet and checks the PDF, and every ❌ row
 | Layout | `inline-block` shrink-to-fit next to text | ✅ Supported |
 | Layout | `inline-block` padding around its label | ✅ Supported |
 | Layout | Tables with `colspan` | ✅ Supported |
+| Layout | Table cell `vertical-align` (`middle` by default) | ✅ Supported |
+| Layout | HTML `valign` on rows and cells | ✅ Supported |
+| Layout | Row grows to its tallest cell (explicit `height`, blocks) | ✅ Supported |
+| Visual | Collapsed borders: the wider border wins | ✅ Supported |
+| Visual | Borders on `<tr>` / `<thead>` / `<tbody>` (collapsed tables) | ✅ Supported |
 | Layout | `direction: rtl` mirrors table / grid columns | ✅ Supported |
 | Layout | `position: absolute` | ✅ Supported |
 | Layout | `float` (text beside a floated box) | ✅ Supported |

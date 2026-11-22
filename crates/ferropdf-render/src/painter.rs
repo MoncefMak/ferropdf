@@ -419,19 +419,11 @@ fn emit_text_decoration(
 fn paint_borders(layout_box: &LayoutBox, ops: &mut Vec<DrawOp>, rect: Rect, radii: Radii) {
     let style = &layout_box.style;
 
-    // border-collapse: suppress duplicate inner borders for table cells.
-    // For collapsed cells, only draw top border if on first row,
-    // and only draw left border if in first column.
+    // border-collapse: shared edges were resolved at layout time
+    // (`ferropdf_layout::collapse`), which cleared the losing side of each
+    // pair, so every side left on a cell is painted.
     let collapse = style.border_collapse == BorderCollapse::Collapse;
-    let (skip_top, skip_left) = if collapse {
-        if let Some((row, col, _total_rows, _total_cols)) = layout_box.table_cell_pos {
-            (row > 0, col > 0)
-        } else {
-            (false, false)
-        }
-    } else {
-        (false, false)
-    };
+    let (skip_top, skip_left) = (false, false);
 
     // Rounded corners with a uniform border: one rounded path for all sides.
     let sides = [

@@ -26,9 +26,7 @@ use taffy::{
 #[derive(Debug)]
 pub struct TableLayoutResult {
     pub column_widths: Vec<f32>,
-    pub row_heights: Vec<f32>,
     pub total_width: f32,
-    pub total_height: f32,
     pub taffy_columns: Vec<TrackSizingFunction>,
     pub taffy_rows: Vec<TrackSizingFunction>,
 }
@@ -71,9 +69,7 @@ pub fn compute_table_layout(
     if cell_rows.is_empty() {
         return TableLayoutResult {
             column_widths: vec![],
-            row_heights: vec![],
             total_width: 0.0,
-            total_height: 0.0,
             taffy_columns: vec![],
             taffy_rows: vec![],
         };
@@ -97,22 +93,17 @@ pub fn compute_table_layout(
     );
     log::debug!("[TABLE] column_widths={:?}", column_widths);
 
-    // Phase 2: compute row heights (colspan-aware)
-    let row_heights =
-        compute_row_heights_with_colspan(&cell_rows, &column_widths, doc, styles, font_system);
-
     let total_width: f32 = column_widths.iter().sum();
-    let total_height: f32 = row_heights.iter().sum();
 
-    // Phase 3: build Taffy tracks
+    // Phase 2: Taffy tracks. Row heights are left to Taffy, which sizes each
+    // row from its cells' actual content (text, images, nested tables,
+    // explicit `height`) instead of a text-only estimate.
     let taffy_columns = build_taffy_column_tracks(&column_widths);
-    let taffy_rows = build_taffy_row_tracks(&row_heights);
+    let taffy_rows = build_taffy_row_tracks(cell_rows.len());
 
     TableLayoutResult {
         column_widths,
-        row_heights,
         total_width,
-        total_height,
         taffy_columns,
         taffy_rows,
     }
@@ -256,51 +247,8 @@ fn compute_column_widths_with_colspan(
     widths
 }
 
-fn compute_row_heights_with_colspan(
-    cell_rows: &[Vec<CellInfo>],
-    column_widths: &[f32],
-    doc: &Document,
-    styles: &StyleTree,
-    font_system: &mut FontSystem,
-) -> Vec<f32> {
-    cell_rows
-        .iter()
-        .map(|row| {
-            let mut effective_col = 0;
-            row.iter()
-                .map(|cell| {
-                    let text = collect_text_content(doc, cell.node_id);
-                    let style = styles.get(&cell.node_id).cloned().unwrap_or_default();
-                    // Cell width is the sum of spanned column widths
-                    let end_col = (effective_col + cell.colspan).min(column_widths.len());
-                    let cell_width: f32 = column_widths[effective_col..end_col].iter().sum();
-                    effective_col = end_col;
-
-                    let font_size = style.font_size;
-                    let font_family = style
-                        .font_family
-                        .first()
-                        .cloned()
-                        .unwrap_or_else(|| "sans-serif".to_string());
-                    let padding_v = resolve_px(&style.padding[0]) + resolve_px(&style.padding[2]);
-                    let padding_h = resolve_px(&style.padding[1]) + resolve_px(&style.padding[3]);
-                    let content_width = (cell_width - padding_h).max(0.0);
-                    measure_text_height(
-                        &text,
-                        content_width,
-                        font_size,
-                        style.line_height,
-                        &font_family,
-                        font_system,
-                    ) + padding_v
-                })
-                .fold(0.0_f32, f32::max)
-        })
-        .collect()
-}
-
 // =============================================================================
-// PHASE 3 — CONSTRUCTION DES TRACK SIZING FUNCTIONS TAFFY
+// PHASE 2 — CONSTRUCTION DES TRACK SIZING FUNCTIONS TAFFY
 // =============================================================================
 
 pub fn build_taffy_column_tracks(column_widths: &[f32]) -> Vec<TrackSizingFunction> {
@@ -315,16 +263,16 @@ pub fn build_taffy_column_tracks(column_widths: &[f32]) -> Vec<TrackSizingFuncti
         .collect()
 }
 
-pub fn build_taffy_row_tracks(row_heights: &[f32]) -> Vec<TrackSizingFunction> {
-    row_heights
-        .iter()
-        .map(|&h| {
-            TrackSizingFunction::Single(MinMax {
-                min: MinTrackSizingFunction::Fixed(LengthPercentage::Length(h)),
-                max: MaxTrackSizingFunction::Auto,
-            })
-        })
-        .collect()
+/// One `auto` track per row: as tall as the row's tallest cell (CSS 2.1
+/// §17.5.3), measured by Taffy from the cells' laid-out content.
+pub fn build_taffy_row_tracks(row_count: usize) -> Vec<TrackSizingFunction> {
+    vec![
+        TrackSizingFunction::Single(MinMax {
+            min: MinTrackSizingFunction::Auto,
+            max: MaxTrackSizingFunction::Auto,
+        });
+        row_count
+    ]
 }
 
 // =============================================================================
@@ -398,27 +346,6 @@ fn measure_min_content_width(
         .layout_runs()
         .map(|run| run.line_w)
         .fold(0.0_f32, f32::max)
-}
-
-fn measure_text_height(
-    text: &str,
-    available_width: f32,
-    font_size: f32,
-    line_height: f32,
-    font_family: &str,
-    font_system: &mut FontSystem,
-) -> f32 {
-    if text.is_empty() {
-        return line_height;
-    }
-    let mut buffer = Buffer::new(font_system, Metrics::new(font_size, line_height));
-    buffer.set_wrap(font_system, Wrap::Word);
-    buffer.set_size(font_system, Some(available_width), None);
-    let attrs = Attrs::new().family(Family::Name(font_family));
-    buffer.set_text(font_system, text, attrs, Shaping::Advanced);
-    buffer.shape_until_scroll(font_system, false);
-    let num_lines = buffer.layout_runs().count().max(1);
-    num_lines as f32 * line_height
 }
 
 // =============================================================================
@@ -699,8 +626,7 @@ mod tests {
 
     #[test]
     fn taffy_row_tracks_emit_one_per_row() {
-        let heights = [20.0, 30.0, 40.0, 50.0];
-        let tracks = build_taffy_row_tracks(&heights);
+        let tracks = build_taffy_row_tracks(4);
         assert_eq!(tracks.len(), 4);
     }
 

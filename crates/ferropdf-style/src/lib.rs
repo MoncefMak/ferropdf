@@ -124,6 +124,17 @@ fn resolve_recursive(
         // `a { text-decoration: none }`).
         compute::apply_tag_defaults(&mut style, node.tag());
 
+        // HTML `valign` on rows, cells and row groups: a presentational hint,
+        // so it sits below every author rule.
+        if matches!(
+            node.tag(),
+            Some("td" | "th" | "tr" | "tbody" | "thead" | "tfoot")
+        ) {
+            if let Some(v) = node.attr("valign").and_then(cascade::parse_vertical_align) {
+                style.vertical_align = v;
+            }
+        }
+
         // Match stylesheet rules using the selectors crate
         let mut scored = matching::match_node(doc, node_id, rules, nth_cache);
 

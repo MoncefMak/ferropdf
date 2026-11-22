@@ -12,6 +12,7 @@ pub fn inherit_from(parent: &ComputedStyle) -> ComputedStyle {
         line_height: parent.line_height,
         line_height_spec: parent.line_height_spec,
         text_align: parent.text_align,
+        vertical_align: parent.vertical_align,
         text_decoration: parent.text_decoration.clone(),
         letter_spacing: parent.letter_spacing,
         word_spacing: parent.word_spacing,

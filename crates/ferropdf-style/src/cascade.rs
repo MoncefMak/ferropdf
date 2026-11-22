@@ -498,6 +498,11 @@ fn apply_single(
                 style.line_height_spec = lh;
             }
         }
+        CssProperty::VerticalAlign => {
+            if let Some(v) = parse_vertical_align(raw) {
+                style.vertical_align = v;
+            }
+        }
         CssProperty::TextAlign => {
             if let Some(a) = match raw {
                 "start" => Some(TextAlign::Start),
@@ -737,6 +742,18 @@ fn apply_single(
         }
 
         _ => {} // Unknown or not yet handled
+    }
+}
+
+/// `vertical-align` keywords that apply to table cells. Inline-only values
+/// (`sub`, `super`, `text-top`, lengths…) are ignored.
+pub(crate) fn parse_vertical_align(raw: &str) -> Option<VerticalAlign> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "baseline" => Some(VerticalAlign::Baseline),
+        "top" => Some(VerticalAlign::Top),
+        "middle" | "center" => Some(VerticalAlign::Middle),
+        "bottom" => Some(VerticalAlign::Bottom),
+        _ => None,
     }
 }
 
