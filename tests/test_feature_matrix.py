@@ -463,17 +463,26 @@ def _fills(d: Doc) -> set[tuple[int, int, int]]:
     return {tuple(round(c * 255) for c in dr["fill"]) for dr in d.drawings() if dr.get("fill")}
 
 
+def _close(got: list[int], want: int) -> bool:
+    """One colour, each channel within 1 of `want`: extractors round 127.5 differently."""
+    if len(got) != 1:
+        return False
+    return all(abs(((got[0] >> s) & 255) - ((want >> s) & 255)) <= 1 for s in (16, 8, 0))
+
+
 def chk_named_colors():
     for css, want in [("navy", 0x000080), ("teal", 0x008080), ("darkred", 0x8B0000),
                       ("Red", 0xFF0000), ("rebeccapurple", 0x663399)]:
-        assert _text_colors(Doc(wrap(f'<p style="color:{css}">X</p>'))) == [want], css
+        got = _text_colors(Doc(wrap(f'<p style="color:{css}">X</p>')))
+        assert _close(got, want), (css, got)
     assert (211, 211, 211) in _fills(Doc(wrap('<div style="background:lightgray;height:20px"></div>')))
 
 
 def chk_color_functions():
     for css, want in [("hsl(120, 100%, 25%)", 0x008000), ("rgb(100% 0% 0%)", 0xFF0000),
                       ("#f00f", 0xFF0000), ("hwb(240 0% 0%)", 0x0000FF)]:
-        assert _text_colors(Doc(wrap(f'<p style="color:{css}">X</p>'))) == [want], css
+        got = _text_colors(Doc(wrap(f'<p style="color:{css}">X</p>')))
+        assert _close(got, want), (css, got)
 
 
 def chk_box_shadow_rgba():

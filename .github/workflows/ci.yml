@@ -17,6 +17,11 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ["3.8", "3.11", "3.12", "3.13"]
+        exclude:
+          # ubuntu-latest (26.04) no longer ships Python 3.8; 3.8 stays
+          # covered on macOS and Windows.
+          - os: ubuntu-latest
+            python-version: "3.8"
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
