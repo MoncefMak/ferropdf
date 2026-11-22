@@ -491,10 +491,11 @@ fn apply_single(
             };
         }
         CssProperty::LineHeight => {
-            if let Some(pt) = parse_length_to_pt(raw) {
-                style.line_height = pt;
-            } else if let Ok(factor) = raw.parse::<f32>() {
-                style.line_height = factor * style.font_size;
+            // Only the specified value is recorded here: it is resolved
+            // against the element's final font size in `resolve_units`, so
+            // `line-height: 1.5; font-size: 20pt` works in either order.
+            if let Some(lh) = parse_line_height(raw) {
+                style.line_height_spec = lh;
             }
         }
         CssProperty::TextAlign => {
@@ -736,6 +737,32 @@ fn apply_single(
         }
 
         _ => {} // Unknown or not yet handled
+    }
+}
+
+/// `line-height`: `normal | <number> | <length> | <percentage>`. Negative and
+/// unparsable values are invalid (`None`) and leave the property unchanged.
+fn parse_line_height(raw: &str) -> Option<LineHeight> {
+    let raw = raw.trim();
+    if raw.eq_ignore_ascii_case("normal") {
+        return Some(LineHeight::Normal);
+    }
+    if let Ok(n) = raw.parse::<f32>() {
+        return (n.is_finite() && n >= 0.0).then_some(LineHeight::Number(n));
+    }
+    match parse_length(raw) {
+        Length::Auto | Length::None => None,
+        Length::Px(v)
+        | Length::Pt(v)
+        | Length::Mm(v)
+        | Length::Em(v)
+        | Length::Rem(v)
+        | Length::Percent(v)
+            if v < 0.0 =>
+        {
+            None
+        }
+        l => Some(LineHeight::Length(l)),
     }
 }
 
@@ -1006,53 +1033,69 @@ pub(crate) fn parse_length_to_pt(s: &str) -> Option<f32> {
     s.parse::<f32>().ok().map(|v| v * 0.75)
 }
 
+/// Parse a CSS `<color>` with `cssparser`'s CSS Color 4 parser: the 148 named
+/// colours (case-insensitive), `#rgb` / `#rgba` / `#rrggbb` / `#rrggbbaa`,
+/// `rgb()` / `rgba()` with numbers or percentages, legacy (comma) and modern
+/// (space, `/ alpha`) syntax, `hsl()` / `hsla()`, `hwb()` and `color(srgb …)`.
+///
+/// Returns `None` for anything that is not a single colour value — callers
+/// rely on that to tell colours apart from the other words of a shorthand —
+/// and for colours ferropdf cannot resolve here: `currentColor` (no element
+/// context) and the Lab / LCH / Oklab / Oklch spaces.
 pub(crate) fn parse_color(s: &str) -> Option<Color> {
     let s = s.trim();
-    match s {
-        "transparent" => Some(Color::transparent()),
-        "black" => Some(Color::black()),
-        "white" => Some(Color::white()),
-        "red" => Some(Color::from_rgb8(255, 0, 0)),
-        "green" => Some(Color::from_rgb8(0, 128, 0)),
-        "blue" => Some(Color::from_rgb8(0, 0, 255)),
-        "gray" | "grey" => Some(Color::from_rgb8(128, 128, 128)),
-        "orange" => Some(Color::from_rgb8(255, 165, 0)),
-        "yellow" => Some(Color::from_rgb8(255, 255, 0)),
-        "purple" => Some(Color::from_rgb8(128, 0, 128)),
-        _ if s.starts_with('#') => Color::from_hex(s),
-        _ if s.starts_with("rgb") => parse_rgb_function(s),
+    if s.is_empty() {
+        return None;
+    }
+    let mut input = cssparser::ParserInput::new(s);
+    let mut parser = cssparser::Parser::new(&mut input);
+    let parsed = parser.parse_entirely(cssparser::Color::parse).ok()?;
+    css_color_to_rgba(parsed)
+}
+
+fn css_color_to_rgba(c: cssparser::Color) -> Option<Color> {
+    use cssparser::Color as C;
+    // `none` components resolve to 0 (CSS Color 4 §4.4); alpha defaults to 1.
+    let alpha = |a: Option<f32>| a.unwrap_or(1.0).clamp(0.0, 1.0);
+    match c {
+        C::Rgba(rgba) => Some(Color::new(
+            rgba.red.unwrap_or(0) as f32 / 255.0,
+            rgba.green.unwrap_or(0) as f32 / 255.0,
+            rgba.blue.unwrap_or(0) as f32 / 255.0,
+            alpha(rgba.alpha),
+        )),
+        C::Hsl(hsl) => {
+            let (r, g, b) = cssparser::hsl_to_rgb(
+                hsl.hue.unwrap_or(0.0) / 360.0,
+                hsl.saturation.unwrap_or(0.0),
+                hsl.lightness.unwrap_or(0.0),
+            );
+            Some(Color::new(r, g, b, alpha(hsl.alpha)))
+        }
+        C::Hwb(hwb) => {
+            let (r, g, b) = cssparser::hwb_to_rgb(
+                hwb.hue.unwrap_or(0.0) / 360.0,
+                hwb.whiteness.unwrap_or(0.0),
+                hwb.blackness.unwrap_or(0.0),
+            );
+            Some(Color::new(r, g, b, alpha(hwb.alpha)))
+        }
+        C::ColorFunction(f) if f.color_space == cssparser::PredefinedColorSpace::Srgb => {
+            let unit = |v: Option<f32>| v.unwrap_or(0.0).clamp(0.0, 1.0);
+            Some(Color::new(
+                unit(f.c1),
+                unit(f.c2),
+                unit(f.c3),
+                alpha(f.alpha),
+            ))
+        }
         _ => None,
     }
 }
 
-fn parse_rgb_function(s: &str) -> Option<Color> {
-    let inner = s
-        .trim_start_matches("rgba(")
-        .trim_start_matches("rgb(")
-        .trim_end_matches(')');
-    let parts: Vec<&str> = inner.split([',', ' ']).filter(|s| !s.is_empty()).collect();
-    if parts.len() >= 3 {
-        let r = parts[0].trim().parse::<u8>().ok()?;
-        let g = parts[1].trim().parse::<u8>().ok()?;
-        let b = parts[2].trim().parse::<u8>().ok()?;
-        if parts.len() >= 4 {
-            let a = parts[3].trim().parse::<f32>().ok().unwrap_or(1.0);
-            Some(Color::new(
-                r as f32 / 255.0,
-                g as f32 / 255.0,
-                b as f32 / 255.0,
-                a,
-            ))
-        } else {
-            Some(Color::from_rgb8(r, g, b))
-        }
-    } else {
-        None
-    }
-}
-
 fn parse_border_shorthand(s: &str) -> BorderSide {
-    let parts: Vec<&str> = s.split_whitespace().collect();
+    // Split on top-level whitespace so `hsl(120 100% 25%)` stays one word.
+    let parts = crate::gradient::split_top_level(s, char::is_whitespace);
     let mut side = BorderSide::default();
 
     for part in &parts {
@@ -1175,6 +1218,93 @@ mod tests {
         assert!((c.a - 0.5).abs() < 0.01);
     }
 
+    fn rgba8(c: Color) -> (u8, u8, u8, u8) {
+        let q = |v: f32| (v * 255.0).round() as u8;
+        (q(c.r), q(c.g), q(c.b), q(c.a))
+    }
+
+    #[test]
+    fn parse_line_height_forms() {
+        assert_eq!(parse_line_height("normal"), Some(LineHeight::Normal));
+        assert_eq!(parse_line_height("1.45"), Some(LineHeight::Number(1.45)));
+        assert_eq!(parse_line_height("0"), Some(LineHeight::Number(0.0)));
+        assert_eq!(
+            parse_line_height("1.5em"),
+            Some(LineHeight::Length(Length::Em(1.5)))
+        );
+        assert_eq!(
+            parse_line_height("150%"),
+            Some(LineHeight::Length(Length::Percent(150.0)))
+        );
+        assert_eq!(
+            parse_line_height("18px"),
+            Some(LineHeight::Length(Length::Px(18.0)))
+        );
+        for bad in ["-1", "-2px", "auto", "abc", ""] {
+            assert_eq!(parse_line_height(bad), None, "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn parse_color_css4_forms() {
+        let cases = [
+            ("navy", (0, 0, 128, 255)),
+            ("whitesmoke", (245, 245, 245, 255)),
+            ("rebeccapurple", (102, 51, 153, 255)),
+            ("Red", (255, 0, 0, 255)),
+            ("LIGHTGRAY", (211, 211, 211, 255)),
+            ("#f008", (255, 0, 0, 136)),
+            ("#00800080", (0, 128, 0, 128)),
+            ("rgb(100%, 0%, 0%)", (255, 0, 0, 255)),
+            ("rgb(255 0 0 / 50%)", (255, 0, 0, 128)),
+            ("rgba(255,0,0,50%)", (255, 0, 0, 128)),
+            ("hsl(120, 100%, 25%)", (0, 128, 0, 255)),
+            ("hsl(120deg 100% 25% / .5)", (0, 128, 0, 128)),
+            ("hsla(0, 100%, 50%, 0.5)", (255, 0, 0, 128)),
+            ("hwb(0 0% 0%)", (255, 0, 0, 255)),
+            ("color(srgb 0 0 1)", (0, 0, 255, 255)),
+            ("transparent", (0, 0, 0, 0)),
+        ];
+        for (css, want) in cases {
+            let got = parse_color(css).unwrap_or_else(|| panic!("{css} not parsed"));
+            assert_eq!(rgba8(got), want, "{css}");
+        }
+    }
+
+    #[test]
+    fn parse_color_rejects_non_colours() {
+        // Shorthand parsers try every word as a colour: these must not match.
+        for s in [
+            "solid",
+            "1px",
+            "none",
+            "inset",
+            "",
+            "red blue",
+            "currentColor",
+        ] {
+            assert_eq!(parse_color(s), None, "{s:?}");
+        }
+    }
+
+    #[test]
+    fn border_shorthand_with_colour_function() {
+        let side = parse_border_shorthand("2px solid hsl(120 100% 25%)");
+        assert_eq!(side.style, BorderStyle::Solid);
+        assert!((side.width - 1.5).abs() < 0.01);
+        assert_eq!(rgba8(side.color), (0, 128, 0, 255));
+    }
+
+    #[test]
+    fn box_shadow_with_comma_colour() {
+        let shadows = parse_box_shadows("0 2px 4px rgba(255,0,0,.5), inset 1px 1px #00f");
+        assert_eq!(shadows.len(), 2);
+        assert_eq!(rgba8(shadows[0].color), (255, 0, 0, 128));
+        assert!((shadows[0].blur_radius - 3.0).abs() < 0.01);
+        assert!(shadows[1].inset);
+        assert_eq!(rgba8(shadows[1].color), (0, 0, 255, 255));
+    }
+
     #[test]
     fn apply_display_block() {
         let mut style = ComputedStyle::default();
@@ -1281,7 +1411,9 @@ mod tests {
 /// Supports: `<offset-x> <offset-y> [blur] [spread] [color] [inset]`
 /// Multiple shadows separated by commas.
 fn parse_box_shadows(raw: &str) -> Vec<BoxShadow> {
-    raw.split(',')
+    // Top-level commas only: `rgba(0,0,0,.2)` must not split one shadow in four.
+    crate::gradient::split_top_level(raw, |c| c == ',')
+        .into_iter()
         .filter_map(|shadow_str| parse_single_box_shadow(shadow_str.trim()))
         .collect()
 }
@@ -1295,21 +1427,8 @@ fn parse_single_box_shadow(raw: &str) -> Option<BoxShadow> {
     let mut color = Color::new(0.0, 0.0, 0.0, 0.3); // default semi-transparent black
     let mut inset = false;
 
-    // Handle rgba(...) or rgb(...) by collecting them first
-    let mut s = raw.to_string();
-    // Extract color functions (rgb/rgba/hsl) before splitting by whitespace
-    if let Some(start) = s.find("rgb") {
-        if let Some(end) = s[start..].find(')') {
-            let color_str = &s[start..start + end + 1];
-            if let Some(c) = parse_color(color_str) {
-                color = c;
-            }
-            s = format!("{} {}", &s[..start], &s[start + end + 1..]);
-        }
-    }
-
-    let parts: Vec<&str> = s.split_whitespace().collect();
-    for part in &parts {
+    // Top-level whitespace keeps colour functions (`rgb(0 0 0 / .2)`) in one word.
+    for part in &crate::gradient::split_top_level(raw, char::is_whitespace) {
         if part.eq_ignore_ascii_case("inset") {
             inset = true;
         } else if let Some(pt) = parse_length_to_pt(part) {

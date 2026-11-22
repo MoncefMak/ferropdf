@@ -285,8 +285,14 @@ fn compute_row_heights_with_colspan(
                     let padding_v = resolve_px(&style.padding[0]) + resolve_px(&style.padding[2]);
                     let padding_h = resolve_px(&style.padding[1]) + resolve_px(&style.padding[3]);
                     let content_width = (cell_width - padding_h).max(0.0);
-                    measure_text_height(&text, content_width, font_size, &font_family, font_system)
-                        + padding_v
+                    measure_text_height(
+                        &text,
+                        content_width,
+                        font_size,
+                        style.line_height,
+                        &font_family,
+                        font_system,
+                    ) + padding_v
                 })
                 .fold(0.0_f32, f32::max)
         })
@@ -398,13 +404,13 @@ fn measure_text_height(
     text: &str,
     available_width: f32,
     font_size: f32,
+    line_height: f32,
     font_family: &str,
     font_system: &mut FontSystem,
 ) -> f32 {
     if text.is_empty() {
-        return font_size * 1.2;
+        return line_height;
     }
-    let line_height = font_size * 1.2;
     let mut buffer = Buffer::new(font_system, Metrics::new(font_size, line_height));
     buffer.set_wrap(font_system, Wrap::Word);
     buffer.set_size(font_system, Some(available_width), None);

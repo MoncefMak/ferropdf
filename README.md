@@ -260,6 +260,9 @@ every row is a test that renders a snippet and checks the PDF, and every ❌ row
 | Text | Whitespace collapsing (`white-space: normal`) | ✅ Supported |
 | Text | `white-space: pre` | ✅ Supported |
 | Text | `white-space: nowrap` | ✅ Supported |
+| Text | Unitless `line-height` (inherited as a factor) | ✅ Supported |
+| Text | `line-height` in `em` / `%` / `rem` | ✅ Supported |
+| Text | `line-height: normal` follows the font size | ✅ Supported |
 | Text | `letter-spacing` | ✅ Supported |
 | Text | `word-spacing` | ✅ Supported |
 | Text | Letter spacing taken into account by line breaking | ✅ Supported |
@@ -288,6 +291,9 @@ every row is a test that renders a snippet and checks the PDF, and every ❌ row
 | Layout | `inline-block` shrink-wraps mixed inline content | ✅ Supported |
 | Visual | `overflow: hidden` with `border-radius` (round clip) | ✅ Supported |
 | Layout | `box-sizing` (content-box default, border-box) | ✅ Supported |
+| Visual | Named colours (all 148, case-insensitive) | ✅ Supported |
+| Visual | `hsl()`, `hwb()`, `rgb()` percentages, 4/8-digit hex | ✅ Supported |
+| Visual | `box-shadow` with an `rgba()` colour | ✅ Supported |
 | Visual | Solid borders | ✅ Supported |
 | Visual | Dashed / dotted borders | ✅ Supported |
 | Visual | Double borders | ✅ Supported |

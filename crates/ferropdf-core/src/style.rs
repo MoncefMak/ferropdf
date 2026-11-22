@@ -74,6 +74,25 @@ pub enum FontStyle {
     Oblique,
 }
 
+/// `line-height` as specified (CSS 2.1 §10.8.1, CSS Inline 3).
+///
+/// `normal` and unitless numbers inherit *as factors* and are re-resolved
+/// against each element's own font size; lengths (`em`, `%`, `rem`, `px`…)
+/// are computed once on the declaring element and inherit as that absolute
+/// value. [`ComputedStyle::line_height`] holds the resolved value in pt.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum LineHeight {
+    #[default]
+    Normal,
+    Number(f32),
+    Length(Length),
+}
+
+impl LineHeight {
+    /// Used value of `line-height: normal`, as a multiple of the font size.
+    pub const NORMAL_FACTOR: f32 = 1.2;
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum TextAlign {
     /// `start` (the initial value): left in LTR, right in RTL.
@@ -539,7 +558,10 @@ pub struct ComputedStyle {
     pub font_size: f32,
     pub font_weight: FontWeight,
     pub font_style: FontStyle,
+    /// Resolved line height in pt (from `line_height_spec` and `font_size`).
     pub line_height: f32,
+    /// Specified `line-height`, kept for inheritance (see [`LineHeight`]).
+    pub line_height_spec: LineHeight,
     pub text_align: TextAlign,
     pub text_decoration: TextDecoration,
     /// `letter-spacing` / `word-spacing`: extra space after each character /
@@ -648,6 +670,7 @@ impl Default for ComputedStyle {
             font_weight: FontWeight::Normal,
             font_style: FontStyle::Normal,
             line_height: 14.4, // 12pt × 1.2 = 14.4pt
+            line_height_spec: LineHeight::Normal,
             text_align: TextAlign::Start,
             text_decoration: TextDecoration::None,
             letter_spacing: Length::Zero,
