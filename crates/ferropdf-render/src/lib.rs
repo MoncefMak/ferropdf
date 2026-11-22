@@ -6,10 +6,12 @@ mod margin_boxes;
 mod navigation;
 mod painter;
 mod pdf;
+mod pdfa;
 mod sandbox;
 
 use ferropdf_core::{PageConfig, PageMargins, PageSize, RenderWarning};
 pub use ferropdf_layout::FontDatabase;
+pub use pdfa::{AfRelationship, Attachment, FacturX, FacturXProfile, PdfVariant};
 
 /// Default upper bound on HTML input size (10 MiB). Renders larger than this
 /// are rejected early to limit memory amplification under adversarial input.
@@ -31,6 +33,34 @@ pub struct RenderOptions {
     /// the narrow layout of responsive frameworks; set e.g. `1200` for their
     /// desktop layout. Layout itself always uses the page width.
     pub viewport_width: Option<f32>,
+    /// Plain PDF (default), PDF/A-2b or PDF/A-3b.
+    pub pdf_variant: PdfVariant,
+    /// Files embedded in the PDF (PDF/A-3b or plain PDF).
+    pub attachments: Vec<Attachment>,
+    /// Factur-X / ZUGFeRD invoice XML; implies PDF/A-3b.
+    pub factur_x: Option<FacturX>,
+}
+
+impl Default for RenderOptions {
+    fn default() -> Self {
+        Self {
+            page_size: "A4".to_string(),
+            margin: "20mm".to_string(),
+            base_url: None,
+            title: None,
+            author: None,
+            max_html_bytes: None,
+            viewport_width: None,
+            pdf_variant: PdfVariant::Standard,
+            attachments: Vec::new(),
+            factur_x: None,
+        }
+    }
+}
+
+/// Check the PDF/A, attachment and Factur-X options without rendering.
+pub fn validate_options(opts: &RenderOptions) -> ferropdf_core::Result<()> {
+    pdfa::Plan::new(opts.pdf_variant, &opts.attachments, opts.factur_x.as_ref()).map(|_| ())
 }
 
 /// Result of a render operation: PDF bytes + any non-fatal warnings.
@@ -83,7 +113,10 @@ fn render_with_warnings_inner(
     // concurrent renders never contend, and @font-face stays private to it.
     let mut fonts = font_db.session();
 
-    // 0. Reject oversize input early so adversarial HTML can't amplify memory.
+    // 0. Check the PDF/A and attachment options before doing any work.
+    let plan = pdfa::Plan::new(opts.pdf_variant, &opts.attachments, opts.factur_x.as_ref())?;
+
+    // Reject oversize input early so adversarial HTML can't amplify memory.
     let max_html = opts.max_html_bytes.unwrap_or(DEFAULT_MAX_HTML_BYTES);
     if html.len() > max_html {
         return Err(ferropdf_core::FerroError::Layout(format!(
@@ -292,6 +325,7 @@ fn render_with_warnings_inner(
         &display_lists,
         &page_config,
         opts,
+        &plan,
         Some(fonts.db()),
         &mut warnings,
     )?;

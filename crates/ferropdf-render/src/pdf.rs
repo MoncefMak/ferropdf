@@ -57,9 +57,11 @@ pub fn write_pdf(
     pages: &[PageDisplayList],
     config: &PageConfig,
     opts: &RenderOptions,
+    plan: &crate::pdfa::Plan,
     ext_font_db: Option<&fontdb::Database>,
     warnings: &mut Vec<ferropdf_core::RenderWarning>,
 ) -> ferropdf_core::Result<Vec<u8>> {
+    let pdfa = plan.is_pdfa();
     let mut pdf = Pdf::new();
     let mut ref_id = 1u32;
     let mut next_ref = || {
@@ -170,6 +172,14 @@ pub fn write_pdf(
                                 font_cache.insert(key.clone(), Some(pdf_name));
                             }
                             None => {
+                                if pdfa && !text.trim().is_empty() {
+                                    return Err(FerroError::Font(format!(
+                                        "PDF/A requires embedded fonts, but no font file \
+                                         was found for {family_name:?} (bold={bold}, \
+                                         italic={italic}); install it or load it with \
+                                         @font-face"
+                                    )));
+                                }
                                 font_cache.insert(key.clone(), None);
                                 continue;
                             }
@@ -357,12 +367,18 @@ pub fn write_pdf(
     let nav = crate::navigation::collect(pages, &mut next_ref);
     let outline_ref = (!nav.bookmarks.is_empty()).then(&mut next_ref);
 
+    // ── PDF/A metadata, output intent and attachments ──
+    let pdfa_refs = crate::pdfa::Refs::alloc(plan, &mut next_ref);
+
     // Write catalog
     {
         let mut catalog = pdf.catalog(catalog_ref);
         catalog.pages(page_tree_ref);
         if let Some(r) = outline_ref {
             catalog.outlines(r);
+        }
+        if plan.needs_catalog_entries() {
+            crate::pdfa::write_catalog_entries(&mut catalog, plan, &pdfa_refs);
         }
     }
 
@@ -385,9 +401,13 @@ pub fn write_pdf(
         // Resources with fonts and images
         let mut resources = page.resources();
         let mut fonts = resources.fonts();
-        fonts.pair(Name(b"F1"), font_ref);
-        fonts.pair(Name(b"F2"), font_bold_ref);
-        fonts.pair(Name(b"F3"), font_italic_ref);
+        // PDF/A forbids non-embedded fonts even when unused, and the
+        // fallback path is refused above, so the Type1 fonts are left out.
+        if !pdfa {
+            fonts.pair(Name(b"F1"), font_ref);
+            fonts.pair(Name(b"F2"), font_bold_ref);
+            fonts.pair(Name(b"F3"), font_italic_ref);
+        }
         for ef in &embedded_fonts {
             fonts.pair(Name(ef.pdf_name.as_bytes()), ef.type0_ref);
         }
@@ -599,6 +619,15 @@ pub fn write_pdf(
                         // increasing x, which is what PDF show() expects.
                         let mut sorted_glyphs = shaped_glyphs.clone();
                         sorted_glyphs.sort_by(|a, b| a.x.partial_cmp(&b.x).unwrap());
+                        if pdfa {
+                            // PDF/A forbids showing .notdef (ISO 19005-2
+                            // §6.2.11.8). Positions come from x, so the next
+                            // glyph still lands where it was shaped.
+                            sorted_glyphs.retain(|g| g.glyph_id != 0);
+                            if sorted_glyphs.is_empty() {
+                                continue;
+                            }
+                        }
 
                         let base_x = *x;
                         let min_x = sorted_glyphs.first().map(|g| g.x).unwrap_or(0.0);
@@ -705,12 +734,21 @@ pub fn write_pdf(
                             Some(ef) => {
                                 content.set_font(Name(ef.pdf_name.as_bytes()), font_size_pt);
                                 content.next_line(aligned_x, pdf_y);
-                                let encoded = encode_for_cid_font(
+                                let mut encoded = encode_for_cid_font(
                                     line_text,
                                     &ef.original_data,
                                     ef.face_index,
                                     ef.gid_remapping.as_ref(),
                                 );
+                                if pdfa {
+                                    // No .notdef in PDF/A (§6.2.11.8).
+                                    encoded = encoded
+                                        .chunks(2)
+                                        .filter(|c| *c != [0, 0])
+                                        .flatten()
+                                        .copied()
+                                        .collect();
+                                }
                                 content.show(Str(&encoded));
                             }
                             None => {
@@ -927,15 +965,39 @@ pub fn write_pdf(
     crate::navigation::write(&mut pdf, &nav, &page_refs, outline_ref, page_h);
 
     // Write metadata
-    let mut info = pdf.document_info(next_ref());
-    info.producer(TextStr("ferropdf"));
+    const PRODUCER: &str = "ferropdf";
+    let now = crate::pdfa::Timestamp::now();
+    let info_ref = next_ref();
+    let mut info = pdf.document_info(info_ref);
+    info.producer(TextStr(PRODUCER));
     if let Some(ref title) = opts.title {
         info.title(TextStr(title));
     }
     if let Some(ref author) = opts.author {
         info.author(TextStr(author));
     }
+    if pdfa {
+        // Must match xmp:CreateDate / xmp:ModifyDate in the XMP packet.
+        info.creation_date(now.pdf_date());
+        info.modified_date(now.pdf_date());
+    }
     info.finish();
+
+    crate::pdfa::write_objects(
+        &mut pdf,
+        plan,
+        &pdfa_refs,
+        opts.title.as_deref(),
+        opts.author.as_deref(),
+        PRODUCER,
+        now,
+    )?;
+
+    if pdfa {
+        // The trailer /ID is mandatory in PDF/A (ISO 19005-2 §6.1.3).
+        let id = crate::pdfa::file_id(&[pdf.as_bytes(), format!("{now:?}").as_bytes()]);
+        pdf.set_file_id((id.clone(), id));
+    }
 
     Ok(pdf.finish())
 }

@@ -976,6 +976,36 @@ def chk_metadata():
     assert d.doc.metadata["title"] == "T1" and d.doc.metadata["author"] == "A1"
 
 
+_FX_XML = """<rsm:CrossIndustryInvoice xmlns:rsm="urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100"
+ xmlns:ram="urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100">
+<rsm:ExchangedDocumentContext><ram:GuidelineSpecifiedDocumentContextParameter>
+<ram:ID>urn:factur-x.eu:1p0:minimum</ram:ID></ram:GuidelineSpecifiedDocumentContextParameter>
+</rsm:ExchangedDocumentContext></rsm:CrossIndustryInvoice>"""
+
+
+def _xmp(d: Doc) -> str:
+    return d.doc.get_xml_metadata()
+
+
+def chk_pdfa():
+    d = Doc(wrap("<p>x</p>"), pdf_variant="pdf/a-3b")
+    meta = _xmp(d)
+    assert "<pdfaid:part>3</pdfaid:part>" in meta and "<pdfaid:conformance>B" in meta
+    assert "/OutputIntents" in d.doc.xref_object(d.doc.pdf_catalog())
+
+
+def chk_attachments():
+    d = Doc(wrap("<p>x</p>"), attachments=[ferropdf.Attachment("data.csv", "a,b\n1,2\n")])
+    assert d.doc.embfile_names() == ["data.csv"] and d.doc.embfile_get("data.csv") == b"a,b\n1,2\n"
+
+
+def chk_factur_x():
+    d = Doc(wrap("<p>x</p>"), factur_x=_FX_XML)
+    assert d.doc.embfile_names() == ["factur-x.xml"]
+    meta = _xmp(d)
+    assert "<fx:ConformanceLevel>MINIMUM</fx:ConformanceLevel>" in meta and "<pdfaid:part>3" in meta
+
+
 # --------------------------------------------------------------------------- matrix
 
 
@@ -1107,6 +1137,9 @@ FEATURES = [
     Feature("PDF", "Block and image links", chk_link_boxes),
     Feature("PDF", "`javascript:` / `data:` links are not clickable", chk_unsafe_links_dropped),
     Feature("PDF", "Outline / bookmarks (nested `h1`–`h6`)", chk_outline),
+    Feature("PDF", "PDF/A-2b / PDF/A-3b output (`pdf_variant`)", chk_pdfa),
+    Feature("PDF", "File attachments (`Attachment`)", chk_attachments),
+    Feature("PDF", "Factur-X / ZUGFeRD e-invoice (`factur_x`)", chk_factur_x),
 ]
 
 
