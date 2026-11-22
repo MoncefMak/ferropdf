@@ -27,6 +27,11 @@ pub fn apply_tag_defaults(style: &mut ComputedStyle, tag: Option<&str>) {
         | Some("label") => {
             style.display = Display::Inline;
         }
+        // HTML UA rule `thead, tbody, tfoot { vertical-align: middle }`; rows
+        // and cells inherit it (`vertical_align` is inherited in ferropdf).
+        Some("thead") | Some("tbody") | Some("tfoot") => {
+            style.vertical_align = VerticalAlign::Middle;
+        }
         _ => {}
     }
 }

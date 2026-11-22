@@ -677,6 +677,19 @@ fn read_layout(
         }
     }
 
+    // One border per shared edge in the collapsing model, resolved on the
+    // final (mirrored) cell positions.
+    if style.display == FDisplay::Table
+        && style.border_collapse == ferropdf_core::BorderCollapse::Collapse
+    {
+        crate::collapse::resolve_collapsed_borders(
+            &mut children,
+            doc,
+            styles,
+            style.direction == ferropdf_core::Direction::Rtl,
+        );
+    }
+
     let text_content = if node.is_text() {
         node.text
             .as_deref()
