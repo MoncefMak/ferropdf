@@ -471,18 +471,37 @@ fn collect_cell_infos(doc: &Document, row_id: NodeId, styles: &StyleTree) -> Vec
             s.display == FDisplay::TableCell
         })
         .map(|&child_id| {
-            let colspan = doc
-                .get(child_id)
-                .attr("colspan")
-                .and_then(|s| s.parse::<usize>().ok())
-                .unwrap_or(1)
-                .max(1);
+            let colspan = parse_colspan(doc.get(child_id).attr("colspan"));
             CellInfo {
                 node_id: child_id,
                 colspan,
             }
         })
         .collect()
+}
+
+/// Largest `colspan` the HTML spec allows; bigger values are clamped to it.
+const MAX_COLSPAN: usize = 1000;
+
+/// `colspan` per the HTML rules for non-negative integers: leading digits
+/// after optional white space (`"2px"` is 2); absent, invalid or 0 is 1, and
+/// the value is clamped to 1000 (HTML §4.9.11). Unbounded spans made Taffy
+/// allocate a column per unit and panic.
+fn parse_colspan(attr: Option<&str>) -> usize {
+    let digits: String = attr
+        .unwrap_or("")
+        .trim_start()
+        .chars()
+        .take_while(char::is_ascii_digit)
+        .collect();
+    if digits.is_empty() {
+        return 1;
+    }
+    // Only overflow can fail here: more digits than a usize holds.
+    digits
+        .parse::<usize>()
+        .unwrap_or(MAX_COLSPAN)
+        .clamp(1, MAX_COLSPAN)
 }
 
 /// Recursively collect all text content from a subtree.
@@ -595,6 +614,24 @@ mod tests {
             for cell in row {
                 assert_eq!(cell.colspan, 1, "no colspan attribute → colspan=1");
             }
+        }
+    }
+
+    #[test]
+    fn colspan_follows_html_parsing_and_is_clamped() {
+        for (attr, want) in [
+            (None, 1),
+            (Some("2"), 2),
+            (Some(" 3"), 3),
+            (Some("2px"), 2),
+            (Some("0"), 1),
+            (Some("-4"), 1),
+            (Some("abc"), 1),
+            (Some("100000"), 1000),
+            (Some("99999999999999999999999"), 1000),
+            (Some("00000000000000000000000"), 1),
+        ] {
+            assert_eq!(parse_colspan(attr), want, "{attr:?}");
         }
     }
 

@@ -186,6 +186,40 @@ class TestMaxHtmlBytes:
 # ---------------------------------------------------------------------------
 
 
+class TestResourceExhaustion:
+    """Inputs that used to cost super-linear time or crash the layout."""
+
+    def test_long_paragraph_renders_in_linear_time(self):
+        # 200 000 characters in a narrow column: ~10 000 lines over ~150 pages.
+        # Each page used to copy the whole paragraph (15 s here before the
+        # fix, ~0.3 s after). The bound leaves room for slow CI machines.
+        import time
+
+        html = "<p style='width:100px'>" + "abcd " * 40_000 + "</p>"
+        start = time.perf_counter()
+        pdf = ferropdf.from_html(html)
+        elapsed = time.perf_counter() - start
+        assert_pdf(pdf)
+        assert elapsed < 5.0, f"200k-character paragraph took {elapsed:.1f}s"
+
+    def test_rich_paragraph_split_across_pages_keeps_its_styles(self):
+        import fitz
+
+        html = "<style>@page{size:200pt 200pt;margin:10pt}</style><p style='width:150pt'>" + "".join(
+            f"w{i} <b>bold{i}</b> <a href='https://example.com/{i}'>link{i}</a> " for i in range(60)
+        ) + "</p>"
+        doc = fitz.open(stream=ferropdf.from_html(html), filetype="pdf")
+        assert doc.page_count > 3
+        spans = [s for p in doc for b in p.get_text("dict")["blocks"] for l in b.get("lines", []) for s in l["spans"]]
+        assert sum("Bold" in s["font"] for s in spans if "bold" in s["text"]) == 60
+        assert sum(len(p.get_links()) for p in doc) == 60
+
+    @pytest.mark.parametrize("colspan", ["100000", "99999999999999999999999", "0", "-3", "2px"])
+    def test_extreme_colspan_does_not_crash(self, colspan):
+        html = f'<table><tr><td colspan="{colspan}">wide</td></tr><tr><td>a</td><td>b</td></tr></table>'
+        assert_pdf(ferropdf.from_html(html))
+
+
 class TestBackwardsCompat:
     def test_render_with_missing_image_does_not_raise(self):
         """The legacy `engine.render()` must keep working even when assets fail."""
