@@ -25,6 +25,8 @@
 //     y_on_page = y_absolute - page_y_offset
 // =============================================================================
 
+use std::collections::HashMap;
+
 use ferropdf_core::layout::Page;
 use ferropdf_core::{Display, Insets, LayoutBox, PageBreak, PageBreakInside, PageConfig, Rect};
 
@@ -368,6 +370,17 @@ fn fragment_text_box(layout_box: &LayoutBox, ctx: &mut PaginationContext) {
     let orphans = (layout_box.style.orphans as usize).max(1);
     let widows = (layout_box.style.widows as usize).max(1);
 
+    // Everything but the lines, spans and text is cloned once here; each
+    // fragment then copies only its own lines. Cloning the whole box per page
+    // made a long paragraph cost O(lines × pages).
+    let shell = LayoutBox {
+        children: Vec::new(),
+        shaped_lines: Vec::new(),
+        inline_spans: Vec::new(),
+        text_content: None,
+        ..layout_box.clone()
+    };
+
     let mut start = 0usize;
     let mut guard = 0usize;
     while start < n {
@@ -416,8 +429,7 @@ fn fragment_text_box(layout_box: &LayoutBox, ctx: &mut PaginationContext) {
         let is_last = end == n;
         let shift = top_of(start);
 
-        let mut fragment = layout_box.clone();
-        fragment.children.clear();
+        let mut fragment = shell.clone();
         fragment.shaped_lines = lines[start..end]
             .iter()
             .cloned()
@@ -426,6 +438,21 @@ fn fragment_text_box(layout_box: &LayoutBox, ctx: &mut PaginationContext) {
                 l
             })
             .collect();
+        if !layout_box.inline_spans.is_empty() {
+            fragment.inline_spans =
+                take_used_spans(&mut fragment.shaped_lines, &layout_box.inline_spans);
+        }
+        if layout_box.text_content.is_some() {
+            // Only tested for presence by the painter (lines carry the text).
+            fragment.text_content = Some(
+                fragment
+                    .shaped_lines
+                    .iter()
+                    .map(|l| l.text.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            );
+        }
         let content_height = if is_last {
             (layout_box.content.height - shift).max(0.0)
         } else {
@@ -731,6 +758,50 @@ fn place_box_on_current_page(layout_box: &LayoutBox, ctx: &mut PaginationContext
 }
 
 /// Recursively offset all Y coordinates in a LayoutBox tree.
+/// The spans of `spans` that `lines` refer to, renumbered from 0. Segments
+/// and glyphs both carry the span index (`metadata`): the painter matches a
+/// segment to its glyphs by it, so both are rewritten with the same map. A
+/// fragment then carries the styles of its own lines only.
+fn take_used_spans(
+    lines: &mut [ferropdf_core::ShapedLine],
+    spans: &[ferropdf_core::InlineSpan],
+) -> Vec<ferropdf_core::InlineSpan> {
+    let mut remap: HashMap<usize, usize> = HashMap::new();
+    let mut used = Vec::new();
+    let mut renumber = |old: usize| -> usize {
+        let Some(span) = spans.get(old) else {
+            return old; // not a span index (synthetic glyphs): leave it
+        };
+        *remap.entry(old).or_insert_with(|| {
+            // Style only: segments carry their own text, and a paragraph's
+            // span can hold all of it, which would be copied on every page.
+            used.push(ferropdf_core::InlineSpan {
+                text: String::new(),
+                font_size: span.font_size,
+                line_height: span.line_height,
+                font_family: span.font_family.clone(),
+                bold: span.bold,
+                italic: span.italic,
+                color: span.color,
+                text_decoration: span.text_decoration.clone(),
+                letter_spacing: span.letter_spacing,
+                word_spacing: span.word_spacing,
+                link: span.link.clone(),
+            });
+            used.len() - 1
+        })
+    };
+    for line in lines.iter_mut() {
+        for seg in &mut line.segments {
+            seg.metadata = renumber(seg.metadata);
+        }
+        for glyph in &mut line.glyphs {
+            glyph.metadata = renumber(glyph.metadata);
+        }
+    }
+    used
+}
+
 fn offset_y_recursive(layout_box: &mut LayoutBox, dy: f32) {
     layout_box.rect.y += dy;
     layout_box.content.y += dy;

@@ -3,7 +3,7 @@ use cosmic_text::{
     ShapeGlyph, ShapeLine, Shaping, Wrap,
 };
 use ferropdf_core::layout::{InlineSpan, ShapedGlyph, ShapedLine, ShapedSegment};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use taffy::prelude::*;
 
 /// Context attached to text leaf nodes in the Taffy tree.
@@ -257,8 +257,10 @@ fn text_attrs(font_family: &str, bold: bool, italic: bool) -> Attrs<'_> {
 
 /// One laid-out line: the parts of cosmic-text's `LayoutRun` ferropdf uses.
 struct Line {
-    /// Text of the paragraph the line belongs to (glyph byte ranges index it).
-    text: String,
+    /// Text of the paragraph the line belongs to (glyph byte ranges index it),
+    /// shared by all its lines: a copy per line made long paragraphs
+    /// quadratic in time and memory.
+    text: Arc<str>,
     glyphs: Vec<LayoutGlyph>,
     line_w: f32,
     line_y: f32,
@@ -273,7 +275,7 @@ const INDENT_GLYPH: usize = usize::MAX - 1;
 /// asked (Taffy measures a text leaf several times).
 #[derive(Debug, Clone)]
 pub struct ShapedText {
-    paragraphs: Vec<(String, ShapeLine)>,
+    paragraphs: Vec<(Arc<str>, ShapeLine)>,
 }
 
 /// Shape `spans` (one span when `rich` is false). `spacing` is indexed by
@@ -319,7 +321,7 @@ fn shape_text(
         if i == 0 && indent != 0.0 {
             add_indent(&mut shape, indent, font_size);
         }
-        paragraphs.push((para.to_string(), shape));
+        paragraphs.push((Arc::from(para), shape));
     }
     ShapedText { paragraphs }
 }
@@ -342,7 +344,7 @@ fn break_lines(
             let glyph_height = ll.max_ascent + ll.max_descent;
             let line_y = line_top + (line_height - glyph_height) / 2.0 + ll.max_ascent;
             lines.push(Line {
-                text: text.clone(),
+                text: Arc::clone(text),
                 glyphs: ll
                     .glyphs
                     .into_iter()
