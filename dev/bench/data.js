@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795365795106,
+  "lastUpdate": 1795370783478,
   "repoUrl": "https://github.com/MoncefMak/ferropdf",
   "entries": {
     "FastPDF Criterion Benchmarks": [
@@ -3124,6 +3124,54 @@ window.BENCHMARK_DATA = {
             "name": "render_invoice_cached",
             "value": 1008913,
             "range": "± 16498",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "72460183+MoncefMak@users.noreply.github.com",
+            "name": "MoncefMak",
+            "username": "MoncefMak"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "ab70810e461e4fc0f0da1dfa60951cfdfea0fe15",
+          "message": "Merge pull request #87 from MoncefMak/fix/robustness\n\nfix: linear-time long paragraphs; clamp colspan",
+          "timestamp": "2026-11-22T19:01:13+01:00",
+          "tree_id": "4dd15819397f0761b42f82db68cf4090f0b5d7f7",
+          "url": "https://github.com/MoncefMak/ferropdf/commit/ab70810e461e4fc0f0da1dfa60951cfdfea0fe15"
+        },
+        "date": 1795370782625,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "render_simple",
+            "value": 3442842,
+            "range": "± 98495",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice",
+            "value": 4035488,
+            "range": "± 20264",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_simple_cached",
+            "value": 477145,
+            "range": "± 4431",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice_cached",
+            "value": 1009215,
+            "range": "± 10733",
             "unit": "ns/iter"
           }
         ]
