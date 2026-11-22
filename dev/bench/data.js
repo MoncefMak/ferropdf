@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795365576461,
+  "lastUpdate": 1795365795106,
   "repoUrl": "https://github.com/MoncefMak/ferropdf",
   "entries": {
     "FastPDF Criterion Benchmarks": [
@@ -3077,6 +3077,53 @@ window.BENCHMARK_DATA = {
             "name": "render_invoice_cached",
             "value": 1172506,
             "range": "± 9339",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "noreply@anthropic.com",
+            "name": "Claude",
+            "username": "claude"
+          },
+          "committer": {
+            "email": "moncef@Moncefs-MacBook-Pro.local",
+            "name": "Moncef"
+          },
+          "distinct": true,
+          "id": "32129c0621015592fed73701e29689e651ee6bf6",
+          "message": "ci: skip Python 3.8 on ubuntu-latest; tolerate ±1 rounding in colour checks\n\nubuntu-latest (26.04) no longer provides Python 3.8, so that matrix entry\nfailed at setup; 3.8 stays covered on macOS and Windows.\n\nhsl(120, 100%, 25%) is rgb(0, 127.5, 0): the PyMuPDF available on 3.8\nreports 127 where newer versions report 128. The colour checks now accept\na difference of 1 per channel.\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_012Pm4T4yb8GkjqbRm1faqHH",
+          "timestamp": "2026-11-22T17:41:04+01:00",
+          "tree_id": "e2c3808994fd99ca79eec6004e2890fe6b9bb6fc",
+          "url": "https://github.com/MoncefMak/ferropdf/commit/32129c0621015592fed73701e29689e651ee6bf6"
+        },
+        "date": 1795365794565,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "render_simple",
+            "value": 3434654,
+            "range": "± 26210",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice",
+            "value": 4026287,
+            "range": "± 25936",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_simple_cached",
+            "value": 479728,
+            "range": "± 4205",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice_cached",
+            "value": 1008913,
+            "range": "± 16498",
             "unit": "ns/iter"
           }
         ]
