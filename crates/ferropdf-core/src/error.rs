@@ -41,6 +41,8 @@ pub enum RenderWarning {
         bold: bool,
         italic: bool,
     },
+    /// An image has no alt text (tagged PDF).
+    MissingAltText { src: String },
 }
 
 impl std::fmt::Display for RenderWarning {
@@ -70,6 +72,9 @@ impl std::fmt::Display for RenderWarning {
                     "font not found: {} (bold={}, italic={})",
                     family, bold, italic
                 )
+            }
+            RenderWarning::MissingAltText { src } => {
+                write!(f, "image without alt text (tagged PDF): {}", src)
             }
         }
     }

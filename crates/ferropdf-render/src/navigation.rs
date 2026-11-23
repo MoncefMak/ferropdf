@@ -1,7 +1,7 @@
 //! Clickable links (`<a href>`) and the PDF outline (bookmarks from
 //! `<h1>`–`<h6>`), from the `Link`, `Anchor` and `Bookmark` draw ops.
 
-use crate::display_list::{DrawOp, PageDisplayList};
+use crate::display_list::{DrawOp, Owner, PageDisplayList};
 use ferropdf_core::Rect;
 use pdf_writer::types::{ActionType, AnnotationType};
 use pdf_writer::{Finish, Pdf, Rect as PdfWriterRect, Ref, Str, TextStr};
@@ -12,6 +12,12 @@ pub(crate) struct LinkAnnotation {
     pub annotation: Ref,
     rect: Rect,
     target: Target,
+    /// Accessible description (`/Contents`): the link text, else the target.
+    text: String,
+    /// What drew the link (tagged PDF).
+    pub owner: Owner,
+    /// `/StructParent` key, set by the tagger.
+    pub struct_parent: Option<i32>,
 }
 
 enum Target {
@@ -88,10 +94,15 @@ pub(crate) fn collect(pages: &[PageDisplayList], next_ref: &mut dyn FnMut() -> R
     let links = pages
         .iter()
         .map(|list| {
+            let mut owner = Owner::Node(None);
             list.ops
                 .iter()
                 .filter_map(|op| {
-                    let DrawOp::Link { rect, target } = op else {
+                    if let DrawOp::Owner(o) = op {
+                        owner = o.clone();
+                        return None;
+                    }
+                    let DrawOp::Link { rect, target, text } = op else {
                         return None;
                     };
                     if rect.width <= 0.0 || rect.height <= 0.0 {
@@ -106,10 +117,18 @@ pub(crate) fn collect(pages: &[PageDisplayList], next_ref: &mut dyn FnMut() -> R
                         None if is_safe_uri(target) => Target::Uri(target.trim().to_string()),
                         None => return None,
                     };
+                    let text = if text.trim().is_empty() {
+                        target_description(&target, text)
+                    } else {
+                        text.trim().to_string()
+                    };
                     Some(LinkAnnotation {
                         annotation: next_ref(),
                         rect: *rect,
                         target,
+                        text,
+                        owner: owner.clone(),
+                        struct_parent: None,
                     })
                 })
                 .collect()
@@ -117,6 +136,13 @@ pub(crate) fn collect(pages: &[PageDisplayList], next_ref: &mut dyn FnMut() -> R
         .collect();
 
     Navigation { links, bookmarks }
+}
+
+fn target_description(target: &Target, _text: &str) -> String {
+    match target {
+        Target::Uri(u) => u.clone(),
+        Target::Internal(page, _) => format!("Go to page {}", page + 1),
+    }
 }
 
 /// Write the link annotations and the outline tree.
@@ -141,6 +167,11 @@ pub(crate) fn write(
         annot.border(0.0, 0.0, 0.0, None);
         // Printable: required by PDF/A (ISO 19005-2 §6.3.2), harmless otherwise.
         annot.flags(pdf_writer::types::AnnotationFlags::PRINT);
+        // Accessible description (PDF/UA-1 §7.18.5).
+        annot.contents(TextStr(&link.text));
+        if let Some(key) = link.struct_parent {
+            annot.struct_parent(key);
+        }
         match &link.target {
             Target::Uri(uri) => {
                 annot
@@ -266,6 +297,7 @@ mod tests {
         let link = |t: &str| DrawOp::Link {
             rect: Rect::new(0.0, 0.0, 10.0, 10.0),
             target: t.into(),
+            text: String::new(),
         };
         let pages = vec![
             page(vec![link("#sec"), link("#missing"), link("javascript:x")]),

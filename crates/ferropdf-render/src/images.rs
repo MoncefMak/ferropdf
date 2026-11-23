@@ -118,10 +118,29 @@ pub(crate) fn inline_svgs_to_img(doc: &mut Document) {
             "data:image/svg+xml;base64,{}",
             base64::engine::general_purpose::STANDARD.encode(xml.as_bytes())
         );
+        // Accessible name for tagged PDF: aria-label, else <title>.
+        let title = doc.get(id).children.iter().find_map(|&c| {
+            let n = doc.get(c);
+            (n.tag().map(str::to_ascii_lowercase).as_deref() == Some("title")).then(|| {
+                n.children
+                    .iter()
+                    .filter_map(|&t| doc.get(t).text.clone())
+                    .collect::<String>()
+            })
+        });
         let node = &mut doc.nodes[id];
+        let alt = node.attr("aria-label").map(String::from).or(title);
         node.tag_name = Some("img".to_string());
-        node.attributes
-            .retain(|k, _| matches!(k.as_str(), "width" | "height" | "class" | "style" | "id"));
+        node.attributes.retain(|k, _| {
+            matches!(
+                k.as_str(),
+                "width" | "height" | "class" | "style" | "id" | "role" | "aria-hidden" | "lang"
+            )
+        });
+        if let Some(alt) = alt {
+            node.attributes
+                .insert("alt".to_string(), alt.trim().to_string());
+        }
         node.attributes.insert("src".to_string(), uri);
         node.children.clear();
     }

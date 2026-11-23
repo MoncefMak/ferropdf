@@ -1,4 +1,4 @@
-use crate::display_list::{DrawOp, PageDisplayList};
+use crate::display_list::{DrawOp, Owner, PageDisplayList};
 use crate::font_subsetter::{
     encode_for_cid_font, encode_shaped_glyphs, encode_winansi, load_font_data, subset_font,
     write_cid_font, EmbeddedFont, FontKey,
@@ -53,15 +53,20 @@ fn y_to_pdf(y: f32, page_height_pt: f32) -> f32 {
 }
 
 /// Write a complete PDF document from display lists.
+#[allow(clippy::too_many_arguments)]
 pub fn write_pdf(
     pages: &[PageDisplayList],
     config: &PageConfig,
     opts: &RenderOptions,
     plan: &crate::pdfa::Plan,
+    semantics: Option<&crate::tagging::Semantics>,
+    title: Option<&str>,
     ext_font_db: Option<&fontdb::Database>,
     warnings: &mut Vec<ferropdf_core::RenderWarning>,
 ) -> ferropdf_core::Result<Vec<u8>> {
     let pdfa = plan.is_pdfa();
+    // PDF/A and PDF/UA: every font embedded, no .notdef.
+    let strict = plan.strict_fonts();
     let mut pdf = Pdf::new();
     let mut ref_id = 1u32;
     let mut next_ref = || {
@@ -172,9 +177,9 @@ pub fn write_pdf(
                                 font_cache.insert(key.clone(), Some(pdf_name));
                             }
                             None => {
-                                if pdfa && !text.trim().is_empty() {
+                                if strict && !text.trim().is_empty() {
                                     return Err(FerroError::Font(format!(
-                                        "PDF/A requires embedded fonts, but no font file \
+                                        "PDF/A and PDF/UA require embedded fonts, but no font file \
                                          was found for {family_name:?} (bold={bold}, \
                                          italic={italic}); install it or load it with \
                                          @font-face"
@@ -364,8 +369,12 @@ pub fn write_pdf(
     }
 
     // ── Links, anchors and outline ──
-    let nav = crate::navigation::collect(pages, &mut next_ref);
+    let mut nav = crate::navigation::collect(pages, &mut next_ref);
     let outline_ref = (!nav.bookmarks.is_empty()).then(&mut next_ref);
+
+    // ── Tagged PDF: structure tree built while writing the content ──
+    let mut tagger = semantics.map(|s| crate::tagging::Tagger::new(s, pages.len()));
+    let struct_root_ref = tagger.as_ref().map(|_| next_ref());
 
     // ── PDF/A metadata, output intent and attachments ──
     let pdfa_refs = crate::pdfa::Refs::alloc(plan, &mut next_ref);
@@ -379,6 +388,21 @@ pub fn write_pdf(
         }
         if plan.needs_catalog_entries() {
             crate::pdfa::write_catalog_entries(&mut catalog, plan, &pdfa_refs);
+        }
+        if let (Some(root), Some(sem)) = (struct_root_ref, semantics) {
+            catalog.pair(Name(b"StructTreeRoot"), root);
+            catalog
+                .mark_info()
+                .marked(true)
+                .pair(Name(b"Suspects"), false);
+            if let Some(lang) = &sem.lang {
+                catalog.lang(TextStr(lang));
+            }
+            if title.is_some() {
+                catalog
+                    .viewer_preferences()
+                    .pair(Name(b"DisplayDocTitle"), true);
+            }
         }
     }
 
@@ -403,7 +427,7 @@ pub fn write_pdf(
         let mut fonts = resources.fonts();
         // PDF/A forbids non-embedded fonts even when unused, and the
         // fallback path is refused above, so the Type1 fonts are left out.
-        if !pdfa {
+        if !strict {
             fonts.pair(Name(b"F1"), font_ref);
             fonts.pair(Name(b"F2"), font_bold_ref);
             fonts.pair(Name(b"F3"), font_italic_ref);
@@ -443,14 +467,72 @@ pub fn write_pdf(
         if !nav.links[i].is_empty() {
             page.annotations(nav.links[i].iter().map(|l| l.annotation));
         }
+        if tagger.is_some() {
+            page.struct_parents(i as i32);
+            if !nav.links[i].is_empty() {
+                // Annotations in structure order (PDF/UA-1 §7.18.3).
+                page.tab_order(pdf_writer::types::TabOrder::StructureOrder);
+            }
+        }
         page.contents(content_ref);
         page.finish();
 
         // Content stream
         let mut content = Content::new();
         let mut next_gradient = gradients.iter();
+        // Tagged PDF: the owner of the following ops, and whether a
+        // marked-content sequence is open. Each painting op gets its own
+        // sequence, closed at the start of the next op (arms may `continue`).
+        let mut owner = Owner::Node(None);
+        let mut mark_open = false;
 
         for op in &display_list.ops {
+            if mark_open {
+                content.end_marked_content();
+                mark_open = false;
+            }
+            if let Some(t) = tagger.as_mut() {
+                use crate::tagging::Mark;
+                let mark = match op {
+                    DrawOp::Owner(o) => {
+                        owner = o.clone();
+                        None
+                    }
+                    DrawOp::DrawText { .. } | DrawOp::DrawImage { .. } => {
+                        Some(t.content(&owner, i))
+                    }
+                    DrawOp::FillRect { .. }
+                    | DrawOp::FillGradient { .. }
+                    | DrawOp::StrokeRect { .. }
+                    | DrawOp::StrokeRoundedRect { .. }
+                    | DrawOp::DrawBoxShadow { .. }
+                    | DrawOp::ClipRect { .. } => Some(Mark::Artifact {
+                        pagination: owner == Owner::Pagination,
+                    }),
+                    _ => None,
+                };
+                match mark {
+                    Some(Mark::Artifact { pagination: false }) => {
+                        content.begin_marked_content(Name(b"Artifact"));
+                        mark_open = true;
+                    }
+                    Some(Mark::Artifact { pagination: true }) => {
+                        content
+                            .begin_marked_content_with_properties(Name(b"Artifact"))
+                            .properties()
+                            .pair(Name(b"Type"), Name(b"Pagination"));
+                        mark_open = true;
+                    }
+                    Some(Mark::Content { role, mcid }) => {
+                        content
+                            .begin_marked_content_with_properties(Name(role.name()))
+                            .properties()
+                            .identify(mcid);
+                        mark_open = true;
+                    }
+                    None => {}
+                }
+            }
             match op {
                 DrawOp::FillRect {
                     rect,
@@ -619,7 +701,7 @@ pub fn write_pdf(
                         // increasing x, which is what PDF show() expects.
                         let mut sorted_glyphs = shaped_glyphs.clone();
                         sorted_glyphs.sort_by(|a, b| a.x.partial_cmp(&b.x).unwrap());
-                        if pdfa {
+                        if strict {
                             // PDF/A forbids showing .notdef (ISO 19005-2
                             // §6.2.11.8). Positions come from x, so the next
                             // glyph still lands where it was shaped.
@@ -740,7 +822,7 @@ pub fn write_pdf(
                                     ef.face_index,
                                     ef.gid_remapping.as_ref(),
                                 );
-                                if pdfa {
+                                if strict {
                                     // No .notdef in PDF/A (§6.2.11.8).
                                     encoded = encoded
                                         .chunks(2)
@@ -869,7 +951,10 @@ pub fn write_pdf(
                     content.end_path();
                 }
                 // Navigation is written as annotations and outline items.
-                DrawOp::Link { .. } | DrawOp::Anchor { .. } | DrawOp::Bookmark { .. } => {}
+                DrawOp::Link { .. }
+                | DrawOp::Anchor { .. }
+                | DrawOp::Bookmark { .. }
+                | DrawOp::Owner(_) => {}
                 DrawOp::Save => {
                     content.save_state();
                 }
@@ -895,8 +980,22 @@ pub fn write_pdf(
             }
         }
 
+        if mark_open {
+            content.end_marked_content();
+        }
         let content_bytes = content.finish();
         pdf.stream(content_ref, &content_bytes);
+    }
+
+    if let (Some(mut t), Some(root)) = (tagger, struct_root_ref) {
+        // After the content, so elements are created in reading order and a
+        // link's text comes before its annotation reference.
+        for (page, links) in nav.links.iter_mut().enumerate() {
+            for link in links {
+                link.struct_parent = t.annotation(&link.owner, page, link.annotation);
+            }
+        }
+        t.write(&mut pdf, &mut next_ref, &page_refs, root);
     }
 
     // Write built-in Type1 fallback fonts
@@ -970,13 +1069,13 @@ pub fn write_pdf(
     let info_ref = next_ref();
     let mut info = pdf.document_info(info_ref);
     info.producer(TextStr(PRODUCER));
-    if let Some(ref title) = opts.title {
+    if let Some(title) = title {
         info.title(TextStr(title));
     }
     if let Some(ref author) = opts.author {
         info.author(TextStr(author));
     }
-    if pdfa {
+    if plan.writes_metadata() {
         // Must match xmp:CreateDate / xmp:ModifyDate in the XMP packet.
         info.creation_date(now.pdf_date());
         info.modified_date(now.pdf_date());
@@ -987,7 +1086,7 @@ pub fn write_pdf(
         &mut pdf,
         plan,
         &pdfa_refs,
-        opts.title.as_deref(),
+        title,
         opts.author.as_deref(),
         PRODUCER,
         now,

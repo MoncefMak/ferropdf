@@ -1,4 +1,4 @@
-use crate::display_list::{DrawOp, PageDisplayList};
+use crate::display_list::{DrawOp, Owner, PageDisplayList};
 use ferropdf_core::layout::Page;
 use ferropdf_core::{
     BorderCollapse, BorderStyle, Color, LayoutBox, ListStyleType, PageConfig, Radii, Rect,
@@ -7,7 +7,9 @@ use ferropdf_core::{
 
 /// Paint a page into a display list.
 /// All coordinates are in points typographiques (pt).
-pub fn paint_page(page: &Page, config: &PageConfig) -> PageDisplayList {
+/// Boxes from index `flow_len` on are margin boxes (running headers and
+/// footers): they are pagination artifacts in tagged PDF.
+pub fn paint_page(page: &Page, config: &PageConfig, flow_len: usize) -> PageDisplayList {
     let mut ops = Vec::new();
 
     // Offsets and container width in points (pt)
@@ -16,14 +18,45 @@ pub fn paint_page(page: &Page, config: &PageConfig) -> PageDisplayList {
     let offset_y = margins.top;
     let container_width = config.content_width_pt();
 
-    for layout_box in &page.content {
-        paint_box(layout_box, &mut ops, offset_x, offset_y, container_width, 0);
+    for (i, layout_box) in page.content.iter().enumerate() {
+        let ctx = Ctx {
+            owner: None,
+            pagination: i >= flow_len,
+        };
+        paint_box(
+            layout_box,
+            &mut ops,
+            offset_x,
+            offset_y,
+            container_width,
+            0,
+            ctx,
+        );
     }
 
     PageDisplayList {
         ops,
         page_number: page.page_number,
         total_pages: page.total_pages,
+    }
+}
+
+/// Inherited painting context for tagged PDF.
+#[derive(Clone, Copy)]
+struct Ctx {
+    /// Nearest DOM node of the box or an ancestor (anonymous boxes have none).
+    owner: Option<ferropdf_core::NodeId>,
+    /// Inside a margin box.
+    pagination: bool,
+}
+
+impl Ctx {
+    fn owner(&self, o: Owner) -> DrawOp {
+        DrawOp::Owner(if self.pagination {
+            Owner::Pagination
+        } else {
+            o
+        })
     }
 }
 
@@ -34,6 +67,7 @@ fn paint_box(
     offset_y: f32,
     _parent_content_width: f32,
     depth: usize,
+    ctx: Ctx,
 ) {
     if depth > ferropdf_core::MAX_DOM_DEPTH {
         return;
@@ -44,6 +78,15 @@ fn paint_box(
     if !style.visibility {
         return;
     }
+
+    let ctx = Ctx {
+        owner: layout_box.node_id.or(ctx.owner),
+        ..ctx
+    };
+    let node = ctx.owner;
+    // Decorations painted next (shadows, backgrounds, borders) belong to
+    // this box; the PDF writer marks them as artifacts.
+    ops.push(ctx.owner(Owner::Node(node)));
 
     // Accumulate position:relative visual offset into effective offsets.
     // This shifts this box, its text, and all descendants.
@@ -100,6 +143,7 @@ fn paint_box(
             ops.push(DrawOp::Link {
                 rect,
                 target: target.clone(),
+                text: box_text(layout_box),
             });
         }
     }
@@ -184,6 +228,33 @@ fn paint_box(
         });
     }
 
+    // List item marker (bullet or number)
+    if let Some(idx) = layout_box.list_item_index {
+        let marker_text = format_list_marker(&style.list_style_type, idx);
+        if !marker_text.is_empty() {
+            if let Some(li) = node {
+                ops.push(ctx.owner(Owner::Label(li)));
+            }
+            let marker_x = layout_box.content.x + eff_x - style.font_size * 1.2;
+            let marker_y = layout_box.content.y + eff_y + style.font_size * 0.8;
+            ops.push(DrawOp::DrawText {
+                text: marker_text,
+                x: marker_x,
+                y: marker_y,
+                font_size: style.font_size,
+                color: style.color,
+                font_family: style.font_family.clone(),
+                bold: false,
+                italic: false,
+                text_align: ferropdf_core::TextAlign::Left,
+                container_width: 0.0,
+                shaped_glyphs: Vec::new(),
+            });
+        }
+    }
+
+    ops.push(ctx.owner(Owner::Node(node)));
+
     // Merged inline text — render with per-segment styling
     if !layout_box.inline_spans.is_empty() && !layout_box.shaped_lines.is_empty() {
         let text_x = layout_box.content.x + eff_x;
@@ -201,6 +272,13 @@ fn paint_box(
                     continue;
                 }
                 let span = &layout_box.inline_spans[seg.metadata];
+                ops.push(ctx.owner(match &span.link {
+                    Some(target) => Owner::InlineLink {
+                        block: node,
+                        target: target.clone(),
+                    },
+                    None => Owner::Node(node),
+                }));
                 if let Some(target) = &span.link {
                     // The line box of the segment: baseline minus ascent,
                     // spread over the line height.
@@ -209,6 +287,7 @@ fn paint_box(
                     ops.push(DrawOp::Link {
                         rect: Rect::new(text_x + seg.x_offset, top, seg.width, span.line_height),
                         target: target.clone(),
+                        text: seg.text.trim().to_string(),
                     });
                 }
                 // Collect shaped glyphs for this segment (with font_id for correct PDF embedding)
@@ -332,6 +411,7 @@ fn paint_box(
 
     // Image
     if let Some(ref src) = layout_box.image_src {
+        ops.push(ctx.owner(Owner::Node(node)));
         ops.push(DrawOp::DrawImage {
             src: src.clone(),
             rect: Rect::new(
@@ -343,32 +423,10 @@ fn paint_box(
         });
     }
 
-    // List item marker (bullet or number)
-    if let Some(idx) = layout_box.list_item_index {
-        let marker_text = format_list_marker(&style.list_style_type, idx);
-        if !marker_text.is_empty() {
-            let marker_x = layout_box.content.x + eff_x - style.font_size * 1.2;
-            let marker_y = layout_box.content.y + eff_y + style.font_size * 0.8;
-            ops.push(DrawOp::DrawText {
-                text: marker_text,
-                x: marker_x,
-                y: marker_y,
-                font_size: style.font_size,
-                color: style.color,
-                font_family: style.font_family.clone(),
-                bold: false,
-                italic: false,
-                text_align: ferropdf_core::TextAlign::Left,
-                container_width: 0.0,
-                shaped_glyphs: Vec::new(),
-            });
-        }
-    }
-
     // Children — propagate effective offset (includes ancestor relative shifts)
     let my_content_width = layout_box.content.width;
     for child in &layout_box.children {
-        paint_box(child, ops, eff_x, eff_y, my_content_width, depth + 1);
+        paint_box(child, ops, eff_x, eff_y, my_content_width, depth + 1, ctx);
     }
 
     if clips {
@@ -380,6 +438,29 @@ fn paint_box(
     if matrix.is_some() {
         ops.push(DrawOp::Restore);
     }
+}
+
+/// The text of a box and its descendants (a link's accessible description).
+fn box_text(lb: &LayoutBox) -> String {
+    fn walk(lb: &LayoutBox, out: &mut String) {
+        if out.len() > 200 {
+            return;
+        }
+        if !lb.inline_spans.is_empty() {
+            for s in &lb.inline_spans {
+                out.push_str(&s.text);
+            }
+        } else if let Some(t) = &lb.text_content {
+            out.push(' ');
+            out.push_str(t);
+        }
+        for c in &lb.children {
+            walk(c, out);
+        }
+    }
+    let mut out = String::new();
+    walk(lb, &mut out);
+    out.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 /// Whether a box still holds content of its own (text not merged into a

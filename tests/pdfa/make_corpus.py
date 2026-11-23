@@ -2,13 +2,15 @@
 
     python tests/pdfa/make_corpus.py OUT_DIR
 
-Produces ``*-2b.pdf`` and ``*-3b.pdf`` files (the suffix is the flavour veraPDF
-should check). CI runs ``verapdf --flavour 3b`` / ``--flavour 2b`` on them;
-see the ``pdfa`` job in ``.github/workflows/ci.yml``.
+File names carry the veraPDF flavours each file must pass: ``-2b``, ``-3b``
+(PDF/A) and ``-ua1`` (PDF/UA-1), e.g. ``letter-3b-ua1.pdf`` is checked with
+both ``--flavour 3b`` and ``--flavour ua1``. See the ``pdfa`` job in
+``.github/workflows/ci.yml``.
 """
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -40,7 +42,7 @@ FEATURES_HTML = """<!DOCTYPE html>
 <p class="shadow">Ombre portée</p>
 <div class="clip"></div>
 <div class="rot">Pivoté</div>
-<svg width="120" height="60" viewBox="0 0 120 60">
+<svg width="120" height="60" viewBox="0 0 120 60" role="img" aria-label="Un carré bleu et un cercle rose">
   <rect x="5" y="5" width="50" height="50" fill="#3f51b5" opacity="0.6"/>
   <circle cx="90" cy="30" r="25" fill="none" stroke="#e91e63" stroke-width="4"/>
 </svg>
@@ -50,6 +52,45 @@ FEATURES_HTML = """<!DOCTYPE html>
 <h2 id="end">Fin</h2>
 </body></html>
 """
+
+
+# Lists, tables, figures, links, languages: the PDF/UA structure tree.
+STRUCTURE_HTML = """<!DOCTYPE html>
+<html lang="fr"><head><title>Structure accessible</title><style>
+  body { font-family: sans-serif; }
+  .card { background: #eef; border: 1px solid #99c; padding: 8px; border-radius: 6px; }
+  th, td { border: 1px solid #999; padding: 4px; }
+  @page { @bottom-center { content: "Page " counter(page) " / " counter(pages); } }
+</style></head><body>
+<header><p>Société Exemple — rapport annuel</p></header>
+<h1>Rapport</h1>
+<p>Un paragraphe avec un <a href="https://example.com/rapport">lien externe</a>, du <b>gras</b>
+et un <a href="#tableau">lien interne</a>.</p>
+<section class="card"><h2>Listes</h2>
+  <ul><li>Premier</li><li>Second <i>élément</i></li></ul>
+  <ol><li><p>Étape un</p></li><li>Étape deux</li></ol>
+</section>
+<h2 id="tableau">Tableau</h2>
+<table><caption>Ventes par région</caption>
+  <thead><tr><th>Région</th><th>Total</th></tr></thead>
+  <tbody><tr><th>Nord</th><td>1 200 €</td></tr><tr><th>Sud</th><td>950 €</td></tr></tbody>
+</table>
+<figure><img alt="Logo : carré rouge" width="40" height="40"
+  src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==">
+  <figcaption>Le logo de la société</figcaption></figure>
+<p><img alt="" width="200" height="4"
+  src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=="></p>
+<blockquote lang="en"><p>A quotation in English.</p></blockquote>
+<div style="break-before: page"><h2>Annexe</h2><p>Deuxième page.</p></div>
+</body></html>
+"""
+
+
+def accessible(html: str) -> str:
+    """The fixes an author makes for PDF/UA: a language, labels on SVGs."""
+    if not re.search(r"<html[^>]*\blang=", html):
+        html = re.sub(r"<html\b", '<html lang="en"', html, count=1)
+    return re.sub(r"<svg\b(?![^>]*aria-label)", '<svg role="img" aria-label="Chart"', html)
 
 
 def main(out: Path) -> None:
@@ -80,12 +121,24 @@ def main(out: Path) -> None:
             ferropdf.Attachment("notes.txt", "Annexe é ü", relationship="Supplement"),
         ],
     )
+    write(
+        "facturx-en16931-3b-ua1.pdf",
+        accessible(invoice),
+        title="Facture FA-2026-0042",
+        factur_x=xml,
+        pdf_ua=True,
+    )
     write("features-2b.pdf", FEATURES_HTML, pdf_variant="pdf/a-2b", title="PDF/A features")
     write("features-3b.pdf", FEATURES_HTML, pdf_variant="pdf/a-3b")
+    write("features-ua1.pdf", FEATURES_HTML, pdf_ua=True)
+    write("structure-ua1.pdf", STRUCTURE_HTML, pdf_ua=True)
+    write("structure-2b-ua1.pdf", STRUCTURE_HTML, pdf_variant="pdf/a-2b", pdf_ua=True)
     for tpl in sorted(TEMPLATES.glob("*.html")):
         html = tpl.read_text(encoding="utf-8")
         write(f"{tpl.stem}-3b.pdf", html, base_url=TEMPLATES, pdf_variant="pdf/a-3b",
               title=tpl.stem)
+        write(f"{tpl.stem}-3b-ua1.pdf", accessible(html), base_url=TEMPLATES,
+              pdf_variant="pdf/a-3b", pdf_ua=True, title=tpl.stem)
 
 
 if __name__ == "__main__":
