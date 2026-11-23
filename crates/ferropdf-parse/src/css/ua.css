@@ -40,6 +40,7 @@ tfoot   { display: table-footer-group; }
 tr      { display: table-row; }
 th      { display: table-cell; font-weight: bold; text-align: center; }
 td      { display: table-cell; }
+caption { display: block; text-align: center; }
 
 img     { display: inline; }
 div, section, article, aside, header, footer, main, nav { display: block; }

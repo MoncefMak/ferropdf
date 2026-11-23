@@ -215,6 +215,20 @@ impl Semantics {
                 }
                 continue;
             }
+            // A caption moved into the table wrapper box still belongs to
+            // its table in the structure tree.
+            if tag == "caption" {
+                if let Some(p) = node.parent {
+                    if doc.get(p).tag() == Some(crate::captions::WRAPPER_TAG) {
+                        if let Some(&t) = doc.get(p).children.iter().find(|&&c| {
+                            doc.get(c).tag().map(str::to_ascii_lowercase).as_deref()
+                                == Some("table")
+                        }) {
+                            parent.insert(id, t);
+                        }
+                    }
+                }
+            }
             let Some(kind) = kind_of(&tag, node) else {
                 continue;
             };

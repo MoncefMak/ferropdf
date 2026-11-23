@@ -581,6 +581,8 @@ pub struct ComputedStyle {
     pub line_height_spec: LineHeight,
     pub text_align: TextAlign,
     pub vertical_align: VerticalAlign,
+    /// `caption-side: bottom` (inherited; `top` is the default).
+    pub caption_bottom: bool,
     pub text_decoration: TextDecoration,
     /// `letter-spacing` / `word-spacing`: extra space after each character /
     /// word separator (`normal` = 0). Resolved to pt per element.
@@ -691,6 +693,7 @@ impl Default for ComputedStyle {
             line_height_spec: LineHeight::Normal,
             text_align: TextAlign::Start,
             vertical_align: VerticalAlign::Baseline,
+            caption_bottom: false,
             text_decoration: TextDecoration::None,
             letter_spacing: Length::Zero,
             word_spacing: Length::Zero,

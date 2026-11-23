@@ -617,6 +617,16 @@ def chk_table_layout():
     assert d.word("c2")[0] > d.word("c1")[2] and d.word("wide")[1] > d.word("c1")[1]
 
 
+def chk_table_caption():
+    d = Doc(wrap('<table style="width:300px;margin:0 auto"><caption>Cap</caption><tr><td>a</td></tr></table>'
+                 '<table style="caption-side:bottom"><caption>Low</caption><tr><td>b</td></tr></table>'))
+    cap, a, low, b = d.word("Cap"), d.word("a"), d.word("Low"), d.word("b")
+    # Word boxes include the font's ascent/descent, which can overlap
+    # between lines: compare the tops of the words.
+    assert cap[1] + 5 < a[1] and low[1] > b[1] + 5, "top caption above, bottom caption below"
+    assert abs((cap[0] + cap[2]) / 2 - 297.6) < 2, "caption centred over the centred table"
+
+
 _TBL = "table{border-collapse:collapse;width:300px} td{padding:4px}"
 
 
@@ -1104,6 +1114,7 @@ FEATURES = [
     Feature("Layout", "`inline-block` shrink-to-fit next to text", chk_inline_block_shrink),
     Feature("Layout", "`inline-block` padding around its label", chk_inline_block_padding),
     Feature("Layout", "Tables with `colspan`", chk_table_layout),
+    Feature("Layout", "Table `<caption>` and `caption-side`", chk_table_caption),
     Feature("Layout", "Table cell `vertical-align` (`middle` by default)", chk_cell_vertical_align),
     Feature("Layout", "HTML `valign` on rows and cells", chk_cell_valign_attribute),
     Feature("Layout", "Row grows to its tallest cell (explicit `height`, blocks)", chk_tall_cell_grows_row),

@@ -503,6 +503,13 @@ fn apply_single(
                 style.vertical_align = v;
             }
         }
+        CssProperty::CaptionSide => match raw {
+            // Logical `block-start` / `block-end` are top / bottom in
+            // horizontal writing modes, the only ones ferropdf lays out.
+            "top" | "block-start" => style.caption_bottom = false,
+            "bottom" | "block-end" => style.caption_bottom = true,
+            _ => {}
+        },
         CssProperty::TextAlign => {
             if let Some(a) = match raw {
                 "start" => Some(TextAlign::Start),

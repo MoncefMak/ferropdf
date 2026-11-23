@@ -1,3 +1,4 @@
+mod captions;
 mod display_list;
 mod font_subsetter;
 mod gradient;
@@ -292,6 +293,9 @@ fn render_with_warnings_inner(
         &mut styles,
         opts.base_url.as_deref(),
     );
+
+    // 5c. Table captions go in a table wrapper box with the table.
+    captions::wrap_table_captions(&mut parse_result.document, &mut styles);
 
     // 6. Layout with Taffy (all in points typographiques)
     let layout_tree = ferropdf_layout::layout_with_font_system(
