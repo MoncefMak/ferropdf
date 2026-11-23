@@ -92,6 +92,8 @@ ferropdf.Options(
     attachments=None,       # list[Attachment] embedded in the PDF
     factur_x=None,          # Factur-X / ZUGFeRD XML invoice (bytes or str)
     factur_x_profile=None,  # "EN 16931", "BASIC"… (None = read from the XML)
+    tagged=False,           # structure tree for screen readers (tagged PDF)
+    pdf_ua=False,           # PDF/UA-1: tagged + strict accessibility checks
 )
 ```
 
@@ -139,6 +141,38 @@ ferropdf.Attachment(
 
 Dates in PDF/A files are the render time in UTC, or `SOURCE_DATE_EPOCH` when
 it is set, for reproducible output.
+
+### Accessibility: tagged PDF and PDF/UA
+
+`tagged=True` adds a logical structure tree, so screen readers, reflow and
+text extraction follow the document's structure:
+
+| HTML | PDF structure |
+|---|---|
+| `h1`–`h6`, `p`, `blockquote` | `H1`–`H6`, `P`, `BlockQuote` |
+| `ul`, `ol`, `li` | `L`, `LI` with `Lbl` (marker) and `LBody` |
+| `table`, `thead`/`tbody`/`tfoot`, `tr`, `th`, `td` | `Table`, `THead`/`TBody`/`TFoot`, `TR`, `TH` (with `Scope`), `TD` (with `ColSpan`) |
+| `figure`, `figcaption` | `Div`, `Caption` |
+| `img`, inline `svg` | `Figure` with `Alt` (from `alt`, `aria-label` or the SVG `<title>`) |
+| `a href` | `Link`, tied to its annotation |
+| `section`, `article`, `div`… | `Sect`, `Art`, `Div` |
+| `lang` attributes | `/Lang` on the catalog and on elements |
+
+Backgrounds, borders, shadows and underlines are artifacts, and so are running
+headers and footers (pagination artifacts). `alt=""`, `aria-hidden="true"`
+and `role="presentation"` mark decorative content. The `<title>` becomes the
+document title when `title=` is not given.
+
+`pdf_ua=True` writes PDF/UA-1 (ISO 14289-1), and refuses to write it, raising
+`RenderError`, when the HTML cannot conform:
+- no `<html lang>`;
+- no title;
+- an image without alt text;
+- headings that do not start at `<h1>` or that skip a level.
+
+With `tagged=True` alone, the same problems are warnings. Combine with
+`pdf_variant="pdf/a-3b"` for archival + accessible files (Factur-X included).
+CI validates the output with veraPDF (`--flavour ua1`).
 
 ### `Engine`
 
@@ -394,6 +428,8 @@ every row is a test that renders a snippet and checks the PDF, and every ❌ row
 | PDF | File attachments (`Attachment`) | ✅ Supported |
 | PDF | Factur-X / ZUGFeRD e-invoice (`factur_x`) | ✅ Supported |
 | PDF | PNG export (`Engine.render_png`) | ✅ Supported |
+| PDF | Tagged PDF (`tagged=True`) | ✅ Supported |
+| PDF | PDF/UA-1 (`pdf_ua=True`) | ✅ Supported |
 <!-- feature-matrix:end -->
 
 Regenerate after changing a feature: `python tests/test_feature_matrix.py`.

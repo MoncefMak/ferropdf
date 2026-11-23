@@ -1012,6 +1012,18 @@ def chk_png():
     assert (pix.width, pix.height) == (794, 1123) and pix.pixel(105, 105)[:3] == (255, 0, 0)
 
 
+def chk_tagged():
+    d = Doc(wrap("<h1>T</h1><ul><li>a</li></ul>").replace("<html>", '<html lang="en">'), tagged=True)
+    cat = d.doc.xref_object(d.doc.pdf_catalog())
+    assert "/StructTreeRoot" in cat and "/Marked true" in cat
+
+
+def chk_pdf_ua():
+    html = wrap("<h1>T</h1><p>x</p>").replace("<html>", '<html lang="en">')
+    d = Doc(html, pdf_ua=True, title="T")
+    assert "<pdfuaid:part>1</pdfuaid:part>" in _xmp(d)
+
+
 # --------------------------------------------------------------------------- matrix
 
 
@@ -1147,6 +1159,8 @@ FEATURES = [
     Feature("PDF", "File attachments (`Attachment`)", chk_attachments),
     Feature("PDF", "Factur-X / ZUGFeRD e-invoice (`factur_x`)", chk_factur_x),
     Feature("PDF", "PNG export (`Engine.render_png`)", chk_png),
+    Feature("PDF", "Tagged PDF (`tagged=True`)", chk_tagged),
+    Feature("PDF", "PDF/UA-1 (`pdf_ua=True`)", chk_pdf_ua),
 ]
 
 
