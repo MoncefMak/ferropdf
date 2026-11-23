@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `vertical-align` for table cells (`top`, `middle`, `bottom`, `baseline`) and the HTML `valign` attribute on `<td>`, `<th>`, `<tr>` and row groups. Cells are vertically centred by default, as in browsers (`thead, tbody, tfoot { vertical-align: middle }`).
 
 ### Fixed
+- SVG images were stretched to fill their box when its proportions differed from the SVG's (e.g. `width="100%"` with a fixed height, or a CSS size). They now keep their aspect ratio, centred, like `preserveAspectRatio` `xMidYMid meet` in browsers.
 - Table `<caption>` text was not rendered at all (#92). Captions now sit in a table wrapper box (CSS 2.1 §17.4): above the table, or below it with `caption-side: bottom`, as wide as the table and aligned with it, centred by default. In tagged PDF they are the `Caption` of their `Table`.
 - Link annotations carry the Print flag (`/F 4`), so links are kept when printing and PDF/A validators accept them.
 - Long paragraphs took quadratic time and memory (200 000 characters in a narrow column: 15 s; 800 000: minutes), so a single paragraph of untrusted HTML could stall a server. Every line kept a copy of its whole paragraph's text, and every page fragment cloned the whole paragraph with all its lines. Lines now share the paragraph text and fragments copy only their own lines and styles; rendering is linear (0.4 s for 200 000 characters) and the output is unchanged.
