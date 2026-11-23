@@ -20,6 +20,87 @@ pyo3::create_exception!(ferropdf, LayoutError, FerroError);
 pyo3::create_exception!(ferropdf, FontError, FerroError);
 pyo3::create_exception!(ferropdf, RenderError, FerroError);
 
+fn value_error(msg: String) -> PyErr {
+    PyErr::new::<pyo3::exceptions::PyValueError, _>(msg)
+}
+
+/// `bytes` as is, `str` as UTF-8.
+fn bytes_or_str(obj: &Bound<'_, PyAny>, what: &str) -> PyResult<Vec<u8>> {
+    if let Ok(s) = obj.extract::<String>() {
+        return Ok(s.into_bytes());
+    }
+    obj.extract::<Vec<u8>>().map_err(|_| {
+        PyErr::new::<pyo3::exceptions::PyTypeError, _>(format!("{what} must be bytes or str"))
+    })
+}
+
+/// A file embedded in the PDF, e.g. the source data of a report.
+#[pyclass(name = "Attachment", from_py_object)]
+#[derive(Clone, Debug)]
+pub struct PyAttachment {
+    #[pyo3(get)]
+    pub name: String,
+    pub data: Vec<u8>,
+    #[pyo3(get)]
+    pub mime_type: Option<String>,
+    #[pyo3(get)]
+    pub description: Option<String>,
+    pub relationship: ferropdf_render::AfRelationship,
+}
+
+#[pymethods]
+impl PyAttachment {
+    #[new]
+    #[pyo3(signature = (name, data, mime_type = None, description = None, relationship = "Unspecified"))]
+    fn new(
+        name: String,
+        data: &Bound<'_, PyAny>,
+        mime_type: Option<String>,
+        description: Option<String>,
+        relationship: &str,
+    ) -> PyResult<Self> {
+        Ok(Self {
+            name,
+            data: bytes_or_str(data, "data")?,
+            mime_type,
+            description,
+            relationship: ferropdf_render::AfRelationship::parse(relationship)
+                .map_err(value_error)?,
+        })
+    }
+
+    #[getter]
+    fn data<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        PyBytes::new(py, &self.data)
+    }
+
+    #[getter]
+    fn relationship(&self) -> String {
+        format!("{:?}", self.relationship)
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "Attachment(name={:?}, {} bytes, relationship='{:?}')",
+            self.name,
+            self.data.len(),
+            self.relationship
+        )
+    }
+}
+
+impl From<PyAttachment> for ferropdf_render::Attachment {
+    fn from(a: PyAttachment) -> Self {
+        ferropdf_render::Attachment {
+            name: a.name,
+            data: a.data,
+            mime_type: a.mime_type,
+            description: a.description,
+            relationship: a.relationship,
+        }
+    }
+}
+
 #[pyclass(name = "Options", from_py_object)]
 #[derive(Clone, Debug)]
 pub struct PyOptions {
@@ -30,6 +111,9 @@ pub struct PyOptions {
     pub author: Option<String>,
     pub max_html_bytes: Option<usize>,
     pub viewport_width: Option<f32>,
+    pub pdf_variant: ferropdf_render::PdfVariant,
+    pub attachments: Vec<PyAttachment>,
+    pub factur_x: Option<ferropdf_render::FacturX>,
 }
 
 #[pymethods]
@@ -43,7 +127,12 @@ impl PyOptions {
         author    = None,
         max_html_bytes = None,
         viewport_width = None,
+        pdf_variant = None,
+        attachments = None,
+        factur_x = None,
+        factur_x_profile = None,
     ))]
+    #[allow(clippy::too_many_arguments)]
     fn new(
         page_size: &str,
         margin: &str,
@@ -52,8 +141,34 @@ impl PyOptions {
         author: Option<String>,
         max_html_bytes: Option<usize>,
         viewport_width: Option<f32>,
-    ) -> Self {
-        Self {
+        pdf_variant: Option<&str>,
+        attachments: Option<Vec<PyAttachment>>,
+        factur_x: Option<&Bound<'_, PyAny>>,
+        factur_x_profile: Option<&str>,
+    ) -> PyResult<Self> {
+        let pdf_variant = match pdf_variant {
+            Some(v) => ferropdf_render::PdfVariant::parse(v).map_err(value_error)?,
+            None => ferropdf_render::PdfVariant::Standard,
+        };
+        let profile = factur_x_profile
+            .map(ferropdf_render::FacturXProfile::parse)
+            .transpose()
+            .map_err(value_error)?;
+        if profile.is_some() && factur_x.is_none() {
+            return Err(value_error(
+                "factur_x_profile is set but factur_x (the XML invoice) is not".into(),
+            ));
+        }
+        let factur_x = match factur_x {
+            Some(obj) => Some(ferropdf_render::FacturX {
+                xml: bytes_or_str(obj, "factur_x")?,
+                profile,
+            }),
+            None => None,
+        };
+        // Surface option conflicts now rather than at render time.
+        let attachments = attachments.unwrap_or_default();
+        let opts = Self {
             page_size: page_size.to_string(),
             margin: margin.to_string(),
             base_url,
@@ -61,14 +176,37 @@ impl PyOptions {
             author,
             max_html_bytes,
             viewport_width,
-        }
+            pdf_variant,
+            attachments,
+            factur_x,
+        };
+        let render_opts: ferropdf_render::RenderOptions = opts.clone().into();
+        ferropdf_render::validate_options(&render_opts).map_err(|e| value_error(e.to_string()))?;
+        Ok(opts)
     }
 
     fn __repr__(&self) -> String {
-        format!(
-            "Options(page_size='{}', margin='{}')",
+        let mut s = format!(
+            "Options(page_size='{}', margin='{}'",
             self.page_size, self.margin
-        )
+        );
+        let variant = match (self.pdf_variant, self.factur_x.is_some()) {
+            (ferropdf_render::PdfVariant::Standard, true) => ferropdf_render::PdfVariant::PdfA3b,
+            (v, _) => v,
+        };
+        match variant {
+            ferropdf_render::PdfVariant::Standard => {}
+            ferropdf_render::PdfVariant::PdfA2b => s.push_str(", pdf_variant='pdf/a-2b'"),
+            ferropdf_render::PdfVariant::PdfA3b => s.push_str(", pdf_variant='pdf/a-3b'"),
+        }
+        if !self.attachments.is_empty() {
+            s.push_str(&format!(", attachments={}", self.attachments.len()));
+        }
+        if self.factur_x.is_some() {
+            s.push_str(", factur_x=...");
+        }
+        s.push(')');
+        s
     }
 }
 
@@ -82,6 +220,9 @@ impl From<PyOptions> for ferropdf_render::RenderOptions {
             author: opts.author,
             max_html_bytes: opts.max_html_bytes,
             viewport_width: opts.viewport_width,
+            pdf_variant: opts.pdf_variant,
+            attachments: opts.attachments.into_iter().map(Into::into).collect(),
+            factur_x: opts.factur_x,
         }
     }
 }
@@ -95,6 +236,9 @@ fn default_options() -> PyOptions {
         author: None,
         max_html_bytes: None,
         viewport_width: None,
+        pdf_variant: ferropdf_render::PdfVariant::Standard,
+        attachments: Vec::new(),
+        factur_x: None,
     }
 }
 
@@ -143,6 +287,55 @@ impl PyEngine {
         let py_bytes = PyBytes::new(py, &bytes);
         let py_warnings = PyList::new(py, &warnings)?;
         PyTuple::new(py, [py_bytes.into_any(), py_warnings.into_any()])
+    }
+
+    /// Render HTML to PNG images, one `bytes` object per page.
+    ///
+    /// `dpi=96` gives one image pixel per CSS pixel. `pages` selects pages by
+    /// zero-based index (an int or a sequence; negative counts from the end).
+    /// The images are rasterized from the PDF, so they match it exactly.
+    #[pyo3(signature = (html, dpi = 96.0, pages = None, transparent = false))]
+    fn render_png<'py>(
+        &self,
+        py: Python<'py>,
+        html: &str,
+        dpi: f32,
+        pages: Option<&Bound<'py, PyAny>>,
+        transparent: bool,
+    ) -> PyResult<Bound<'py, PyList>> {
+        let pages = match pages {
+            None => None,
+            Some(obj) => Some(match obj.extract::<i64>() {
+                Ok(i) => vec![i],
+                Err(_) => obj.extract::<Vec<i64>>().map_err(|_| {
+                    PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                        "pages must be an int or a sequence of ints",
+                    )
+                })?,
+            }),
+        };
+        let png_opts = ferropdf_render::PngOptions {
+            dpi,
+            pages,
+            transparent,
+        };
+        ferropdf_render::validate_png_options(&png_opts).map_err(png_err)?;
+        let (pdf, warnings) = self.render_inner(py, html)?;
+        let images = py
+            .detach(move || ferropdf_render::pdf_to_png(&pdf, &png_opts))
+            .map_err(png_err)?;
+        emit_warnings(py, &warnings);
+        PyList::new(py, images.iter().map(|png| PyBytes::new(py, png)))
+    }
+}
+
+fn png_err(e: ferropdf_render::PngError) -> PyErr {
+    use ferropdf_render::PngError::*;
+    let msg = e.to_string();
+    match e {
+        InvalidOption(_) => PyErr::new::<pyo3::exceptions::PyValueError, _>(msg),
+        PageOutOfRange(_) => PyErr::new::<pyo3::exceptions::PyIndexError, _>(msg),
+        Render(_) => PyErr::new::<RenderError, _>(msg),
     }
 }
 
@@ -229,6 +422,7 @@ fn write_pdf(
 fn _ferropdf(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyOptions>()?;
     m.add_class::<PyEngine>()?;
+    m.add_class::<PyAttachment>()?;
     m.add_function(wrap_pyfunction!(from_html, m)?)?;
     m.add_function(wrap_pyfunction!(from_file, m)?)?;
     m.add_function(wrap_pyfunction!(write_pdf, m)?)?;

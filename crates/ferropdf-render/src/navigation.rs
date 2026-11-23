@@ -139,6 +139,8 @@ pub(crate) fn write(
         ));
         // No visible border (browsers draw none).
         annot.border(0.0, 0.0, 0.0, None);
+        // Printable: required by PDF/A (ISO 19005-2 §6.3.2), harmless otherwise.
+        annot.flags(pdf_writer::types::AnnotationFlags::PRINT);
         match &link.target {
             Target::Uri(uri) => {
                 annot

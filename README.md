@@ -88,6 +88,10 @@ ferropdf.Options(
     title=None,             # PDF metadata
     author=None,            # PDF metadata
     viewport_width=None,    # CSS px for @media width queries (None = page area)
+    pdf_variant=None,       # "pdf/a-2b" or "pdf/a-3b" (None = plain PDF 1.7)
+    attachments=None,       # list[Attachment] embedded in the PDF
+    factur_x=None,          # Factur-X / ZUGFeRD XML invoice (bytes or str)
+    factur_x_profile=None,  # "EN 16931", "BASIC"… (None = read from the XML)
 )
 ```
 
@@ -97,15 +101,68 @@ area in CSS px — about 643px for A4 with 20mm margins, which selects the narro
 layout of responsive frameworks. Pass `viewport_width=1200` to get their desktop
 breakpoints (`.col-md-6`, `lg:flex`); the page itself keeps its size.
 
+### PDF/A, attachments and e-invoices
+
+`pdf_variant="pdf/a-3b"` (or `"pdf/a-2b"`) writes an archival PDF/A file,
+level B: XMP metadata, an sRGB output intent, a file identifier, every font
+embedded. Text that would need a font ferropdf cannot embed raises `FontError`
+instead of producing a non-conforming file. Conformance is checked with
+[veraPDF](https://verapdf.org) in CI.
+
+```python
+xml = open("factur-x.xml", "rb").read()   # CII XML from your invoicing code
+pdf = ferropdf.Engine(ferropdf.Options(
+    title="Facture FA-2026-0042",
+    author="Exemple SARL",
+    factur_x=xml,                          # implies pdf_variant="pdf/a-3b"
+)).render(invoice_html)
+```
+
+`factur_x` embeds the XML as `factur-x.xml` (`xrechnung.xml` for XRechnung),
+adds the `fx:` XMP extension schema and sets `/AFRelationship` as the
+Factur-X 1.0 / ZUGFeRD 2.x specifications require. The profile (`MINIMUM`,
+`BASIC WL`, `BASIC`, `EN 16931`, `EXTENDED`, `XRECHNUNG`) is read from the
+invoice's `GuidelineSpecifiedDocumentContextParameter`; pass
+`factur_x_profile=` to override it. ferropdf does not validate the invoice
+itself — use your invoicing library or the official schematron for that.
+
+Any file can be attached, in a plain PDF or a PDF/A-3b one:
+
+```python
+ferropdf.Attachment(
+    "data.csv", csv_text,            # bytes or str (UTF-8)
+    mime_type=None,                  # guessed from the extension
+    description="Source data",
+    relationship="Source",           # Source, Data, Alternative, Supplement, Unspecified
+)
+```
+
+Dates in PDF/A files are the render time in UTC, or `SOURCE_DATE_EPOCH` when
+it is set, for reproducible output.
+
 ### `Engine`
 
 ```python
 engine = ferropdf.Engine(options=None)
 engine.render(html: str) -> bytes         # Render HTML to PDF bytes
 engine.render_file(path: str) -> bytes    # Render from file
+engine.render_png(html: str, dpi=96, pages=None, transparent=False) -> list[bytes]
 ```
 
 The engine caches fonts internally — create once, render many times.
+
+`render_png` returns one PNG per page, for previews and thumbnails. The
+images are rasterized from the PDF (with [hayro](https://github.com/LaurenzV/hayro)),
+so they match it exactly. `dpi=96` gives one pixel per CSS pixel (A4 →
+794 × 1123). `pages` takes an index or a list of indices, zero-based, negative
+from the end (`pages=0` for a thumbnail of the first page). Images are limited
+to 16 384 px per side and 64 Mpx: a larger request raises `ValueError`, an
+index outside the document `IndexError`.
+
+```python
+thumb, = ferropdf.Engine().render_png(html, dpi=48, pages=0)
+open("thumb.png", "wb").write(thumb)
+```
 
 ### Functions
 
@@ -333,6 +390,10 @@ every row is a test that renders a snippet and checks the PDF, and every ❌ row
 | PDF | Block and image links | ✅ Supported |
 | PDF | `javascript:` / `data:` links are not clickable | ✅ Supported |
 | PDF | Outline / bookmarks (nested `h1`–`h6`) | ✅ Supported |
+| PDF | PDF/A-2b / PDF/A-3b output (`pdf_variant`) | ✅ Supported |
+| PDF | File attachments (`Attachment`) | ✅ Supported |
+| PDF | Factur-X / ZUGFeRD e-invoice (`factur_x`) | ✅ Supported |
+| PDF | PNG export (`Engine.render_png`) | ✅ Supported |
 <!-- feature-matrix:end -->
 
 Regenerate after changing a feature: `python tests/test_feature_matrix.py`.
@@ -437,7 +498,7 @@ cargo audit
 cargo machete   # checks for unused workspace dependencies
 ```
 
-**MSRV**: Rust 1.85+ (set in `[workspace.package]`).
+**MSRV**: Rust 1.85+ for the Rust crates (set in `[workspace.package]`); the Python extension needs 1.92+ because PNG export (`ferropdf-render`'s `png` feature) uses hayro.
 
 ---
 

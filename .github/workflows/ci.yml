@@ -77,6 +77,50 @@ jobs:
           path: tests/corpus/_output
           retention-days: 14
 
+  pdfa:
+    # PDF/A conformance of generated files (tests/pdfa/make_corpus.py),
+    # checked by veraPDF, the reference validator.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install fonts
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fonts-dejavu-core fonts-dejavu-extra
+      - name: Build and install
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install maturin
+          maturin develop --release
+      - name: Generate PDF/A files
+        run: |
+          source .venv/bin/activate
+          python tests/pdfa/make_corpus.py pdfa-out
+      - name: veraPDF
+        working-directory: pdfa-out
+        run: |
+          docker pull -q verapdf/cli:v1.28.2
+          : > report.txt
+          for flavour in 2b 3b; do
+            files=$(ls *-"$flavour".pdf | sed 's|^|/data/|')
+            docker run --rm -v "$PWD:/data" verapdf/cli:v1.28.2 \
+              --flavour "$flavour" --format text --verbose $files | tee -a report.txt || true
+          done
+          total=$(ls *.pdf | wc -l)
+          passed=$(grep -c '^PASS' report.txt || true)
+          echo "veraPDF: $passed / $total files pass"
+          test "$passed" -eq "$total"
+      - name: Upload PDF/A files
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: pdfa-files
+          path: pdfa-out
+          retention-days: 14
+
   lint:
     runs-on: ubuntu-latest
     steps:

@@ -8,9 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- PDF/A-2b and PDF/A-3b output: `Options(pdf_variant="pdf/a-3b")` writes XMP metadata (`pdfaid`, Dublin Core, dates matching the info dictionary), an sRGB output intent and a trailer `/ID`, embeds every font and never shows `.notdef`. Rendering fails with `FontError` rather than writing a non-conforming file when text has no embeddable font. Generated files are validated with veraPDF in CI (#42).
+- Factur-X 1.0 / ZUGFeRD 2.x e-invoices: `Options(factur_x=xml)` embeds the CII XML as `factur-x.xml` (or `xrechnung.xml`) with the right `/AFRelationship`, the `fx:` XMP properties and their PDF/A extension schema, and switches to PDF/A-3b. The profile is detected from the XML or given with `factur_x_profile` (#42).
+- File attachments: `ferropdf.Attachment(name, data, mime_type=None, description=None, relationship="Unspecified")` in `Options(attachments=[...])`, for plain PDFs and PDF/A-3b (`/EmbeddedFiles` name tree, catalog `/AF`, MIME subtype, size and modification date).
+- `SOURCE_DATE_EPOCH` sets the PDF/A creation date, for reproducible output.
+- PNG export: `Engine.render_png(html, dpi=96, pages=None, transparent=False)` returns one PNG per page, rasterized from the generated PDF with hayro so previews match it exactly. Pages are selected by index (negative from the end); oversized images (over 16 384 px per side or 64 Mpx) raise `ValueError`. In Rust: `ferropdf_render::pdf_to_png` behind the `png` feature. Building the Python extension now needs Rust 1.92 (#44).
 - `vertical-align` for table cells (`top`, `middle`, `bottom`, `baseline`) and the HTML `valign` attribute on `<td>`, `<th>`, `<tr>` and row groups. Cells are vertically centred by default, as in browsers (`thead, tbody, tfoot { vertical-align: middle }`).
 
 ### Fixed
+- Link annotations carry the Print flag (`/F 4`), so links are kept when printing and PDF/A validators accept them.
 - Long paragraphs took quadratic time and memory (200 000 characters in a narrow column: 15 s; 800 000: minutes), so a single paragraph of untrusted HTML could stall a server. Every line kept a copy of its whole paragraph's text, and every page fragment cloned the whole paragraph with all its lines. Lines now share the paragraph text and fragments copy only their own lines and styles; rendering is linear (0.4 s for 200 000 characters) and the output is unchanged.
 - `colspan` is parsed per HTML (leading digits, `0` or invalid → 1) and clamped to 1000: `colspan="100000"` made the layout panic.
 - A table row did not grow to fit a cell taller than its text (explicit `height`, images, block children, nested tables): the cell overflowed and the content after the table overlapped it. Row heights are now sized by Taffy from the cells' laid-out content instead of a text-only estimate (which also drops one text shaping pass per cell).
