@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Certificate</title>
+<style>
+  @page { size: A4 landscape; margin: 12mm; }
+  body { font-family: "DejaVu Serif", serif; margin: 0; }
+  .frame { border: 6px double #8a6d3b; padding: 12mm; height: 150mm; text-align: center;
+           background: linear-gradient(135deg, #fffaf0 0%, #f5e9d3 100%); }
+  .org { font-family: "DejaVu Sans", sans-serif; font-size: 11pt; letter-spacing: 4px; text-transform: uppercase; color: #8a6d3b; }
+  h1 { font-size: 34pt; margin: 10mm 0 4mm; color: #3b2f1e; }
+  .lead { font-size: 13pt; color: #555; }
+  .name { font-size: 28pt; font-style: italic; margin: 8mm 0; color: #1f3b5a;
+          border-bottom: 1px solid #8a6d3b; display: inline-block; padding: 0 12mm 2mm; }
+  .course { font-size: 14pt; }
+  .sigs { display: flex; justify-content: space-around; margin-top: 18mm; font-family: "DejaVu Sans", sans-serif; font-size: 9pt; }
+  .sig { width: 60mm; border-top: 1px solid #333; padding-top: 2mm; }
+  .seal { width: 26mm; height: 26mm; border-radius: 50%; background: #8a6d3b; color: #fff;
+          font-family: "DejaVu Sans", sans-serif; font-size: 8pt; font-weight: bold;
+          display: flex; align-items: center; justify-content: center; transform: rotate(-12deg); }
+</style>
+</head>
+<body>
+  <div class="frame">
+    <div class="org">Open Source Academy</div>
+    <h1>Certificate of Completion</h1>
+    <div class="lead">This certifies that</div>
+    <div class="name">Lina Ouali</div>
+    <div class="course">has successfully completed the 40-hour course<br><b>Systems Programming in Rust</b></div>
+    <div class="sigs">
+      <div class="sig">Programme Director</div>
+      <div class="seal">VERIFIED</div>
+      <div class="sig">Issued 28 October 2026</div>
+    </div>
+  </div>
+</body>
+</html>

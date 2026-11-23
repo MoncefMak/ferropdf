@@ -28,6 +28,27 @@ ferropdf intentionally targets **document rendering**, not full-fidelity browser
 
 ---
 
+## Gallery
+
+Real documents rendered by ferropdf. Click a page for the PDF; the HTML source is next to it.
+
+<table>
+<tr>
+<td align="center" valign="top" width="33%"><a href="examples/gallery/pdf/invoice.pdf"><img src="examples/gallery/img/invoice.png" height="290" alt="Invoice rendered by ferropdf"></a><br><b>Invoice</b><br><sub>Bootstrap-style CSS · Factur-X · PDF/A-3b</sub><br><sub><a href="examples/gallery/invoice.html">HTML</a> · <a href="examples/gallery/pdf/invoice.pdf">PDF</a></sub></td>
+<td align="center" valign="top" width="33%"><a href="examples/gallery/pdf/report.pdf"><img src="examples/gallery/img/report.png" height="290" alt="Report rendered by ferropdf"></a><br><b>Report</b><br><sub>Running headers · CSS grid · SVG chart · PDF/UA</sub><br><sub><a href="examples/gallery/report.html">HTML</a> · <a href="examples/gallery/pdf/report.pdf">PDF</a></sub></td>
+<td align="center" valign="top" width="33%"><a href="examples/gallery/pdf/letter.pdf"><img src="examples/gallery/img/letter.png" height="290" alt="Letter rendered by ferropdf"></a><br><b>Letter</b><br><sub>Serif typography · justified text</sub><br><sub><a href="examples/gallery/letter.html">HTML</a> · <a href="examples/gallery/pdf/letter.pdf">PDF</a></sub></td>
+</tr>
+<tr>
+<td align="center" valign="top" width="33%"><a href="examples/gallery/pdf/receipt.pdf"><img src="examples/gallery/img/receipt.png" height="290" alt="Receipt rendered by ferropdf"></a><br><b>Receipt</b><br><sub>80 mm roll · monospace</sub><br><sub><a href="examples/gallery/receipt.html">HTML</a> · <a href="examples/gallery/pdf/receipt.pdf">PDF</a></sub></td>
+<td align="center" valign="top" width="33%"><a href="examples/gallery/pdf/certificate.pdf"><img src="examples/gallery/img/certificate.png" width="260" alt="Certificate rendered by ferropdf"></a><br><b>Certificate</b><br><sub>Landscape · gradient · rotated seal</sub><br><sub><a href="examples/gallery/certificate.html">HTML</a> · <a href="examples/gallery/pdf/certificate.pdf">PDF</a></sub></td>
+<td align="center" valign="top" width="33%"><a href="examples/gallery/pdf/invoice_arabic.pdf"><img src="examples/gallery/img/invoice_arabic.png" height="290" alt="Arabic invoice rendered by ferropdf"></a><br><b>Arabic invoice</b><br><sub>Right-to-left · Arabic shaping</sub><br><sub><a href="examples/gallery/invoice_arabic.html">HTML</a> · <a href="examples/gallery/pdf/invoice_arabic.pdf">PDF</a></sub></td>
+</tr>
+</table>
+
+Regenerate with `python examples/gallery/build.py`. Every PDF above takes under 50 ms, thumbnail included.
+
+---
+
 ## Install
 
 ```bash

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Invoice INV-2026-0042</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  :root {
+    --bs-primary: #0d6efd;
+    --bs-secondary: #6c757d;
+    --bs-success: #198754;
+    --bs-light: #f8f9fa;
+    --bs-border-color: #dee2e6;
+    --bs-gutter-x: 1.5rem;
+    --bs-border-radius: .375rem;
+  }
+  *, ::before, ::after { box-sizing: border-box; }
+  body { font-family: "DejaVu Sans", sans-serif; font-size: 10pt; color: #212529; }
+  .container { padding: 0 calc(var(--bs-gutter-x) * .5); }
+  .row { display: flex; flex-wrap: wrap; margin: 0 calc(var(--bs-gutter-x) * -.5); }
+  .col-6 { flex: 0 0 auto; width: 50%; padding: 0 calc(var(--bs-gutter-x) * .5); }
+  .text-end { text-align: right; }
+  .text-muted { color: var(--bs-secondary); }
+  .fw-bold { font-weight: bold; }
+  .mb-4 { margin-bottom: 1.5rem; }
+  .h2 { font-size: 20pt; margin: 0 0 .25rem; color: var(--bs-primary); }
+  .badge { display: inline-block; padding: .35em .65em; font-size: .75em; font-weight: bold;
+           color: #fff; background: var(--bs-success); border-radius: var(--bs-border-radius); }
+  .card { border: 1px solid var(--bs-border-color); border-radius: var(--bs-border-radius);
+          padding: 1rem; background: var(--bs-light); }
+  .table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+  .table th { text-align: left; background: var(--bs-primary); color: #fff; padding: .5rem; }
+  .table td { padding: .5rem; border-bottom: 1px solid var(--bs-border-color); }
+  .table tr:nth-child(even) td { background: var(--bs-light); }
+  .totals { width: 45%; margin-left: auto; margin-top: 1rem; }
+  .totals td { padding: .25rem .5rem; }
+  .grand td { font-weight: bold; font-size: 12pt; border-top: 2px solid #212529; }
+  .btn { display: inline-block; padding: .375rem .75rem; color: #fff; background: var(--bs-primary);
+         border-radius: var(--bs-border-radius); }
+  footer { margin-top: 2rem; font-size: 8pt; color: var(--bs-secondary); }
+</style>
+</head>
+<body>
+  <div class="container">
+    <div class="row mb-4">
+      <div class="col-6">
+        <div class="h2">Northwind Studio</div>
+        <div class="text-muted">12 rue des Lilas<br>75011 Paris, France<br>billing@northwind.example</div>
+      </div>
+      <div class="col-6 text-end">
+        <div class="fw-bold">INVOICE INV-2026-0042</div>
+        <div class="text-muted">Issued 28 Oct 2026 &middot; Due 27 Nov 2026</div>
+        <span class="badge">PAID</span>
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="fw-bold">Bill to</div>
+      Acme Corporation &mdash; Accounts Payable<br>
+      400 Market Street, Suite 12, San Francisco, CA 94105
+    </div>
+
+    <table class="table">
+      <thead>
+        <tr><th>Description</th><th>Qty</th><th>Unit price</th><th class="text-end">Amount</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Brand identity workshop</td><td>1</td><td>1 800.00 €</td><td class="text-end">1 800.00 €</td></tr>
+        <tr><td>Logo design — 3 concepts</td><td>3</td><td>450.00 €</td><td class="text-end">1 350.00 €</td></tr>
+        <tr><td>Landing page (responsive)</td><td>1</td><td>2 400.00 €</td><td class="text-end">2 400.00 €</td></tr>
+        <tr><td>Hosting, 12 months</td><td>12</td><td>25.00 €</td><td class="text-end">300.00 €</td></tr>
+        <tr><td>Support hours</td><td>6</td><td>80.00 €</td><td class="text-end">480.00 €</td></tr>
+      </tbody>
+    </table>
+
+    <table class="totals">
+      <tr><td>Subtotal</td><td class="text-end">6 330.00 €</td></tr>
+      <tr><td>VAT 20%</td><td class="text-end">1 266.00 €</td></tr>
+      <tr class="grand"><td>Total</td><td class="text-end">7 596.00 €</td></tr>
+    </table>
+
+    <p><span class="btn">Pay online</span> or transfer to IBAN FR76 3000 6000 0112 3456 7890 189.</p>
+
+    <footer>Northwind Studio SAS — SIRET 123 456 789 00012 — Late payment penalty: 3× legal interest rate.</footer>
+  </div>
+</body>
+</html>

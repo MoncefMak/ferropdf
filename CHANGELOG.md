@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- README gallery (#45): an invoice (Factur-X, PDF/A-3b), a report (PDF/UA), a letter, a receipt, a certificate and an Arabic invoice, with their HTML, PDFs and thumbnails in `examples/gallery/`, rebuilt by `examples/gallery/build.py`.
 - Tagged PDF and PDF/UA-1 (#43). `Options(tagged=True)` writes a structure tree built from the HTML: headings, paragraphs, lists with `Lbl`/`LBody`, tables with header `Scope` and `ColSpan`, figures with `Alt`, links tied to their annotations, `lang`. Decorations and running headers/footers are artifacts. `Options(pdf_ua=True)` adds the PDF/UA identification, `DisplayDocTitle`, embedded fonts only, and raises `RenderError` for a document without `lang`, without a title, with an image lacking alt text, or with skipped heading levels (warnings with `tagged=True`). Validated with veraPDF `--flavour ua1` in CI, also combined with PDF/A-2b/3b and Factur-X. Inline SVGs take their alt text from `aria-label` or `<title>`.
 - Link annotations carry `/Contents` (the link text) for assistive technology.
 - PDF/A-2b and PDF/A-3b output: `Options(pdf_variant="pdf/a-3b")` writes XMP metadata (`pdfaid`, Dublin Core, dates matching the info dictionary), an sRGB output intent and a trailer `/ID`, embeds every font and never shows `.notdef`. Rendering fails with `FontError` rather than writing a non-conforming file when text has no embeddable font. Generated files are validated with veraPDF in CI (#42).

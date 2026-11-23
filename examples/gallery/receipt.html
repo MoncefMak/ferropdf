@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Receipt</title>
+<style>
+  @page { size: 80mm 200mm; margin: 4mm; }
+  body { font-family: "DejaVu Sans Mono", monospace; font-size: 8pt; }
+  .center { text-align: center; }
+  .shop { font-size: 12pt; font-weight: bold; }
+  hr { border: 0; border-top: 1px dashed #000; margin: 4pt 0; }
+  table { width: 100%; border-collapse: collapse; }
+  td.r { text-align: right; }
+  .total td { font-weight: bold; font-size: 10pt; }
+</style>
+</head>
+<body>
+  <div class="center shop">CAFÉ DU COIN</div>
+  <div class="center">8 bd Saint-Michel, Paris<br>TVA FR12 345678901</div>
+  <hr>
+  <div>28/10/2026 21:42 · Caisse 2 · Ticket 004512</div>
+  <hr>
+  <table>
+    <tr><td>2 × Espresso</td><td class="r">4,40</td></tr>
+    <tr><td>1 × Croissant</td><td class="r">1,60</td></tr>
+    <tr><td>1 × Jus d'orange pressé</td><td class="r">4,90</td></tr>
+    <tr><td>1 × Tarte citron</td><td class="r">5,20</td></tr>
+  </table>
+  <hr>
+  <table>
+    <tr><td>HT</td><td class="r">14,64</td></tr>
+    <tr><td>TVA 10 %</td><td class="r">1,46</td></tr>
+    <tr class="total"><td>TOTAL TTC</td><td class="r">16,10 €</td></tr>
+    <tr><td>CB sans contact</td><td class="r">16,10</td></tr>
+  </table>
+  <hr>
+  <div class="center">Merci de votre visite !</div>
+</body>
+</html>

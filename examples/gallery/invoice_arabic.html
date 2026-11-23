@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>فاتورة</title>
+<style>
+  @page { size: A4; margin: 18mm; }
+  body { font-family: "DejaVu Sans", sans-serif; font-size: 11pt; direction: rtl; }
+  .head { display: flex; justify-content: space-between; border-bottom: 3px solid #0a7d5a; padding-bottom: 6mm; }
+  .brand { font-size: 22pt; font-weight: bold; color: #0a7d5a; }
+  .meta { text-align: left; }
+  h2 { color: #0a7d5a; }
+  table { width: 100%; border-collapse: collapse; margin-top: 6mm; }
+  th { background: #0a7d5a; color: #fff; padding: 6px; text-align: right; }
+  td { padding: 6px; border-bottom: 1px solid #ccc; }
+  .num { text-align: left; }
+  .total td { font-weight: bold; border-top: 2px solid #0a7d5a; }
+</style>
+</head>
+<body>
+  <div class="head">
+    <div>
+      <div class="brand">شركة الأمل للتجارة</div>
+      <div>شارع ديدوش مراد، الجزائر العاصمة</div>
+    </div>
+    <div class="meta">
+      <div>رقم الفاتورة: 2026-117</div>
+      <div>التاريخ: 28/10/2026</div>
+    </div>
+  </div>
+  <h2>فاتورة ضريبية</h2>
+  <p>العميل: مؤسسة النور للخدمات — وهران</p>
+  <table>
+    <thead><tr><th>الوصف</th><th>الكمية</th><th>السعر (دج)</th><th>المجموع (دج)</th></tr></thead>
+    <tbody>
+      <tr><td>حاسوب محمول</td><td class="num">2</td><td class="num">145000</td><td class="num">290000</td></tr>
+      <tr><td>شاشة 27 بوصة</td><td class="num">3</td><td class="num">52000</td><td class="num">156000</td></tr>
+      <tr><td>خدمة التركيب والصيانة لمدة سنة</td><td class="num">1</td><td class="num">30000</td><td class="num">30000</td></tr>
+      <tr class="total"><td colspan="3">المجموع الكلي مع الرسوم (19%)</td><td class="num">566440</td></tr>
+    </tbody>
+  </table>
+  <p>شكراً لتعاملكم معنا. يُرجى الدفع خلال 30 يوماً.</p>
+</body>
+</html>
