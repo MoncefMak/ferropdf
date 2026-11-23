@@ -112,3 +112,16 @@ def test_warnings_are_emitted():
 def test_works_with_pdfa_options():
     opts = ferropdf.Options(pdf_variant="pdf/a-3b", attachments=[ferropdf.Attachment("a.txt", "x")])
     assert len(ferropdf.Engine(opts).render_png("<p>x</p>")) == 1
+
+
+def test_svg_keeps_its_aspect_ratio():
+    # A square viewBox in a 2:1 box is scaled uniformly and centred
+    # (preserveAspectRatio xMidYMid meet), as in browsers.
+    html = """<style>@page { size: A4; margin: 0 } body { margin: 0 }</style>
+    <svg width="10" height="10" viewBox="0 0 10 10" style="width: 200px; height: 100px">
+      <rect width="10" height="10" fill="#ff0000"/></svg>"""
+    (png,) = ferropdf.Engine().render_png(html, dpi=96, pages=0)
+    assert pixel(png, 100, 50)[:3] == (255, 0, 0)  # centre
+    assert pixel(png, 20, 50)[:3] == (255, 255, 255)  # left letterbox
+    assert pixel(png, 180, 50)[:3] == (255, 255, 255)  # right letterbox
+    assert pixel(png, 55, 50)[:3] == (255, 0, 0) and pixel(png, 145, 50)[:3] == (255, 0, 0)

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- README gallery (#45): an invoice (Factur-X, PDF/A-3b), a report (PDF/UA), a letter, a receipt, a certificate and an Arabic invoice, with their HTML, PDFs and thumbnails in `examples/gallery/`, rebuilt by `examples/gallery/build.py`.
 - Tagged PDF and PDF/UA-1 (#43). `Options(tagged=True)` writes a structure tree built from the HTML: headings, paragraphs, lists with `Lbl`/`LBody`, tables with header `Scope` and `ColSpan`, figures with `Alt`, links tied to their annotations, `lang`. Decorations and running headers/footers are artifacts. `Options(pdf_ua=True)` adds the PDF/UA identification, `DisplayDocTitle`, embedded fonts only, and raises `RenderError` for a document without `lang`, without a title, with an image lacking alt text, or with skipped heading levels (warnings with `tagged=True`). Validated with veraPDF `--flavour ua1` in CI, also combined with PDF/A-2b/3b and Factur-X. Inline SVGs take their alt text from `aria-label` or `<title>`.
 - Link annotations carry `/Contents` (the link text) for assistive technology.
 - PDF/A-2b and PDF/A-3b output: `Options(pdf_variant="pdf/a-3b")` writes XMP metadata (`pdfaid`, Dublin Core, dates matching the info dictionary), an sRGB output intent and a trailer `/ID`, embeds every font and never shows `.notdef`. Rendering fails with `FontError` rather than writing a non-conforming file when text has no embeddable font. Generated files are validated with veraPDF in CI (#42).
@@ -18,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `vertical-align` for table cells (`top`, `middle`, `bottom`, `baseline`) and the HTML `valign` attribute on `<td>`, `<th>`, `<tr>` and row groups. Cells are vertically centred by default, as in browsers (`thead, tbody, tfoot { vertical-align: middle }`).
 
 ### Fixed
+- SVG images were stretched to fill their box when its proportions differed from the SVG's (e.g. `width="100%"` with a fixed height, or a CSS size). They now keep their aspect ratio, centred, like `preserveAspectRatio` `xMidYMid meet` in browsers.
 - Table `<caption>` text was not rendered at all (#92). Captions now sit in a table wrapper box (CSS 2.1 §17.4): above the table, or below it with `caption-side: bottom`, as wide as the table and aligned with it, centred by default. In tagged PDF they are the `Caption` of their `Table`.
 - Link annotations carry the Print flag (`/F 4`), so links are kept when printing and PDF/A validators accept them.
 - Long paragraphs took quadratic time and memory (200 000 characters in a narrow column: 15 s; 800 000: minutes), so a single paragraph of untrusted HTML could stall a server. Every line kept a copy of its whole paragraph's text, and every page fragment cloned the whole paragraph with all its lines. Lines now share the paragraph text and fragments copy only their own lines and styles; rendering is linear (0.4 s for 200 000 characters) and the output is unchanged.

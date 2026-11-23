@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Q3 2026 Business Review</title>
+<style>
+  @page {
+    size: A4;
+    margin: 20mm 18mm 18mm;
+    @top-left { content: "Northwind Studio"; font-size: 8pt; color: #8a94a6; }
+    @top-right { content: "Q3 2026 Business Review"; font-size: 8pt; color: #8a94a6; }
+    @bottom-center { content: "Page " counter(page) " of " counter(pages); font-size: 8pt; color: #8a94a6; }
+  }
+  body { font-family: "DejaVu Sans", sans-serif; font-size: 9.5pt; line-height: 1.5; color: #1f2933; }
+  h1 { font-size: 22pt; color: #0b3d91; margin: 0 0 2pt; }
+  .lead { color: #52606d; font-size: 11pt; margin: 0 0 14pt; }
+  h2 { font-size: 13pt; color: #0b3d91; border-bottom: 1.5pt solid #0b3d91; padding-bottom: 2pt; margin-top: 18pt; break-after: avoid; }
+  .toc { background: #f5f7fa; border-radius: 6pt; padding: 8pt 12pt; margin-bottom: 14pt; }
+  .toc a { color: #0b3d91; text-decoration: none; }
+  .toc ol { margin: 4pt 0 0; padding-left: 16pt; }
+  .kpis { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10pt; margin: 10pt 0 6pt; }
+  .kpi { border-radius: 8pt; padding: 10pt 12pt; color: #fff;
+         background: linear-gradient(135deg, #0b3d91, #3e7bfa); }
+  .kpi.green { background: linear-gradient(135deg, #0f7b52, #2bb673); }
+  .kpi.amber { background: linear-gradient(135deg, #b54708, #f79009); }
+  .kpi .label { font-size: 8pt; text-transform: uppercase; letter-spacing: 0.5pt; opacity: 0.85; }
+  .kpi .value { font-size: 20pt; font-weight: bold; }
+  .kpi .delta { font-size: 8.5pt; }
+  .chart { margin: 8pt 0 2pt; }
+  .note { font-size: 8pt; color: #7b8794; }
+  table { width: 100%; border-collapse: collapse; font-size: 9pt; margin-top: 6pt; }
+  caption { text-align: left; font-weight: bold; color: #323f4b; padding-bottom: 4pt; }
+  thead th { background: #0b3d91; color: #fff; padding: 5pt 6pt; text-align: left; }
+  td { padding: 4pt 6pt; border-bottom: 0.5pt solid #d9e2ec; }
+  tbody tr:nth-child(even) td { background: #f5f7fa; }
+  .num { text-align: right; }
+  .up { color: #0f7b52; }
+  .down { color: #b42318; }
+  .callout { border-left: 3pt solid #f79009; background: #fffaeb; padding: 8pt 12pt; margin: 12pt 0; border-radius: 0 6pt 6pt 0; }
+  section.next { break-before: page; }
+</style>
+</head>
+<body>
+  <h1>Q3 2026 Business Review</h1>
+  <p class="lead">Northwind Studio · Prepared for the Board of Directors · 14 October 2026</p>
+
+  <nav class="toc">
+    <strong>Contents</strong>
+    <ol>
+      <li><a href="#summary">Executive summary</a></li>
+      <li><a href="#revenue">Revenue by quarter</a></li>
+      <li><a href="#regions">Regional performance</a></li>
+      <li><a href="#outlook">Outlook for Q4</a></li>
+    </ol>
+  </nav>
+
+  <h2 id="summary">1. Executive summary</h2>
+  <div class="kpis">
+    <div class="kpi"><div class="label">Revenue</div><div class="value">€2.84M</div><div class="delta">+12.4% vs Q2</div></div>
+    <div class="kpi green"><div class="label">Gross margin</div><div class="value">61%</div><div class="delta">+3 pts vs Q2</div></div>
+    <div class="kpi amber"><div class="label">New clients</div><div class="value">38</div><div class="delta">−4 vs Q2</div></div>
+  </div>
+  <p>The studio closed its strongest quarter to date. Growth came from the
+     redesign programme for retail clients and from recurring hosting
+     contracts, which now account for a third of revenue. Margin improved as
+     the design system work begun in Q1 cut delivery time on new projects.</p>
+  <p>Client acquisition slowed over the summer. Pipeline value for Q4 is
+     nevertheless 18% above last year, with two framework agreements awaiting
+     signature.</p>
+
+  <h2 id="revenue">2. Revenue by quarter</h2>
+  <svg class="chart" width="100%" height="212" viewBox="0 0 460 150" role="img"
+       aria-label="Bar chart of revenue by quarter: Q4 2025 €2.1M, Q1 2026 €2.3M, Q2 2026 €2.5M, Q3 2026 €2.84M">
+    <line x1="40" y1="120" x2="450" y2="120" stroke="#9aa5b1" stroke-width="1"/>
+    <g font-family="DejaVu Sans" font-size="9" fill="#52606d">
+      <text x="34" y="123" text-anchor="end">0</text>
+      <text x="34" y="70.5" text-anchor="end">1.5M</text>
+      <text x="34" y="18" text-anchor="end">3M</text>
+    </g>
+    <line x1="40" y1="67.5" x2="450" y2="67.5" stroke="#e4e7eb" stroke-width="1"/>
+    <line x1="40" y1="15" x2="450" y2="15" stroke="#e4e7eb" stroke-width="1"/>
+    <rect x="70" y="46.5" width="60" height="73.5" rx="3" fill="#9fb3d9"/>
+    <rect x="170" y="39.5" width="60" height="80.5" rx="3" fill="#7d9ad1"/>
+    <rect x="270" y="32.5" width="60" height="87.5" rx="3" fill="#5b82d6"/>
+    <rect x="370" y="20.6" width="60" height="99.4" rx="3" fill="#0b3d91"/>
+    <g font-family="DejaVu Sans" font-size="9" fill="#323f4b" text-anchor="middle">
+      <text x="100" y="135">Q4 2025</text><text x="200" y="135">Q1 2026</text>
+      <text x="300" y="135">Q2 2026</text><text x="400" y="135">Q3 2026</text>
+    </g>
+    <g font-family="DejaVu Sans" font-size="9" font-weight="bold" fill="#323f4b" text-anchor="middle">
+      <text x="100" y="42">2.10</text><text x="200" y="35">2.30</text>
+      <text x="300" y="28">2.50</text><text x="400" y="16">2.84</text>
+    </g>
+  </svg>
+  <p class="note">Recognised revenue, € millions. Q3 includes €0.21M of one-off licence fees.</p>
+
+  <section class="next">
+    <h2 id="regions">3. Regional performance</h2>
+    <table>
+      <caption>Table 1 — Revenue and margin by region, Q3 2026</caption>
+      <thead>
+        <tr><th>Region</th><th class="num">Revenue</th><th class="num">vs Q2</th><th class="num">Margin</th><th>Lead</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Île-de-France</td><td class="num">€1,120k</td><td class="num up">+15%</td><td class="num">64%</td><td>C. Martin</td></tr>
+        <tr><td>Auvergne-Rhône-Alpes</td><td class="num">€640k</td><td class="num up">+9%</td><td class="num">59%</td><td>A. Benali</td></tr>
+        <tr><td>Occitanie</td><td class="num">€410k</td><td class="num up">+21%</td><td class="num">58%</td><td>L. Garcia</td></tr>
+        <tr><td>Hauts-de-France</td><td class="num">€380k</td><td class="num down">−3%</td><td class="num">55%</td><td>M. Dubois</td></tr>
+        <tr><td>International</td><td class="num">€290k</td><td class="num up">+34%</td><td class="num">66%</td><td>S. Okafor</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout">
+      <strong>Watch point.</strong> Hauts-de-France lost one retail account
+      in August. A recovery plan with two prospects is in progress.
+    </div>
+
+    <h2 id="outlook">4. Outlook for Q4</h2>
+    <ul>
+      <li>Sign the two framework agreements (expected value €1.4M over two years).</li>
+      <li>Open the accessibility audit offer: tagged PDF and PDF/UA deliverables.</li>
+      <li>Hire two senior developers for the International team.</li>
+    </ul>
+    <p>Guidance for Q4 revenue is <strong>€2.9M–3.1M</strong> with a gross
+       margin of 60–62%.</p>
+  </section>
+</body>
+</html>
