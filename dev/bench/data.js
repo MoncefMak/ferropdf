@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795423448257,
+  "lastUpdate": 1795425539542,
   "repoUrl": "https://github.com/MoncefMak/ferropdf",
   "entries": {
     "FastPDF Criterion Benchmarks": [
@@ -3412,6 +3412,54 @@ window.BENCHMARK_DATA = {
             "name": "render_invoice_cached",
             "value": 1323530,
             "range": "± 25962",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "72460183+MoncefMak@users.noreply.github.com",
+            "name": "MoncefMak",
+            "username": "MoncefMak"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "692e4b784af877a95d2cdcc1f6e9581927e58de9",
+          "message": "Merge pull request #94 from MoncefMak/fix/svg-aspect-ratio\n\nKeep SVG aspect ratio when the box has other proportions",
+          "timestamp": "2026-11-23T10:16:08+01:00",
+          "tree_id": "914d9a282808b892e94f6ba1aab049c2a8e909e3",
+          "url": "https://github.com/MoncefMak/ferropdf/commit/692e4b784af877a95d2cdcc1f6e9581927e58de9"
+        },
+        "date": 1795425538753,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "render_simple",
+            "value": 3086127,
+            "range": "± 238101",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice",
+            "value": 3605399,
+            "range": "± 234719",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_simple_cached",
+            "value": 274735,
+            "range": "± 8981",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice_cached",
+            "value": 669546,
+            "range": "± 68453",
             "unit": "ns/iter"
           }
         ]
