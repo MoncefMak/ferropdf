@@ -621,7 +621,9 @@ def chk_table_caption():
     d = Doc(wrap('<table style="width:300px;margin:0 auto"><caption>Cap</caption><tr><td>a</td></tr></table>'
                  '<table style="caption-side:bottom"><caption>Low</caption><tr><td>b</td></tr></table>'))
     cap, a, low, b = d.word("Cap"), d.word("a"), d.word("Low"), d.word("b")
-    assert cap[3] <= a[1] and low[1] >= b[3], "top caption above, bottom caption below"
+    # Word boxes include the font's ascent/descent, which can overlap
+    # between lines: compare the tops of the words.
+    assert cap[1] + 5 < a[1] and low[1] > b[1] + 5, "top caption above, bottom caption below"
     assert abs((cap[0] + cap[2]) / 2 - 297.6) < 2, "caption centred over the centred table"
 
 
