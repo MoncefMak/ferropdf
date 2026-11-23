@@ -262,3 +262,15 @@ def test_multi_page_and_internal_links():
 def test_options_repr():
     assert "pdf_ua=True" in repr(ferropdf.Options(pdf_ua=True))
     assert "tagged=True" in repr(ferropdf.Options(tagged=True))
+
+
+def test_table_caption_is_in_the_table():
+    html = """<html lang="fr"><body>
+    <table><caption>Haut</caption><tr><td>a</td></tr></table>
+    <table style="caption-side: bottom"><caption>Bas</caption><tr><td>b</td></tr></table>
+    </body></html>"""
+    t = tree(render(html, tagged=True))
+    first, second = find(t, "Table")
+    assert first[2][0] == "Caption" and second[-1][0] == "Caption"
+    assert roles(t) == ["Document", "Table", "Caption", "TBody", "TR", "TD",
+                        "Table", "TBody", "TR", "TD", "Caption"]

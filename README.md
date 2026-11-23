@@ -151,7 +151,7 @@ text extraction follow the document's structure:
 |---|---|
 | `h1`–`h6`, `p`, `blockquote` | `H1`–`H6`, `P`, `BlockQuote` |
 | `ul`, `ol`, `li` | `L`, `LI` with `Lbl` (marker) and `LBody` |
-| `table`, `thead`/`tbody`/`tfoot`, `tr`, `th`, `td` | `Table`, `THead`/`TBody`/`TFoot`, `TR`, `TH` (with `Scope`), `TD` (with `ColSpan`) |
+| `table`, `caption`, `thead`/`tbody`/`tfoot`, `tr`, `th`, `td` | `Table`, `Caption`, `THead`/`TBody`/`TFoot`, `TR`, `TH` (with `Scope`), `TD` (with `ColSpan`) |
 | `figure`, `figcaption` | `Div`, `Caption` |
 | `img`, inline `svg` | `Figure` with `Alt` (from `alt`, `aria-label` or the SVG `<title>`) |
 | `a href` | `Link`, tied to its annotation |
@@ -373,6 +373,7 @@ every row is a test that renders a snippet and checks the PDF, and every ❌ row
 | Layout | `inline-block` shrink-to-fit next to text | ✅ Supported |
 | Layout | `inline-block` padding around its label | ✅ Supported |
 | Layout | Tables with `colspan` | ✅ Supported |
+| Layout | Table `<caption>` and `caption-side` | ✅ Supported |
 | Layout | Table cell `vertical-align` (`middle` by default) | ✅ Supported |
 | Layout | HTML `valign` on rows and cells | ✅ Supported |
 | Layout | Row grows to its tallest cell (explicit `height`, blocks) | ✅ Supported |
