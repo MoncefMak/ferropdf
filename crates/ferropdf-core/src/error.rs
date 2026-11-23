@@ -41,6 +41,9 @@ pub enum RenderWarning {
         bold: bool,
         italic: bool,
     },
+    /// A tagged-PDF accessibility problem in the HTML (image without alt
+    /// text, skipped heading level).
+    Accessibility(String),
 }
 
 impl std::fmt::Display for RenderWarning {
@@ -71,6 +74,7 @@ impl std::fmt::Display for RenderWarning {
                     family, bold, italic
                 )
             }
+            RenderWarning::Accessibility(m) => write!(f, "accessibility (tagged PDF): {}", m),
         }
     }
 }

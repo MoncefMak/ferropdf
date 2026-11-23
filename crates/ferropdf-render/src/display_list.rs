@@ -1,5 +1,5 @@
-use ferropdf_core::Radii;
 use ferropdf_core::{BorderStyle, BoxShadow, Color, Rect, ShapedGlyph};
+use ferropdf_core::{NodeId, Radii};
 
 /// A drawing operation for rendering.
 #[derive(Debug, Clone)]
@@ -72,7 +72,12 @@ pub enum DrawOp {
     /// Set opacity
     SetOpacity(f32),
     /// A clickable area: an external URI, or `#name` for an anchor.
-    Link { rect: Rect, target: String },
+    /// `text` is the link's text, its accessible description.
+    Link {
+        rect: Rect,
+        target: String,
+        text: String,
+    },
     /// The position (top of a box) a `#name` link jumps to.
     Anchor { name: String, y: f32 },
     /// A PDF outline (bookmark) entry; `key` identifies the heading so that
@@ -86,6 +91,27 @@ pub enum DrawOp {
     /// Concatenate an affine matrix `[a, b, c, d, e, f]` expressed in page
     /// coordinates (top-left origin, y down) to the current transform.
     Transform([f32; 6]),
+    /// What the following ops draw, for tagged PDF (see `tagging`). Content
+    /// ops (text, images) are tagged with their owner; decorations are
+    /// artifacts.
+    Owner(Owner),
+}
+
+/// The logical owner of drawing ops.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Owner {
+    /// Running headers, footers and page counters.
+    Pagination,
+    /// Content of a DOM node (a text node or anonymous box resolves to its
+    /// nearest semantic ancestor).
+    Node(Option<NodeId>),
+    /// The marker of the list item `NodeId`.
+    Label(NodeId),
+    /// The part of a paragraph's text that is an inline `<a href>`.
+    InlineLink {
+        block: Option<NodeId>,
+        target: String,
+    },
 }
 
 /// A display list for one page.

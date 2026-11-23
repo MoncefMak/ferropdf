@@ -10,6 +10,7 @@ mod pdfa;
 #[cfg(feature = "png")]
 mod png;
 mod sandbox;
+mod tagging;
 
 use ferropdf_core::{PageConfig, PageMargins, PageSize, RenderWarning};
 pub use ferropdf_layout::FontDatabase;
@@ -45,6 +46,11 @@ pub struct RenderOptions {
     pub attachments: Vec<Attachment>,
     /// Factur-X / ZUGFeRD invoice XML; implies PDF/A-3b.
     pub factur_x: Option<FacturX>,
+    /// Tagged PDF: a logical structure tree for screen readers and reflow.
+    pub tagged: bool,
+    /// PDF/UA-1 (ISO 14289-1): tagged, and refuses documents that cannot
+    /// conform (no `<html lang>`, no title, images without alt text).
+    pub pdf_ua: bool,
 }
 
 impl Default for RenderOptions {
@@ -60,6 +66,8 @@ impl Default for RenderOptions {
             pdf_variant: PdfVariant::Standard,
             attachments: Vec::new(),
             factur_x: None,
+            tagged: false,
+            pdf_ua: false,
         }
     }
 }
@@ -120,7 +128,8 @@ fn render_with_warnings_inner(
     let mut fonts = font_db.session();
 
     // 0. Check the PDF/A and attachment options before doing any work.
-    let plan = pdfa::Plan::new(opts.pdf_variant, &opts.attachments, opts.factur_x.as_ref())?;
+    let mut plan = pdfa::Plan::new(opts.pdf_variant, &opts.attachments, opts.factur_x.as_ref())?;
+    plan.ua = opts.pdf_ua;
 
     // Reject oversize input early so adversarial HTML can't amplify memory.
     let max_html = opts.max_html_bytes.unwrap_or(DEFAULT_MAX_HTML_BYTES);
@@ -295,6 +304,8 @@ fn render_with_warnings_inner(
 
     // 7. Paginate
     let mut pages = ferropdf_page::paginate(&layout_tree, &page_config)?;
+    // Boxes added after these are margin boxes (pagination artifacts).
+    let flow_lens: Vec<usize> = pages.iter().map(|p| p.content.len()).collect();
 
     // 7b. Margin boxes (running headers/footers, page counters) — needs the
     // final page count, so it runs after pagination.
@@ -323,15 +334,52 @@ fn render_with_warnings_inner(
     // 8. Build display lists
     let display_lists: Vec<_> = pages
         .iter()
-        .map(|page| painter::paint_page(page, &page_config))
+        .zip(&flow_lens)
+        .map(|(page, &flow_len)| painter::paint_page(page, &page_config, flow_len))
         .collect();
 
     // 9. Write PDF (reuse fontdb from cosmic-text — no second load_system_fonts)
+    // 8b. Tagged PDF: the semantic structure of the DOM. PDF/UA refuses a
+    // document that cannot conform rather than writing a false claim.
+    let tagged = opts.tagged || opts.pdf_ua;
+    let semantics = tagged.then(|| tagging::Semantics::from_document(&parse_result.document));
+    let mut title = opts.title.clone();
+    if let Some(sem) = &semantics {
+        title = title.or_else(|| sem.title.clone());
+        if opts.pdf_ua {
+            let fail = |m: String| Err(ferropdf_core::FerroError::PdfWrite(format!("PDF/UA: {m}")));
+            if sem.lang.is_none() {
+                return fail("the document language is required: add <html lang=\"…\">".into());
+            }
+            if title.is_none() {
+                return fail("a title is required: add <title> or pass title=".into());
+            }
+            if let Some(src) = sem.missing_alt.first() {
+                return fail(format!(
+                    "every image needs alt text (alt=\"\" for decorative ones); missing on {src}"
+                ));
+            }
+            if let Some(problem) = &sem.heading_problem {
+                return fail(problem.clone());
+            }
+        }
+        for src in &sem.missing_alt {
+            warnings.push(RenderWarning::Accessibility(format!(
+                "image without alt text: {src}"
+            )));
+        }
+        if let Some(problem) = &sem.heading_problem {
+            warnings.push(RenderWarning::Accessibility(problem.clone()));
+        }
+    }
+
     let pdf_bytes = pdf::write_pdf(
         &display_lists,
         &page_config,
         opts,
         &plan,
+        semantics.as_ref(),
+        title.as_deref(),
         Some(fonts.db()),
         &mut warnings,
     )?;

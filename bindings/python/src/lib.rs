@@ -114,6 +114,8 @@ pub struct PyOptions {
     pub pdf_variant: ferropdf_render::PdfVariant,
     pub attachments: Vec<PyAttachment>,
     pub factur_x: Option<ferropdf_render::FacturX>,
+    pub tagged: bool,
+    pub pdf_ua: bool,
 }
 
 #[pymethods]
@@ -131,6 +133,8 @@ impl PyOptions {
         attachments = None,
         factur_x = None,
         factur_x_profile = None,
+        tagged = false,
+        pdf_ua = false,
     ))]
     #[allow(clippy::too_many_arguments)]
     fn new(
@@ -145,6 +149,8 @@ impl PyOptions {
         attachments: Option<Vec<PyAttachment>>,
         factur_x: Option<&Bound<'_, PyAny>>,
         factur_x_profile: Option<&str>,
+        tagged: bool,
+        pdf_ua: bool,
     ) -> PyResult<Self> {
         let pdf_variant = match pdf_variant {
             Some(v) => ferropdf_render::PdfVariant::parse(v).map_err(value_error)?,
@@ -179,6 +185,8 @@ impl PyOptions {
             pdf_variant,
             attachments,
             factur_x,
+            tagged,
+            pdf_ua,
         };
         let render_opts: ferropdf_render::RenderOptions = opts.clone().into();
         ferropdf_render::validate_options(&render_opts).map_err(|e| value_error(e.to_string()))?;
@@ -205,6 +213,11 @@ impl PyOptions {
         if self.factur_x.is_some() {
             s.push_str(", factur_x=...");
         }
+        if self.pdf_ua {
+            s.push_str(", pdf_ua=True");
+        } else if self.tagged {
+            s.push_str(", tagged=True");
+        }
         s.push(')');
         s
     }
@@ -223,6 +236,8 @@ impl From<PyOptions> for ferropdf_render::RenderOptions {
             pdf_variant: opts.pdf_variant,
             attachments: opts.attachments.into_iter().map(Into::into).collect(),
             factur_x: opts.factur_x,
+            tagged: opts.tagged,
+            pdf_ua: opts.pdf_ua,
         }
     }
 }
@@ -239,6 +254,8 @@ fn default_options() -> PyOptions {
         pdf_variant: ferropdf_render::PdfVariant::Standard,
         attachments: Vec::new(),
         factur_x: None,
+        tagged: false,
+        pdf_ua: false,
     }
 }
 

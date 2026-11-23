@@ -248,6 +248,8 @@ pub struct FacturX {
 /// Options checked and resolved into what gets written.
 pub(crate) struct Plan {
     pub variant: PdfVariant,
+    /// PDF/UA-1 (ISO 14289-1): `pdfuaid` in XMP, strict fonts.
+    pub ua: bool,
     attachments: Vec<Attachment>,
     factur_x: Option<(FacturXProfile, String)>,
 }
@@ -319,6 +321,7 @@ impl Plan {
 
         Ok(Self {
             variant,
+            ua: false,
             attachments: files,
             factur_x: fx,
         })
@@ -328,8 +331,18 @@ impl Plan {
         self.variant.is_pdfa()
     }
 
+    /// PDF/A and PDF/UA: every font embedded, no `.notdef`.
+    pub fn strict_fonts(&self) -> bool {
+        self.is_pdfa() || self.ua
+    }
+
+    /// An XMP metadata stream (and matching info dates) is written.
+    pub fn writes_metadata(&self) -> bool {
+        self.is_pdfa() || self.ua
+    }
+
     pub fn needs_catalog_entries(&self) -> bool {
-        self.is_pdfa() || !self.attachments.is_empty()
+        self.writes_metadata() || !self.attachments.is_empty()
     }
 }
 
@@ -349,7 +362,7 @@ impl Refs {
     pub fn alloc(plan: &Plan, next_ref: &mut dyn FnMut() -> Ref) -> Self {
         let pdfa = plan.is_pdfa();
         Self {
-            metadata: pdfa.then(&mut *next_ref),
+            metadata: plan.writes_metadata().then(&mut *next_ref),
             icc: pdfa.then(&mut *next_ref),
             files: plan
                 .attachments
@@ -612,6 +625,14 @@ fn build_xmp(
         ));
     }
 
+    if plan.ua {
+        x.push_str(
+            "<rdf:Description rdf:about=\"\" xmlns:pdfuaid=\"http://www.aiim.org/pdfua/ns/id/\">\n\
+             <pdfuaid:part>1</pdfuaid:part>\n\
+             </rdf:Description>\n",
+        );
+    }
+
     x.push_str(
         "<rdf:Description rdf:about=\"\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\n\
          <dc:format>application/pdf</dc:format>\n",
@@ -654,54 +675,87 @@ fn build_xmp(
              </rdf:Description>\n",
             profile.xmp_name()
         ));
-        // PDF/A requires a schema description for every non-standard
-        // namespace used in XMP (ISO 19005-2 §6.6.2.3.3).
-        let prop = |name: &str, desc: &str| {
-            format!(
-                "<rdf:li rdf:parseType=\"Resource\">\
-                 <pdfaProperty:name>{name}</pdfaProperty:name>\
-                 <pdfaProperty:valueType>Text</pdfaProperty:valueType>\
-                 <pdfaProperty:category>external</pdfaProperty:category>\
-                 <pdfaProperty:description>{desc}</pdfaProperty:description>\
-                 </rdf:li>\n"
-            )
-        };
+    }
+
+    // PDF/A requires a schema description for every non-standard namespace
+    // used in XMP (ISO 19005-2 §6.6.2.3.3): fx (Factur-X) and pdfuaid.
+    type Prop = (&'static str, &'static str, &'static str, &'static str);
+    let mut schemas: Vec<(&str, &str, &str, Vec<Prop>)> = Vec::new();
+    if plan.factur_x.is_some() {
+        schemas.push((
+            "Factur-X PDFA Extension Schema",
+            FACTUR_X_NS,
+            "fx",
+            vec![
+                (
+                    "DocumentFileName",
+                    "Text",
+                    "external",
+                    "The name of the embedded XML document",
+                ),
+                (
+                    "DocumentType",
+                    "Text",
+                    "external",
+                    "The type of the hybrid document in capital letters, e.g. INVOICE or ORDER",
+                ),
+                (
+                    "Version",
+                    "Text",
+                    "external",
+                    "The actual version of the standard applying to the embedded XML document",
+                ),
+                (
+                    "ConformanceLevel",
+                    "Text",
+                    "external",
+                    "The conformance level of the embedded XML document",
+                ),
+            ],
+        ));
+    }
+    if plan.ua && plan.is_pdfa() {
+        schemas.push((
+            "PDF/UA Universal Accessibility Schema",
+            "http://www.aiim.org/pdfua/ns/id/",
+            "pdfuaid",
+            vec![(
+                "part",
+                "Integer",
+                "internal",
+                "Indicates, which part of ISO 14289 standard is followed",
+            )],
+        ));
+    }
+    if !schemas.is_empty() {
         x.push_str(
             "<rdf:Description rdf:about=\"\" \
              xmlns:pdfaExtension=\"http://www.aiim.org/pdfa/ns/extension/\" \
              xmlns:pdfaSchema=\"http://www.aiim.org/pdfa/ns/schema#\" \
              xmlns:pdfaProperty=\"http://www.aiim.org/pdfa/ns/property#\">\n\
-             <pdfaExtension:schemas><rdf:Bag>\n\
-             <rdf:li rdf:parseType=\"Resource\">\n\
-             <pdfaSchema:schema>Factur-X PDFA Extension Schema</pdfaSchema:schema>\n",
+             <pdfaExtension:schemas><rdf:Bag>\n",
         );
-        x.push_str(&format!(
-            "<pdfaSchema:namespaceURI>{FACTUR_X_NS}</pdfaSchema:namespaceURI>\n\
-             <pdfaSchema:prefix>fx</pdfaSchema:prefix>\n\
-             <pdfaSchema:property><rdf:Seq>\n"
-        ));
-        x.push_str(&prop(
-            "DocumentFileName",
-            "The name of the embedded XML document",
-        ));
-        x.push_str(&prop(
-            "DocumentType",
-            "The type of the hybrid document in capital letters, e.g. INVOICE or ORDER",
-        ));
-        x.push_str(&prop(
-            "Version",
-            "The actual version of the standard applying to the embedded XML document",
-        ));
-        x.push_str(&prop(
-            "ConformanceLevel",
-            "The conformance level of the embedded XML document",
-        ));
-        x.push_str(
-            "</rdf:Seq></pdfaSchema:property>\n\
-             </rdf:li>\n\
-             </rdf:Bag></pdfaExtension:schemas>\n\
-             </rdf:Description>\n",
-        );
+        for (schema, ns, prefix, props) in schemas {
+            x.push_str(&format!(
+                "<rdf:li rdf:parseType=\"Resource\">\n\
+                 <pdfaSchema:schema>{schema}</pdfaSchema:schema>\n\
+                 <pdfaSchema:namespaceURI>{ns}</pdfaSchema:namespaceURI>\n\
+                 <pdfaSchema:prefix>{prefix}</pdfaSchema:prefix>\n\
+                 <pdfaSchema:property><rdf:Seq>\n"
+            ));
+            for (name, value_type, category, desc) in props {
+                x.push_str(&format!(
+                    "<rdf:li rdf:parseType=\"Resource\">\
+                     <pdfaProperty:name>{name}</pdfaProperty:name>\
+                     <pdfaProperty:valueType>{value_type}</pdfaProperty:valueType>\
+                     <pdfaProperty:category>{category}</pdfaProperty:category>\
+                     <pdfaProperty:description>{desc}</pdfaProperty:description>\
+                     </rdf:li>\n"
+                ));
+            }
+            x.push_str("</rdf:Seq></pdfaSchema:property>\n</rdf:li>\n");
+        }
+        x.push_str("</rdf:Bag></pdfaExtension:schemas>\n</rdf:Description>\n");
     }
 
     x.push_str("</rdf:RDF>\n</x:xmpmeta>\n");
