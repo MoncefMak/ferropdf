@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795370783478,
+  "lastUpdate": 1795411124758,
   "repoUrl": "https://github.com/MoncefMak/ferropdf",
   "entries": {
     "FastPDF Criterion Benchmarks": [
@@ -3172,6 +3172,54 @@ window.BENCHMARK_DATA = {
             "name": "render_invoice_cached",
             "value": 1009215,
             "range": "± 10733",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "72460183+MoncefMak@users.noreply.github.com",
+            "name": "MoncefMak",
+            "username": "MoncefMak"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "ef0c0421c78c9404bfd08d67906f1460d46744f2",
+          "message": "Merge pull request #89 from MoncefMak/fix/macos-bold-test\n\ntest: fix macOS failure of the rich-paragraph split test",
+          "timestamp": "2026-11-23T06:16:10+01:00",
+          "tree_id": "9fa6639badc42564df175ed1852ca1145f3eeb40",
+          "url": "https://github.com/MoncefMak/ferropdf/commit/ef0c0421c78c9404bfd08d67906f1460d46744f2"
+        },
+        "date": 1795411124082,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "render_simple",
+            "value": 2374185,
+            "range": "± 34688",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice",
+            "value": 2968975,
+            "range": "± 27449",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_simple_cached",
+            "value": 562520,
+            "range": "± 2014",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice_cached",
+            "value": 1061862,
+            "range": "± 8645",
             "unit": "ns/iter"
           }
         ]
