@@ -76,6 +76,27 @@ pub(crate) fn load_font_data(
     db.with_face_data(id, |data, index| (data.to_vec(), index))
 }
 
+/// Any installed face, for when `family` and the generic families resolve to
+/// nothing (fontdb maps `sans-serif` to Arial, absent from many Linux
+/// systems). Prefers a "Sans" family with the requested weight and style.
+pub(crate) fn any_font_data(
+    db: &fontdb::Database,
+    bold: bool,
+    italic: bool,
+) -> Option<(Vec<u8>, u32)> {
+    let score = |f: &fontdb::FaceInfo| {
+        let sans = f
+            .families
+            .iter()
+            .any(|(n, _)| n.to_ascii_lowercase().contains("sans") && !n.contains("Mono"));
+        let weight_ok = (f.weight.0 >= 600) == bold;
+        let style_ok = (f.style != fontdb::Style::Normal) == italic;
+        (sans as u8) * 4 + (weight_ok as u8) * 2 + style_ok as u8
+    };
+    let face = db.faces().max_by_key(|f| score(f))?;
+    db.with_face_data(face.id, |data, index| (data.to_vec(), index))
+}
+
 // ── CIDFont embedding ──
 
 pub(crate) fn write_cid_font(pdf: &mut Pdf, ef: &EmbeddedFont) -> ferropdf_core::Result<()> {

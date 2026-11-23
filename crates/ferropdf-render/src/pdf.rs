@@ -1,7 +1,7 @@
 use crate::display_list::{DrawOp, Owner, PageDisplayList};
 use crate::font_subsetter::{
-    encode_for_cid_font, encode_shaped_glyphs, encode_winansi, load_font_data, subset_font,
-    write_cid_font, EmbeddedFont, FontKey,
+    any_font_data, encode_for_cid_font, encode_shaped_glyphs, encode_winansi, load_font_data,
+    subset_font, write_cid_font, EmbeddedFont, FontKey,
 };
 use crate::RenderOptions;
 use ferropdf_core::{FerroError, PageConfig};
@@ -168,7 +168,15 @@ pub fn write_pdf(
                         italic: *italic,
                     };
                     if !font_cache.contains_key(&key) {
-                        match load_font_data(font_db, &family_name, *bold, *italic) {
+                        let found =
+                            load_font_data(font_db, &family_name, *bold, *italic).or_else(|| {
+                                // PDF/A and PDF/UA cannot fall back to the
+                                // non-embedded Type1 fonts: use any installed face.
+                                strict
+                                    .then(|| any_font_data(font_db, *bold, *italic))
+                                    .flatten()
+                            });
+                        match found {
                             Some(data) => {
                                 font_name_counter += 1;
                                 let pdf_name = format!("F{}", font_name_counter);
