@@ -318,13 +318,13 @@ pub fn write_pdf(
                             let pdf_name = format!("Im{img_counter}");
                             img_counter += 1;
                             let (pdf_ref, kind) = match kind {
-                                ImageKind::Svg { chunk, root } => {
+                                ImageKind::Svg { chunk, root, size } => {
                                     // Renumber svg2pdf's objects into our ref space.
                                     let mut map = HashMap::default();
                                     let chunk = chunk.renumber(|old| {
                                         *map.entry(old).or_insert_with(&mut next_ref)
                                     });
-                                    (map[&root], ImageKind::Svg { chunk, root })
+                                    (map[&root], ImageKind::Svg { chunk, root, size })
                                 }
                                 raster => (next_ref(), raster),
                             };
@@ -977,7 +977,19 @@ pub fn write_pdf(
                 }
                 DrawOp::DrawImage { src, rect } => {
                     if let Some(img) = image_map.get(src) {
-                        let pr = to_pdf_rect(rect.x, rect.y, rect.width, rect.height, page_h);
+                        let mut pr = to_pdf_rect(rect.x, rect.y, rect.width, rect.height, page_h);
+                        // An SVG keeps its aspect ratio in the box, centred
+                        // (`preserveAspectRatio` default, xMidYMid meet).
+                        if let ImageKind::Svg { size: (sw, sh), .. } = img.kind {
+                            if sw > 0.0 && sh > 0.0 && pr.width > 0.0 && pr.height > 0.0 {
+                                let scale = (pr.width / sw).min(pr.height / sh);
+                                let (w, h) = (sw * scale, sh * scale);
+                                pr.x += (pr.width - w) / 2.0;
+                                pr.y += (pr.height - h) / 2.0;
+                                pr.width = w;
+                                pr.height = h;
+                            }
+                        }
                         // Position image: scale to target size and translate
                         content.save_state();
                         content.transform([pr.width, 0.0, 0.0, pr.height, pr.x, pr.y]);
@@ -1161,8 +1173,13 @@ enum ImageKind {
         width: u32,
         height: u32,
     },
-    /// Vector SVG as a Form XObject (unit square) produced by svg2pdf.
-    Svg { chunk: pdf_writer::Chunk, root: Ref },
+    /// Vector SVG as a Form XObject (unit square) produced by svg2pdf, and
+    /// the SVG's intrinsic size (for its aspect ratio).
+    Svg {
+        chunk: pdf_writer::Chunk,
+        root: Ref,
+        size: (f32, f32),
+    },
 }
 
 /// Load an image from a source string (data URI or sandboxed file path).
@@ -1176,7 +1193,8 @@ fn load_image(src: &str, base_url: Option<&str>) -> Result<ImageKind, String> {
     if crate::images::is_svg(src, &data) {
         let tree = crate::images::parse_svg(&data)?;
         let (chunk, root) = svg2pdf::to_chunk(&tree, svg2pdf::ConversionOptions::default());
-        return Ok(ImageKind::Svg { chunk, root });
+        let size = (tree.size().width(), tree.size().height());
+        return Ok(ImageKind::Svg { chunk, root, size });
     }
 
     let img = image::load_from_memory(&data).map_err(|e| format!("cannot decode image: {}", e))?;
