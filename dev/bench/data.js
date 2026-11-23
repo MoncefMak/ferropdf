@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795421043790,
+  "lastUpdate": 1795423448257,
   "repoUrl": "https://github.com/MoncefMak/ferropdf",
   "entries": {
     "FastPDF Criterion Benchmarks": [
@@ -3364,6 +3364,54 @@ window.BENCHMARK_DATA = {
             "name": "render_invoice_cached",
             "value": 681136,
             "range": "± 14997",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "72460183+MoncefMak@users.noreply.github.com",
+            "name": "MoncefMak",
+            "username": "MoncefMak"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "591643d660f48f23e4b98c4c69008faf3bf0a80b",
+          "message": "Merge pull request #93 from MoncefMak/fix/table-caption\n\nRender table captions (#92)",
+          "timestamp": "2026-11-23T09:41:10+01:00",
+          "tree_id": "37da669ae3bca0ff7bf606da2cc35bd16112df3b",
+          "url": "https://github.com/MoncefMak/ferropdf/commit/591643d660f48f23e4b98c4c69008faf3bf0a80b"
+        },
+        "date": 1795423447418,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "render_simple",
+            "value": 3097681,
+            "range": "± 178310",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice",
+            "value": 3868059,
+            "range": "± 53397",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_simple_cached",
+            "value": 706085,
+            "range": "± 6199",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice_cached",
+            "value": 1323530,
+            "range": "± 25962",
             "unit": "ns/iter"
           }
         ]
