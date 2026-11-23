@@ -146,9 +146,23 @@ it is set, for reproducible output.
 engine = ferropdf.Engine(options=None)
 engine.render(html: str) -> bytes         # Render HTML to PDF bytes
 engine.render_file(path: str) -> bytes    # Render from file
+engine.render_png(html: str, dpi=96, pages=None, transparent=False) -> list[bytes]
 ```
 
 The engine caches fonts internally — create once, render many times.
+
+`render_png` returns one PNG per page, for previews and thumbnails. The
+images are rasterized from the PDF (with [hayro](https://github.com/LaurenzV/hayro)),
+so they match it exactly. `dpi=96` gives one pixel per CSS pixel (A4 →
+794 × 1123). `pages` takes an index or a list of indices, zero-based, negative
+from the end (`pages=0` for a thumbnail of the first page). Images are limited
+to 16 384 px per side and 64 Mpx: a larger request raises `ValueError`, an
+index outside the document `IndexError`.
+
+```python
+thumb, = ferropdf.Engine().render_png(html, dpi=48, pages=0)
+open("thumb.png", "wb").write(thumb)
+```
 
 ### Functions
 
@@ -379,6 +393,7 @@ every row is a test that renders a snippet and checks the PDF, and every ❌ row
 | PDF | PDF/A-2b / PDF/A-3b output (`pdf_variant`) | ✅ Supported |
 | PDF | File attachments (`Attachment`) | ✅ Supported |
 | PDF | Factur-X / ZUGFeRD e-invoice (`factur_x`) | ✅ Supported |
+| PDF | PNG export (`Engine.render_png`) | ✅ Supported |
 <!-- feature-matrix:end -->
 
 Regenerate after changing a feature: `python tests/test_feature_matrix.py`.
@@ -483,7 +498,7 @@ cargo audit
 cargo machete   # checks for unused workspace dependencies
 ```
 
-**MSRV**: Rust 1.85+ (set in `[workspace.package]`).
+**MSRV**: Rust 1.85+ for the Rust crates (set in `[workspace.package]`); the Python extension needs 1.92+ because PNG export (`ferropdf-render`'s `png` feature) uses hayro.
 
 ---
 

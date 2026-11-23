@@ -2,14 +2,15 @@
 name    = "ferropdf-python"
 version = "0.2.9"
 edition = "2021"
-rust-version.workspace = true
+# hayro (PNG export) needs 1.92; the Rust crates alone build with 1.85.
+rust-version = "1.92"
 
 [lib]
 name       = "_ferropdf"
 crate-type = ["cdylib"]
 
 [dependencies]
-ferropdf-render = { path = "../../crates/ferropdf-render" }
+ferropdf-render = { path = "../../crates/ferropdf-render", features = ["png"] }
 ferropdf-core   = { path = "../../crates/ferropdf-core" }
 pyo3            = { workspace = true }
 

@@ -7,11 +7,17 @@ mod navigation;
 mod painter;
 mod pdf;
 mod pdfa;
+#[cfg(feature = "png")]
+mod png;
 mod sandbox;
 
 use ferropdf_core::{PageConfig, PageMargins, PageSize, RenderWarning};
 pub use ferropdf_layout::FontDatabase;
 pub use pdfa::{AfRelationship, Attachment, FacturX, FacturXProfile, PdfVariant};
+#[cfg(feature = "png")]
+pub use png::{
+    pdf_to_png, validate_png_options, PngError, PngOptions, MAX_PNG_PIXELS, MAX_PNG_SIDE,
+};
 
 /// Default upper bound on HTML input size (10 MiB). Renders larger than this
 /// are rejected early to limit memory amplification under adversarial input.
