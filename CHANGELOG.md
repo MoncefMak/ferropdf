@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Factur-X 1.0 / ZUGFeRD 2.x e-invoices: `Options(factur_x=xml)` embeds the CII XML as `factur-x.xml` (or `xrechnung.xml`) with the right `/AFRelationship`, the `fx:` XMP properties and their PDF/A extension schema, and switches to PDF/A-3b. The profile is detected from the XML or given with `factur_x_profile` (#42).
 - File attachments: `ferropdf.Attachment(name, data, mime_type=None, description=None, relationship="Unspecified")` in `Options(attachments=[...])`, for plain PDFs and PDF/A-3b (`/EmbeddedFiles` name tree, catalog `/AF`, MIME subtype, size and modification date).
 - `SOURCE_DATE_EPOCH` sets the PDF/A creation date, for reproducible output.
+- PNG export: `Engine.render_png(html, dpi=96, pages=None, transparent=False)` returns one PNG per page, rasterized from the generated PDF with hayro so previews match it exactly. Pages are selected by index (negative from the end); oversized images (over 16 384 px per side or 64 Mpx) raise `ValueError`. In Rust: `ferropdf_render::pdf_to_png` behind the `png` feature. Building the Python extension now needs Rust 1.92 (#44).
 - `vertical-align` for table cells (`top`, `middle`, `bottom`, `baseline`) and the HTML `valign` attribute on `<td>`, `<th>`, `<tr>` and row groups. Cells are vertically centred by default, as in browsers (`thead, tbody, tfoot { vertical-align: middle }`).
 
 ### Fixed

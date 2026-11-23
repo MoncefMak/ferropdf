@@ -288,6 +288,55 @@ impl PyEngine {
         let py_warnings = PyList::new(py, &warnings)?;
         PyTuple::new(py, [py_bytes.into_any(), py_warnings.into_any()])
     }
+
+    /// Render HTML to PNG images, one `bytes` object per page.
+    ///
+    /// `dpi=96` gives one image pixel per CSS pixel. `pages` selects pages by
+    /// zero-based index (an int or a sequence; negative counts from the end).
+    /// The images are rasterized from the PDF, so they match it exactly.
+    #[pyo3(signature = (html, dpi = 96.0, pages = None, transparent = false))]
+    fn render_png<'py>(
+        &self,
+        py: Python<'py>,
+        html: &str,
+        dpi: f32,
+        pages: Option<&Bound<'py, PyAny>>,
+        transparent: bool,
+    ) -> PyResult<Bound<'py, PyList>> {
+        let pages = match pages {
+            None => None,
+            Some(obj) => Some(match obj.extract::<i64>() {
+                Ok(i) => vec![i],
+                Err(_) => obj.extract::<Vec<i64>>().map_err(|_| {
+                    PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                        "pages must be an int or a sequence of ints",
+                    )
+                })?,
+            }),
+        };
+        let png_opts = ferropdf_render::PngOptions {
+            dpi,
+            pages,
+            transparent,
+        };
+        ferropdf_render::validate_png_options(&png_opts).map_err(png_err)?;
+        let (pdf, warnings) = self.render_inner(py, html)?;
+        let images = py
+            .detach(move || ferropdf_render::pdf_to_png(&pdf, &png_opts))
+            .map_err(png_err)?;
+        emit_warnings(py, &warnings);
+        PyList::new(py, images.iter().map(|png| PyBytes::new(py, png)))
+    }
+}
+
+fn png_err(e: ferropdf_render::PngError) -> PyErr {
+    use ferropdf_render::PngError::*;
+    let msg = e.to_string();
+    match e {
+        InvalidOption(_) => PyErr::new::<pyo3::exceptions::PyValueError, _>(msg),
+        PageOutOfRange(_) => PyErr::new::<pyo3::exceptions::PyIndexError, _>(msg),
+        Render(_) => PyErr::new::<RenderError, _>(msg),
+    }
 }
 
 impl PyEngine {

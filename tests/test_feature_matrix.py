@@ -1006,6 +1006,12 @@ def chk_factur_x():
     assert "<fx:ConformanceLevel>MINIMUM</fx:ConformanceLevel>" in meta and "<pdfaid:part>3" in meta
 
 
+def chk_png():
+    (png,) = ferropdf.Engine().render_png(wrap('<div style="width:50px;height:50px;background:#f00"></div>'), pages=0)
+    pix = pymupdf.Pixmap(png)
+    assert (pix.width, pix.height) == (794, 1123) and pix.pixel(105, 105)[:3] == (255, 0, 0)
+
+
 # --------------------------------------------------------------------------- matrix
 
 
@@ -1140,6 +1146,7 @@ FEATURES = [
     Feature("PDF", "PDF/A-2b / PDF/A-3b output (`pdf_variant`)", chk_pdfa),
     Feature("PDF", "File attachments (`Attachment`)", chk_attachments),
     Feature("PDF", "Factur-X / ZUGFeRD e-invoice (`factur_x`)", chk_factur_x),
+    Feature("PDF", "PNG export (`Engine.render_png`)", chk_png),
 ]
 
 
