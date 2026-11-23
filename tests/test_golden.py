@@ -45,11 +45,17 @@ def _fingerprint(pdf: bytes) -> dict:
     reader = pypdf.PdfReader(io.BytesIO(pdf))
     pages = [_normalise_text(p.extract_text() or "") for p in reader.pages]
 
+    # Operators are counted in the decoded page content streams only: a
+    # regex over the raw file also hits random bytes inside compressed font
+    # and image streams, which change with the zlib backend.
+    content = b"\n".join(
+        c.get_data() for p in reader.pages if (c := p.get_contents()) is not None
+    )
     # Number of color operators is a coarse proxy for "did style rules
     # apply": missing colors usually mean a selector was silently dropped.
-    rg_ops = len(re.findall(rb"\d(?:\.\d+)?\s+\d(?:\.\d+)?\s+\d(?:\.\d+)?\s+rg", pdf))
-    bt_ops = len(re.findall(rb"\bBT\b", pdf))  # text-block markers
-    image_ops = len(re.findall(rb"\bDo\b", pdf))  # XObject draws (images)
+    rg_ops = len(re.findall(rb"\d(?:\.\d+)?\s+\d(?:\.\d+)?\s+\d(?:\.\d+)?\s+rg", content))
+    bt_ops = len(re.findall(rb"\bBT\b", content))  # text-block markers
+    image_ops = len(re.findall(rb"\bDo\b", content))  # XObject draws (images)
 
     return {
         "page_count": len(reader.pages),
