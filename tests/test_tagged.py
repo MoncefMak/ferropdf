@@ -195,11 +195,40 @@ def test_pdf_ua_title_option_wins():
         ('<html lang="fr"><body><p>x</p></body></html>', "title"),
         (f'<html lang="fr"><head><title>T</title></head><body><img src="{PIXEL}"></body></html>', "alt text"),
         ('<html lang="fr"><head><title>T</title></head><body><svg width="5" height="5"></svg></body></html>', "alt text"),
+        ('<html lang="fr"><head><title>T</title></head><body><h2>x</h2></body></html>', "start at <h1>"),
+        ('<html lang="fr"><head><title>T</title></head><body><h1>a</h1><h3>b</h3></body></html>', "skipped"),
     ],
 )
 def test_pdf_ua_refuses_non_conforming_documents(html, message):
     with pytest.raises(ferropdf.RenderError, match=message):
         render(html, pdf_ua=True)
+
+
+def test_tagged_warns_about_skipped_headings():
+    html = '<html lang="fr"><body><h1>a</h1><h3>b</h3></body></html>'
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        render(html, tagged=True)
+    assert any("<h1> is followed by <h3>" in str(w.message) for w in caught)
+
+
+def test_colspan_is_written():
+    html = """<html lang="fr"><body><table>
+    <tr><th>A</th><th>B</th><th>C</th></tr>
+    <tr><td colspan="2">Total</td><td>3</td></tr></table></body></html>"""
+    reader = PdfReader(io.BytesIO(render(html, tagged=True)))
+
+    def cells(e):
+        e = e.get_object()
+        if not isinstance(e, DictionaryObject) or "/S" not in e:
+            return []
+        out = [e] if e["/S"] == "/TD" else []
+        kids = e.get("/K", [])
+        for k in kids if isinstance(kids, ArrayObject) else [kids]:
+            out += cells(k)
+        return out
+    tds = cells(reader.trailer["/Root"]["/StructTreeRoot"]["/K"])
+    assert [td.get("/A", {}).get("/ColSpan") for td in tds] == [2, None]
 
 
 def test_tagged_warns_about_missing_alt():
@@ -221,13 +250,13 @@ def test_aria_hidden_and_presentation_are_artifacts():
 def test_multi_page_and_internal_links():
     html = """<html lang="fr"><head><title>T</title></head><body>
     <p><a href="#fin">Aller à la fin</a></p>
-    <h2 id="fin" style="break-before: page">Fin</h2><p>Dernière page.</p></body></html>"""
+    <h1 id="fin" style="break-before: page">Fin</h1><p>Dernière page.</p></body></html>"""
     pdf = render(html, pdf_ua=True)
     reader = PdfReader(io.BytesIO(pdf))
     assert len(reader.pages) == 2
     assert [p["/StructParents"] for p in reader.pages] == [0, 1]
     assert "/Tabs" not in reader.pages[1]  # no annotations there
-    assert roles(tree(pdf)) == ["Document", "P", "Link", "H2", "P"]
+    assert roles(tree(pdf)) == ["Document", "P", "Link", "H1", "P"]
 
 
 def test_options_repr():

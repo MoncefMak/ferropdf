@@ -359,9 +359,17 @@ fn render_with_warnings_inner(
                     "every image needs alt text (alt=\"\" for decorative ones); missing on {src}"
                 ));
             }
+            if let Some(problem) = &sem.heading_problem {
+                return fail(problem.clone());
+            }
         }
         for src in &sem.missing_alt {
-            warnings.push(RenderWarning::MissingAltText { src: src.clone() });
+            warnings.push(RenderWarning::Accessibility(format!(
+                "image without alt text: {src}"
+            )));
+        }
+        if let Some(problem) = &sem.heading_problem {
+            warnings.push(RenderWarning::Accessibility(problem.clone()));
         }
     }
 

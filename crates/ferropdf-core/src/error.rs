@@ -41,8 +41,9 @@ pub enum RenderWarning {
         bold: bool,
         italic: bool,
     },
-    /// An image has no alt text (tagged PDF).
-    MissingAltText { src: String },
+    /// A tagged-PDF accessibility problem in the HTML (image without alt
+    /// text, skipped heading level).
+    Accessibility(String),
 }
 
 impl std::fmt::Display for RenderWarning {
@@ -73,9 +74,7 @@ impl std::fmt::Display for RenderWarning {
                     family, bold, italic
                 )
             }
-            RenderWarning::MissingAltText { src } => {
-                write!(f, "image without alt text (tagged PDF): {}", src)
-            }
+            RenderWarning::Accessibility(m) => write!(f, "accessibility (tagged PDF): {}", m),
         }
     }
 }

@@ -87,10 +87,21 @@ et un <a href="#tableau">lien interne</a>.</p>
 
 
 def accessible(html: str) -> str:
-    """The fixes an author makes for PDF/UA: a language, labels on SVGs."""
+    """The fixes an author makes for PDF/UA: a language, labels on SVGs,
+    headings that start at <h1> and do not skip levels."""
     if not re.search(r"<html[^>]*\blang=", html):
         html = re.sub(r"<html\b", '<html lang="en"', html, count=1)
-    return re.sub(r"<svg\b(?![^>]*aria-label)", '<svg role="img" aria-label="Chart"', html)
+    html = re.sub(r"<svg\b(?![^>]*aria-label)", '<svg role="img" aria-label="Chart"', html)
+    prev, current = 0, 1
+
+    def renumber(m: re.Match) -> str:
+        nonlocal prev, current
+        if not m.group(1):  # opening tag
+            current = min(int(m.group(2)), prev + 1)
+            prev = current
+        return f"<{m.group(1)}h{current}"
+
+    return re.sub(r"<(/?)h([1-6])\b", renumber, html)
 
 
 def main(out: Path) -> None:

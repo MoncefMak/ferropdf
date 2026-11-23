@@ -140,6 +140,24 @@ struct ElemInfo {
     alt: Option<String>,
     lang: Option<String>,
     scope: Option<Scope>,
+    /// `colspan` > 1 of a cell.
+    colspan: Option<u32>,
+}
+
+/// `colspan` as the table layout reads it: leading digits, 0 or invalid
+/// is 1, at most 1000.
+fn colspan(attr: Option<&str>) -> u32 {
+    let digits: String = attr
+        .unwrap_or("")
+        .trim_start()
+        .chars()
+        .take_while(char::is_ascii_digit)
+        .collect();
+    digits
+        .parse::<u32>()
+        .map_or(if digits.is_empty() { 1 } else { 1000 }, |n| {
+            n.clamp(1, 1000)
+        })
 }
 
 // =============================================================================
@@ -156,6 +174,8 @@ pub(crate) struct Semantics {
     pub title: Option<String>,
     /// `<img>` / `<svg>` without alt text, by `src` (for warnings).
     pub missing_alt: Vec<String>,
+    /// Headings that do not start at `<h1>` or skip a level (PDF/UA-1 §7.4.2).
+    pub heading_problem: Option<String>,
 }
 
 impl Semantics {
@@ -165,6 +185,8 @@ impl Semantics {
         let mut lang = None;
         let mut title = None;
         let mut missing_alt = Vec::new();
+        let mut heading_problem = None;
+        let mut last_heading: Option<u8> = None;
         let root = doc.root();
         for id in doc.iter_preorder(root) {
             let node = doc.get(id);
@@ -196,6 +218,20 @@ impl Semantics {
             let Some(kind) = kind_of(&tag, node) else {
                 continue;
             };
+            if let Kind::Elem(Role::H(level)) = kind {
+                if heading_problem.is_none() {
+                    heading_problem = match last_heading {
+                        None if level != 1 => Some(format!(
+                            "the first heading is <h{level}>; headings must start at <h1>"
+                        )),
+                        Some(prev) if level > prev + 1 => Some(format!(
+                            "<h{prev}> is followed by <h{level}>; heading levels must not be skipped"
+                        )),
+                        _ => None,
+                    };
+                }
+                last_heading = Some(level);
+            }
             let alt = node
                 .attr("alt")
                 .or_else(|| node.attr("aria-label"))
@@ -223,6 +259,9 @@ impl Semantics {
                 .map(str::trim)
                 .filter(|l| !l.is_empty())
                 .map(String::from);
+            let colspan = matches!(tag.as_str(), "td" | "th")
+                .then(|| colspan(node.attr("colspan")))
+                .filter(|&c| c > 1);
             info.insert(
                 id,
                 ElemInfo {
@@ -230,6 +269,7 @@ impl Semantics {
                     alt,
                     lang: elem_lang,
                     scope,
+                    colspan,
                 },
             );
         }
@@ -239,6 +279,7 @@ impl Semantics {
             lang,
             title,
             missing_alt,
+            heading_problem,
         }
     }
 
@@ -330,6 +371,7 @@ struct Elem {
     alt: Option<String>,
     lang: Option<String>,
     scope: Option<Scope>,
+    colspan: Option<u32>,
 }
 
 /// How a content op is marked.
@@ -369,6 +411,7 @@ impl<'a> Tagger<'a> {
             alt: None,
             lang: None,
             scope: None,
+            colspan: None,
         });
         t.index.insert(Key::Document, 0);
         t
@@ -423,6 +466,7 @@ impl<'a> Tagger<'a> {
                 .filter(|a| !a.is_empty()),
             lang: info.as_ref().and_then(|i| i.lang.clone()),
             scope: info.as_ref().and_then(|i| i.scope),
+            colspan: info.as_ref().and_then(|i| i.colspan),
         });
         // A list label goes before the body, whatever the paint order.
         if role == Role::Lbl {
@@ -482,16 +526,21 @@ impl<'a> Tagger<'a> {
             if let Some(lang) = &e.lang {
                 se.lang(TextStr(lang));
             }
-            if let Some(scope) = e.scope {
+            if e.scope.is_some() || e.colspan.is_some() {
                 let mut a = se.insert(Name(b"A")).dict();
                 a.pair(Name(b"O"), Name(b"Table"));
-                a.pair(
-                    Name(b"Scope"),
-                    Name(match scope {
-                        Scope::Column => b"Column",
-                        Scope::Row => b"Row",
-                    }),
-                );
+                if let Some(scope) = e.scope {
+                    a.pair(
+                        Name(b"Scope"),
+                        Name(match scope {
+                            Scope::Column => b"Column",
+                            Scope::Row => b"Row",
+                        }),
+                    );
+                }
+                if let Some(span) = e.colspan {
+                    a.pair(Name(b"ColSpan"), span as i32);
+                }
                 a.finish();
             }
             let mut kids = se.children();
