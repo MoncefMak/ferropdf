@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795414596851,
+  "lastUpdate": 1795421043790,
   "repoUrl": "https://github.com/MoncefMak/ferropdf",
   "entries": {
     "FastPDF Criterion Benchmarks": [
@@ -3316,6 +3316,54 @@ window.BENCHMARK_DATA = {
             "name": "render_invoice_cached",
             "value": 1074382,
             "range": "± 8786",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "72460183+MoncefMak@users.noreply.github.com",
+            "name": "MoncefMak",
+            "username": "MoncefMak"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "45b03e3475c0827ed385b968e3da34a6c2efeab9",
+          "message": "Merge pull request #91 from MoncefMak/feat/tagged-pdf\n\nTagged PDF and PDF/UA-1 (#43)",
+          "timestamp": "2026-11-23T09:01:30+01:00",
+          "tree_id": "a65194bf5d8301b4fb295bc476207e9bea833e6e",
+          "url": "https://github.com/MoncefMak/ferropdf/commit/45b03e3475c0827ed385b968e3da34a6c2efeab9"
+        },
+        "date": 1795421043172,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "render_simple",
+            "value": 3055443,
+            "range": "± 288752",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice",
+            "value": 3689539,
+            "range": "± 120905",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_simple_cached",
+            "value": 277071,
+            "range": "± 4522",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice_cached",
+            "value": 681136,
+            "range": "± 14997",
             "unit": "ns/iter"
           }
         ]
