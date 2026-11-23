@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795413879678,
+  "lastUpdate": 1795414596851,
   "repoUrl": "https://github.com/MoncefMak/ferropdf",
   "entries": {
     "FastPDF Criterion Benchmarks": [
@@ -3268,6 +3268,54 @@ window.BENCHMARK_DATA = {
             "name": "render_invoice_cached",
             "value": 1231014,
             "range": "± 11875",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "72460183+MoncefMak@users.noreply.github.com",
+            "name": "MoncefMak",
+            "username": "MoncefMak"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "e60ffd63323b7a62eb86a8fd84cdc16ae4c50d33",
+          "message": "Merge pull request #90 from MoncefMak/feat/png-export\n\nPNG export: Engine.render_png (#44)",
+          "timestamp": "2026-11-23T07:01:43+01:00",
+          "tree_id": "46a6cffa7f75f624dbf71364b2ad3c6aa1da2722",
+          "url": "https://github.com/MoncefMak/ferropdf/commit/e60ffd63323b7a62eb86a8fd84cdc16ae4c50d33"
+        },
+        "date": 1795414596206,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "render_simple",
+            "value": 2395011,
+            "range": "± 24743",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice",
+            "value": 2989745,
+            "range": "± 32613",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_simple_cached",
+            "value": 566145,
+            "range": "± 7449",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "render_invoice_cached",
+            "value": 1074382,
+            "range": "± 8786",
             "unit": "ns/iter"
           }
         ]
